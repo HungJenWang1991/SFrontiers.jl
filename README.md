@@ -25,7 +25,7 @@ Current Version. It has a detailed example (also available in Jupyter notebook) 
 Before `SFrontiers.jl` is registered with Julia, use the following method to install the package.
 
     julia> using Pkg
-    julia> Pkg.add("https://github.com/HungJenWang1991/SFrontiers.jl.git")
+    julia> Pkg.add(url="https://github.com/HungJenWang1991/SFrontiers")
 
 ## Citation
 

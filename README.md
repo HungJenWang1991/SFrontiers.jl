@@ -18,7 +18,7 @@ Collaboration to add models is welcome!
 
 ## Documentation
 
-Current Version. It has a detailed example (also available in Jupyter notebook) of using `SFrontiers.jl` to conduct a stochastic frontier analysis.
+[Current Version](https://hungjenwang1991.github.io/SFrontiers.jl/). It has a detailed example (also available in Jupyter notebook) of using `SFrontiers.jl` to conduct a stochastic frontier analysis.
 
 ## Installation
 

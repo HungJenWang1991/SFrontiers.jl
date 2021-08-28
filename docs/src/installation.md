@@ -8,7 +8,7 @@ https://julialang.org/downloads/
 
 ```
 julia> using Pkg
-julia> Pkg.add("https://github.com/hjw.econ.1991/SFrontiers.jl")
+julia> Pkg.add("https://github.com/HungJenWang1991/SFrontiers.jl.git")
 ```
 
 ## Run Julia script

@@ -3,7 +3,7 @@ A Julia Package for Estimating Stochastic Frontier Models
 
 [![Build Status](https://app.travis-ci.com/HungJenWang1991/SFrontiers.jl.svg?branch=main)](https://travis-ci.com/HungJenWang1991/SFrontiers.jl)
 [![Coverage Status](https://coveralls.io/repos/github/HungJenWang1991/SFrontiers.jl/badge.svg?branch=main)](https://coveralls.io/github/HungJenWang1991/SFrontiers.jl?branch=main)
-[![codecov.io](https://codecov.io/github/HungJenWang1991/SFrontiers.jl/coverage.svg?branch=master)](https://codecov.io/github/HungJenWang1991/SFrontiers.jl?branch=master)
+[![codecov.io](https://codecov.io/github/HungJenWang1991/SFrontiers.jl/coverage.svg?branch=main)](https://codecov.io/github/HungJenWang1991/SFrontiers.jl?branch=main)
 
 
 __SFrontiers.jl__ provides commands for estimating various parametric _stochastic frontier models_ in Julia. The commands estimate model parameters, calculate efficiency and inefficiency index, compute marginal effects of inefficiency determinants (if any), and with the option of bootstrapping standard errors of the mean marginal effects. The package uses `Optim.jl` as the main driver for the maximum likelihood estimation.

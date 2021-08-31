@@ -36,6 +36,7 @@ using SFrontiers, Test
     @test aa[1,1] ≈ 1.0199 atol=1e-5
 	@test bb[1] ≈ 0.41615 atol = 1e-5
 
+
 	# -- N-TN ----
 
 	posvec = (begx=1, endx=2, begz=3, endz=4, begq=0, endq=0, begw=5, endw=6, begv=7, endv=7)
@@ -254,6 +255,10 @@ end
 	@test res.jlms[1] ≈ 0.67725 atol=1e-5
 	@test res.bc[1] ≈ 0.57816 atol=1e-5
 
+	pred1 = sfmodel_predict(@eq(frontier))
+	@test pred1[1] ≈  -0.28303 atol=1e-5 
+
+
 end
 
 
@@ -307,6 +312,9 @@ end
 	@test res.coeff[2] ≈ 0.11681 atol=1e-5 
 	@test res.jlms[1] ≈ 1.20146 atol=1e-5
 	@test res.bc[1] ≈ 0.37468 atol=1e-5
+
+	pred1 = sfmodel_predict(@eq(frontier))
+	@test pred1[1] ≈  0.33485 atol=1e-5 
 
 end
 
@@ -362,6 +370,9 @@ end
 	@test res.marginal[1,1] ≈ -0.07106 atol=1e-5
 	@test res.jlms[1] ≈ 1.35874 atol=1e-5
 	@test res.bc[1] ≈ 0.32483 atol=1e-5
+	
+	pred1 = sfmodel_predict(@eq(frontier))
+	@test pred1[1] ≈  0.47454 atol=1e-5 
 
 end
 
@@ -405,7 +416,7 @@ end
 
 		sfmodel_opt(warmstart_solver(NelderMead()),  
 				warmstart_maxIT(200),
-				main_solver(Newton()), # may try warmstart_delta=0.2
+				main_solver(Newton()), 
 				main_maxIT(2000), 
 				tolerance(1e-8),
 				verbose(false),	banner(false)
@@ -417,6 +428,9 @@ end
 		@test res.coeff[2] ≈ 0.31477 atol=1e-5 
 		@test res.jlms[1]  ≈ 1.41041 atol=1e-5
 		@test res.bc[1]    ≈ 0.30956 atol=1e-5
+
+		pred1 = sfmodel_predict(@eq(frontier))
+		@test pred1[1] ≈  0.52564 atol=1e-5 
 
 end
 
@@ -474,8 +488,11 @@ end
 	@test res.marginal[1,1] ≈ -0.08340  atol=1e-5
 	@test res.jlms[1] ≈ 1.21327  atol=1e-5
 	@test res.bc[1] ≈ 0.37075 atol=1e-5
-	@test boot1[1] ≈ 1.6007 atol=1e-4
+	@test boot1[1] ≈ 1.60067 atol=5e-5
 	@test d1[1] ≈ -0.47043 atol=1e-5
+
+	pred1 = sfmodel_predict(@eq(frontier))
+	@test pred1[1] ≈ 0.33963 atol=1e-5 
 
 end
 

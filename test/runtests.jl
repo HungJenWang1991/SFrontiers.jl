@@ -474,7 +474,7 @@ end
 	@test res.marginal[1,1] ≈ -0.08340  atol=1e-5
 	@test res.jlms[1] ≈ 1.21327  atol=1e-5
 	@test res.bc[1] ≈ 0.37075 atol=1e-5
-	@test boot1[1] ≈ 1.60067 atol=1e-5
+	@test boot1[1] ≈ 1.6007 atol=1e-4
 	@test d1[1] ≈ -0.47043 atol=1e-5
 
 end

@@ -1,5 +1,6 @@
 language: julia
 julia:
   - 1.6.2
+  - nightly
 after_success:
   -codecov

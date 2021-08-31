@@ -1,7 +1,7 @@
 # SFrontiers.jl
 A Julia Package for Estimating Stochastic Frontier Models
 
-[![Build Status](https://travis-ci.com/HungJenWang1991/SFrontiers.jl.svg?branch=master)](https://travis-ci.com/HungJenWang1991/SFrontiers.jl)
+[![Build Status](https://app.travis-ci.com/HungJenWang1991/SFrontiers.jl.svg?branch=main)](https://travis-ci.com/HungJenWang1991/SFrontiers.jl)
 [![Coverage Status](https://coveralls.io/repos/github/HungJenWang1991/SFrontiers.jl/badge.svg?branch=master)](https://coveralls.io/github/HungJenWang1991/SFrontiers.jl?branch=master)
 [![codecov.io](https://codecov.io/github/HungJenWang1991/SFrontiers.jl/coverage.svg?branch=master)](https://codecov.io/github/HungJenWang1991/SFrontiers.jl?branch=master)
 

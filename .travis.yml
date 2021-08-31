@@ -1,6 +1,5 @@
-codecov: true
-coveralls: true
-
 language: julia
 julia:
   - 1.6.2
+after_success:
+  -codecov

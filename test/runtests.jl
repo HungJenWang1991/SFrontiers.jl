@@ -164,6 +164,24 @@ end
     @test aa[1,1] ≈ 4.38273 atol=1e-5
 	@test bb[1] ≈ 1.04393 atol = 1e-5
 
+	# --- Kumbhakar 1990 ----
+
+	posvec = (begx=1, endx=2, begz=3, endz=4, begq=5, endq=6, begw=7, endw=7, begv=8, endv=8)
+	rho = ones(8,1); rho2 = vec(rho)
+	@test LL_T(PanKumb90, y, x, z, q, w,v,1,5,posvec,rho, idt, nothing)  ≈ 13.42116 atol=1e-5
+
+	jlms, bc = jlmsbc(PanKumb90, PorC, posvec, rho2, y, x, z, q, w, v, idt)
+    @test jlms[1,1] ≈ 0.23543 atol = 1e-5
+    @test bc[1,1] ≈ 0.79868 atol = 1e-5	
+
+	nofvar = (nofobs=5, nofx=2, nofz=2, nofq=2,	nofw=1, nofv=1, nofpara=8, nofmarg = 2+2+1)
+	sfmodel_spec(sfpanel(Kumbhakar1990), sftype(prod), sfdist(trun), timevar(tvar), idvar(ivar), 
+	             depvar(y), frontier(x), μ(z), gamma(q), σᵤ²(v), σᵥ²(v))
+    aa, bb = get_marg(PanKumb90, posvec, nofvar, rho2, z, q, v)
+    @test aa[1,1] ≈ 0.17797 atol=1e-5
+	@test bb[1] ≈ 0.29235 atol = 1e-5
+
+
 	# --- CSW 2014, half ---------
 
 	posvec = (begx=1, endx=2, begz=0, endz=0, begq=0, endq=0, begw=3, endw=3, begv=4, endv=4)
@@ -199,6 +217,68 @@ end
     @test bc[1,1] ≈ 0.18474 atol = 1e-5	
 
 	# This model does not allow exog determinants hence no marginal effect.
+
+end
+
+
+@testset verbose=true "full MLE: N-HN(z), boot (may take time)" begin
+
+	data = [-0.930756     0.679107   -0.117138   1.0
+			-0.611645     0.828413   -0.601254   1.0
+			-1.31106     -0.353007    1.14228    1.0
+			-0.00456725  -0.134854   -0.0886163  1.0
+			-3.36723      0.586617    0.279466   1.0
+			-1.49024      0.297336    0.111422   1.0
+			1.33926      0.0649475  -0.357884   1.0
+			0.0539396   -0.109017    0.473714   1.0
+			-3.75177     -0.51421     0.300234   1.0
+			-0.485357     1.57433    -0.762677   1.0
+			-0.643492    -0.688907    1.42305    1.0
+			0.675002    -0.762804    0.408387   1.0
+			-2.48183      0.397482    0.588621   1.0
+			-2.96432      0.81163    -0.296278   1.0
+			-1.04406     -0.346355    0.691111   1.0
+			-4.63685     -0.187573    0.506874   1.0
+			-2.07605     -1.60726    -0.0569299  1.0
+			-2.85586     -2.48079    -1.77102    1.0
+			0.207866     2.27623     1.59062    1.0
+			-1.38462      0.219693    1.39706    1.0]
+
+	y = data[:,1];
+	xvar = hcat(data[:,2], data[:,4]);
+	_con = data[:,4];
+	zvar = hcat(data[:,3], data[:,4]);
+
+	myini = [0.5, 0.5, 0.5, log(3), log(1)]
+
+	sfmodel_spec(sftype(prod), sfdist(half), 
+			depvar(y), frontier(xvar), 
+			sigma_u_2(zvar), sigma_v_2(_con))
+
+	sfmodel_init(all_init(myini))
+
+	sfmodel_opt(warmstart_solver(NelderMead()),  
+			warmstart_maxIT(200),
+			main_solver(Newton()), 
+			main_maxIT(2000), 
+			tolerance(1e-8), 
+			verbose(false), banner(false)
+			)
+
+	res = sfmodel_fit();
+
+	boot1, d1 = sfmodel_boot_marginal(result=res, R=10, seed=123, getBootData=true)
+
+	@test res.coeff[1] ≈ 0.30200 atol=1e-5 
+	@test res.coeff[2] ≈ 0.13454 atol=1e-5 
+	@test res.marginal[1,1] ≈ -0.08340  atol=1e-5
+	@test res.jlms[1] ≈ 1.21327  atol=1e-5
+	@test res.bc[1] ≈ 0.37075 atol=1e-5
+	@test boot1[1] ≈ 1.60067 atol=7e-5
+	@test d1[1] ≈ -0.47043 atol=1e-5
+
+	pred1 = sfmodel_predict(@eq(frontier))
+	@test pred1[1] ≈ 0.33963 atol=1e-5 
 
 end
 
@@ -431,68 +511,6 @@ end
 
 		pred1 = sfmodel_predict(@eq(frontier))
 		@test pred1[1] ≈  0.52564 atol=1e-5 
-
-end
-
-
-@testset verbose=true "full MLE: N-HN(z), boot (may take time)" begin
-
-	data = [-0.930756     0.679107   -0.117138   1.0
-			-0.611645     0.828413   -0.601254   1.0
-			-1.31106     -0.353007    1.14228    1.0
-			-0.00456725  -0.134854   -0.0886163  1.0
-			-3.36723      0.586617    0.279466   1.0
-			-1.49024      0.297336    0.111422   1.0
-			1.33926      0.0649475  -0.357884   1.0
-			0.0539396   -0.109017    0.473714   1.0
-			-3.75177     -0.51421     0.300234   1.0
-			-0.485357     1.57433    -0.762677   1.0
-			-0.643492    -0.688907    1.42305    1.0
-			0.675002    -0.762804    0.408387   1.0
-			-2.48183      0.397482    0.588621   1.0
-			-2.96432      0.81163    -0.296278   1.0
-			-1.04406     -0.346355    0.691111   1.0
-			-4.63685     -0.187573    0.506874   1.0
-			-2.07605     -1.60726    -0.0569299  1.0
-			-2.85586     -2.48079    -1.77102    1.0
-			0.207866     2.27623     1.59062    1.0
-			-1.38462      0.219693    1.39706    1.0]
-
-	y = data[:,1];
-	xvar = hcat(data[:,2], data[:,4]);
-	_con = data[:,4];
-	zvar = hcat(data[:,3], data[:,4]);
-
-	myini = [0.5, 0.5, 0.5, log(3), log(1)]
-
-	sfmodel_spec(sftype(prod), sfdist(half), 
-			depvar(y), frontier(xvar), 
-			sigma_u_2(zvar), sigma_v_2(_con))
-
-	sfmodel_init(all_init(myini))
-
-	sfmodel_opt(warmstart_solver(NelderMead()),  
-			warmstart_maxIT(200),
-			main_solver(Newton()), 
-			main_maxIT(2000), 
-			tolerance(1e-8), 
-			verbose(false), banner(false)
-			)
-
-	res = sfmodel_fit();
-
-	boot1, d1 = sfmodel_boot_marginal(result=res, R=10, seed=123, getBootData=true)
-
-	@test res.coeff[1] ≈ 0.30200 atol=1e-5 
-	@test res.coeff[2] ≈ 0.13454 atol=1e-5 
-	@test res.marginal[1,1] ≈ -0.08340  atol=1e-5
-	@test res.jlms[1] ≈ 1.21327  atol=1e-5
-	@test res.bc[1] ≈ 0.37075 atol=1e-5
-	@test boot1[1] ≈ 1.60067 atol=7e-5
-	@test d1[1] ≈ -0.47043 atol=1e-5
-
-	pred1 = sfmodel_predict(@eq(frontier))
-	@test pred1[1] ≈ 0.33963 atol=1e-5 
 
 end
 

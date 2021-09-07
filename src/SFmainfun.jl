@@ -208,6 +208,11 @@ function sfmodel_spec(arg::Vararg; message::Bool=false)
             tagD[:modelid] = PanDecay
         elseif (_dicM[:panel] == [:TimeDecay]) 
             throw("The panel time-decay model can only have `sfdist(trun)`.")    
+        elseif (_dicM[:panel] == [:Kumbhakar1990]) && (s == "T")
+            tagD = Dict{Symbol, Type{PanKumb90}}()
+            tagD[:modelid] = PanKumb90      
+        elseif (_dicM[:panel] == [:Kumbhakar1990]) 
+            throw("The panel Kumbhakar 1990 model can only have `sfdist(trun)`.")                    
         else 
             throw("The `sfpanel()` and/or `sfdist()` are not specified correctly.")
         end
@@ -947,7 +952,7 @@ end # sfmodel_fit
 Bootstrap standard errors of the mean marginal effects of inefficiency
 determinants. Return a vector of standard errors of ``K x 1`` where ``K``
 is the number of exogenous inefficiency determinants. Optionally returns
-bootstrapped data (``R x K``, with `getBootData=true`). 
+bootstrapped data (``R x K`` with `getBootData=true`). 
 
 # Arguments
 - result=<returned result>: The returned result from `sfmodel_fit()`.
@@ -957,23 +962,23 @@ bootstrapped data (``R x K``, with `getBootData=true`).
   should be skipped.
 - R::Integer=<number>: The number of bootstrapped samples. The default is 500.
 - seed::Integer=<number>: A postive integer used to seed the random
-  number generator (rng) used in resampling, which ensures reproducibility.
-  This rng is not global and is only effective in in this function. If not
+  number generator (rng) for resampling, which ensures reproducibility.
+  This rng is not global and is only effective in this function. If not
   specified, the global random number generator is used, and the bootstrap
   result may change (slightly) between different runs.
-- iter::Integer=<number>: The maximum number iterations for each bootstrapped
+- iter::Integer=<number>: The maximum number of iterations for each bootstrapped
   sample. If the number is larger than 0, it overwrites the `main_maxIT` 
   specified in `sfmodel_opt()` which is the default.
 - getBootData::Bool=false: Whether to return the bootstrapped data which is
   ``R x K`` where K is the number of exogenous determinants of inefficiency.
-  Default returns only the bootstrapped standard errors (which is ``K x 1``).
+  Default return only the bootstrapped standard errors (which is ``K x 1``).
 - every::Integer=10: Print bootstrapping progress for every `every` samples.
 
 # Remarks
 - Bootstrap samples are with replacement. For panel data, it samples
   cross-sectional units with replacement.
 - In the MLE estimation, estimated
-  coefficients  from the main model is used as initial values. There is no
+  coefficients  from the main result is used as initial values. There is no
   `warmstart`. The `main_solver`, `main_maxIT`, and `tolerance` specified in
   `sfmodel_opt()` are used as default, but the value of `main_maxIT` may be
   replaced by the `iter` option.

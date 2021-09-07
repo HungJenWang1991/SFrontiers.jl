@@ -45,13 +45,12 @@ export sfmodel_spec, sfmodel_init, sfmodel_opt,
         Half_Scale, half_scale, half_scaling,
         production, cost, #* not prod, b/c conflict with Base
         text, html, latex,
-        PFEWHH, PFEWHT, PTREH,  PTRET,  PFECSWH, PanDecay, get_marg, #* export for testing purpose
-        TFE_WH2010, TFE_CSW2014, TFE_G2005, TRE, TimeDecay,
+        PFEWHH, PFEWHT, PTREH,  PTRET,  PFECSWH, PanDecay, get_marg, PanKumb90,  #* export for testing purpose
+        TFE_WH2010, TFE_CSW2014, TFE_G2005, TRE, TimeDecay, Kumbhakar1990,
       # Optim's algorithms  
         NelderMead, SimulatedAnnealing, SAMIN, ParticleSwarm,
         ConjugateGradient, GradientDescent, BFGS, LBFGS,
         Newton, NewtonTrustRegion, IPNewton
-
 
 using Optim
 using DataFrames
@@ -102,6 +101,7 @@ abstract type Sfmodeltype end
   struct PTRET    <: Sfmodeltype end # panel true random effect model, truncated normal
   struct PFECSWH <: Sfmodeltype end
   struct PanDecay <: Sfmodeltype end # Panel Time Decay Model of Battese and Coelli (1992)
+  struct PanKumb90   <: Sfmodeltype end # Kumbhakar (1990)
 
 abstract type PorC end
   struct production <: PorC end
@@ -113,6 +113,7 @@ abstract type PanelModel end
   struct TFE_G2005   <: PanelModel end
   struct TRE         <: PanelModel end
   struct TimeDecay   <: PanelModel end
+  struct Kumbhakar1990 <: PanelModel end
 
 abstract type TableFormat end
   struct text   <: TableFormat end

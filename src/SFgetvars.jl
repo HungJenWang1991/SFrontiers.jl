@@ -734,8 +734,9 @@ end
 
 #?--------- time decay model   ----------------
 
+# function getvar(::Type{PanDecay}, dat::DataFrame)
 
-function getvar(::Type{PanDecay}, dat::DataFrame)
+function getvar(::Union{Type{PanDecay}, Type{PanKumb90}}, dat::DataFrame)
 
   yvar = dat[:, _dicM[:depvar]]   # still a DataFrame
   xvar = dat[:, _dicM[:frontier]]
@@ -748,24 +749,59 @@ function getvar(::Type{PanDecay}, dat::DataFrame)
 
   #* --- model info printout --------- 
 
-  modelinfo1 = "panel time-decay model of Battese and Coelli (1992) (see also Wang and Kumbhakar 2005)"
-  modelinfo2 = begin
-   """
-   * In the case of type(cost), "- uᵢₜ" below is changed to "+ uᵢₜ".
 
-   $(_dicM[:depvar][1]) = frontier($(_dicM[:frontier])) + vᵢₜ - uᵢₜ,
-   
-   where vᵢₜ ∼ N(0, σᵥ²),
-               σᵥ² = exp(log_σᵥ²) 
-                   = exp($(_dicM[:σᵥ²]));
-         uᵢₜ ∼ gammaₜ * uᵢ,
-               gammaₜ = exp($(_dicM[:gamma])), 
-         uᵢ ∼ N⁺(μ, σᵤ²),
-              μ = $(_dicM[:μ])
-              σᵤ² = exp(log_σᵤ²) 
-                  = exp($(_dicM[:σᵤ²]));
-   """
+ if _dicM[:panel][1]  == :TimeDecay
+
+
+      modelinfo1 = "panel time-decay model of Battese and Coelli (1992) (see also Wang and Kumbhakar 2005)"
+      modelinfo2 = begin
+      """
+      * In the case of type(cost), "- uᵢₜ" below is changed to "+ uᵢₜ".
+
+      $(_dicM[:depvar][1]) = frontier($(_dicM[:frontier])) + vᵢₜ - uᵢₜ,
+      
+      where vᵢₜ ∼ N(0, σᵥ²),
+                  σᵥ² = exp(log_σᵥ²) 
+                      = exp($(_dicM[:σᵥ²]));
+            uᵢₜ ∼ gammaₜ * uᵢ,
+                  gammaₜ = exp($(_dicM[:gamma])), 
+            uᵢ ∼ N⁺(μ, σᵤ²),
+                  μ = $(_dicM[:μ])
+                  σᵤ² = exp(log_σᵤ²) 
+                      = exp($(_dicM[:σᵤ²]));
+      """
+      end
+
   end
+
+
+  if _dicM[:panel][1]  == :Kumbhakar1990
+
+    modelinfo1 = "panel Kumbhakar (1990) model"
+    modelinfo2 = begin
+    """
+    * In the case of type(cost), "- uᵢₜ" below is changed to "+ uᵢₜ".
+
+    $(_dicM[:depvar][1]) = frontier($(_dicM[:frontier])) + vᵢₜ - uᵢₜ,
+    
+    where vᵢₜ ∼ N(0, σᵥ²),
+                σᵥ² = exp(log_σᵥ²) 
+                    = exp($(_dicM[:σᵥ²]));
+          uᵢₜ ∼ gammaₜ * uᵢ,
+                gammaₜ = 2/(1 + exp($(_dicM[:gamma]))), 
+          uᵢ ∼ N⁺(μ, σᵤ²),
+                μ = $(_dicM[:μ])
+                σᵤ² = exp(log_σᵤ²) 
+                    = exp($(_dicM[:σᵤ²]));
+    """
+    end
+
+  end
+
+  
+
+
+
 
   #* --- retrieve and generate important parameters -----
 
@@ -841,9 +877,6 @@ function getvar(::Type{PanDecay}, dat::DataFrame)
   checkConst(wvar, :σᵤ²,    @requireConst(1))
   checkConst(vvar, :σᵥ²,    @requireConst(1))
 
-  dum1 = ()
-
-# return modelinfo1, modelinfo2, posvec, nofvar, eqvec, eqvec2,  yvar, xvar, zvar, qvar, wvar, vvar, dum1, rowIDT, varlist
   return modelinfo1, modelinfo2, posvec, nofvar, eqvec, eqvec2,  yvar, xvar, zvar, qvar, wvar, vvar,       rowIDT, varlist
 
 

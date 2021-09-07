@@ -299,6 +299,58 @@ function LL_T(::Type{PanDecay}, Y::Union{Vector,Matrix}, X::Matrix, Z::Matrix, Q
     return -lnf
 end
 
+
+
+#* -------- panel Kumbhakar Model --------------
+
+function LL_T(::Type{PanKumb90}, Y::Union{Vector,Matrix}, X::Matrix, Z::Matrix, Q::Matrix, W::Matrix, V::Matrix, 
+  PorC::Int64, nobs::Int64, po::NamedTuple, rho, idt::Matrix{Any}, ::Nothing)
+
+
+  β  = rho[1:po.endx]
+  δ1 = rho[po.begz:po.endz]
+  τ  = rho[po.begq:po.endq]
+  δ2 = rho[po.begw]  
+  γ  = rho[po.begv]  # rho[po.begw : po.endw][1]
+
+  nofid = size(idt,1)
+
+  σᵤ² = exp(δ2)    # should be W*log_σᵤ² where W is a _cons =1; make a short cut here
+  σᵤ  = exp(0.5*δ2)
+  σᵥ² = exp(γ)
+  σᵥ  = exp(0.5*γ)
+  σₛ² = σᵤ² + σᵥ²
+  
+  @floop begin
+    lnf = zero(eltype(Y))
+    @inbounds for i = 1:nofid 
+        @views ind = idt[i,1]
+        @views Tᵢ  = idt[i,2] 
+        @views ε   = PorC*(Y[ind] - X[ind, :] * β)
+        @views μ   = (Z[ind, :] * δ1)[1]  # ok becuase time-invariant
+        @views Gₜ  = 2 ./ (1 .+ exp.(Q[ind, :] * τ ) )
+               Gε  = Gₜ .* ε
+
+        Σε²  = sum_kbn(ε.^2)  #*  sensitive in this part, need precision
+        ΣGε  = sum_kbn(Gε)    
+        ΣGₜ² = sum_kbn(Gₜ.^2) 
+        # ΣGₜ  = sum_kbn(Gₜ)    
+      
+        μₛ      = (μ * σᵥ² - ΣGε * σᵤ²) / (σᵥ² + σᵤ² * ΣGₜ²)
+        σₛ²     =  σᵥ² * σᵤ² / (σᵥ² + σᵤ² * ΣGₜ²)
+        comp1   = (μ * σᵥ² - σᵤ² * ΣGε)^2 / (σᵥ² * σᵤ² * (σᵥ² + σᵤ² * ΣGₜ²))
+        bigterm =  Σε²/σᵥ² + (μ)^2 / σᵤ² - comp1
+
+        lnf += ( - 0.5*(Tᵢ)*log(2π) + normlogcdf(μₛ/sqrt(σₛ²)) 
+                + 0.5*log(σₛ²) - 0.5*bigterm - Tᵢ*0.5*γ
+                - 0.5*δ2 - normlogcdf(μ/σᵤ)  )
+    end
+  end  
+  return -lnf
+end
+
+
+
 #* -------- panel fixed effect, Half normal, CSW JoE 2014 (CSN) --------
 
 

@@ -1016,7 +1016,7 @@ end
      
     (length(arg)==1)||throw("@sfpanel in sfmodel_spec should have one single string.")
     
-    if !(arg[1] ∈ (:TFE_WH2010, :TFE_CSW2014, :TFE_G2005, :TRE, :TimeDecay ))
+    if !(arg[1] ∈ (:TFE_WH2010, :TFE_CSW2014, :TFE_G2005, :TRE, :TimeDecay, :Kumbhakar1990 ))
          throw("The keyword of @sfpanel in sfmodel_spec is specified incorrectly.")
     end 
     
@@ -1032,7 +1032,7 @@ end
      
     (length(arg)==1) || throw("`sfpanel()` in sfmodel_spec should have one single string.")
     
-    if !(arg[1] ∈ (TFE_WH2010, TFE_CSW2014, TFE_G2005, TRE, TimeDecay ))
+    if !(arg[1] ∈ (TFE_WH2010, TFE_CSW2014, TFE_G2005, TRE, TimeDecay, Kumbhakar1990 ))
          throw("The keyword of `sfpanel` in sfmodel_spec is specified incorrectly.")
     end 
     

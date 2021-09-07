@@ -113,6 +113,24 @@ function checksyn(::Type{PanDecay})
     end
 end
 
+# ------- panel Kumbhakar 1990 model  -------------
+
+function checksyn(::Type{PanKumb90})
+    for k in (:depvar, :frontier, :μ, :gamma, :σᵤ², :σᵥ², :idvar) 
+        if  (_dicM[k] === nothing) 
+            throw("For the panel Kumbhakar (1990) model, the $k equation is required but is currently missing in your sfmodel_spec().")
+        end 
+    end
+    for k in (:σₐ², :hscale, ) 
+        if  (_dicM[k] !== nothing) 
+            throw("For the panel Kumbhakar (1990) model, the $k equation is not needed in sfmodel_spec().")
+        end 
+    end
+end
+
+
+
+
 # ------- panel CSW (2014 JoE) CSN model, with Halfnormal Dist ----------
 
 function checksyn(::Type{PFECSWH})

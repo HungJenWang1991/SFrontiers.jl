@@ -241,6 +241,59 @@ function jlmsbc(::Type{PanDecay}, PorC::Int64, pos::NamedTuple, coef::Array{Floa
   return jlms_uit, bc_uit
 end
 
+
+#? ---------- panel Kumbhakar 1990 -----------
+
+function jlmsbc(::Type{PanKumb90}, PorC::Int64, pos::NamedTuple, coef::Array{Float64, 1}, 
+  Y::Matrix, X::Matrix, Z::Matrix, Q::Matrix, W::Matrix, V::Matrix, # dum1, 
+  idt::Matrix{Any})
+
+  x_pre = X*coef[pos.begx : pos.endx]
+  z_pre = Z*coef[pos.begz : pos.endz]  
+  q_pre = Q*coef[pos.begq : pos.endq]
+  w_pre =   coef[pos.begw] # log_σᵤ²
+  v_pre =   coef[pos.begv] # log_σᵥ²
+  
+  nofobs = length(Y)
+  N = size(idt)[1]
+
+  σᵤ² = exp(w_pre)    # should be W*log_σᵤ² where W is a _cons =1; make a short cut here
+  σᵥ² = exp(v_pre)
+  σₛ² = σᵤ² + σᵥ²
+
+  jlms_ui  = zeros(nofobs, 1)
+  jlms_uit = zeros(nofobs, 1)
+  bc_uit   = zeros(nofobs, 1)
+  
+  @inbounds for i = 1:N
+      @views ind = idt[i,1]
+      @views Tᵢ  = idt[i,2] 
+      @views ε   = PorC*(Y[ind] - x_pre[ind])
+      @views μ   = (z_pre[ind])[1]  # ok becuase it is time-invariant
+      @views Gₜ  = 2 ./ (1 .+ exp.(q_pre[ind])  ) # Gₜ  = exp.(q_pre[ind]) 
+      Gε  = Gₜ .* ε
+  
+      ΣGε  = sum_kbn(Gε)  
+      ΣGₜ² = sum_kbn(Gₜ.^2) 
+     
+      μₛ   = (μ * σᵥ² - ΣGε * σᵤ²) / (σᵥ² + σᵤ² * ΣGₜ²)
+      σₛ²  =  σᵥ² * σᵤ² / (σᵥ² + σᵤ² * ΣGₜ²)
+      σₛ   = sqrt(σₛ²)
+  
+             jlms_ui[ind] .= μₛ + σₛ*(normpdf(μₛ/σₛ) / normcdf(μₛ/σₛ))  # identical within the panel
+      @views jlms_uit[ind] = Gₜ .* jlms_ui[ind]
+
+      bc_uit[ind] = (normcdf.(μₛ/σₛ .- Gₜ*σₛ  ) ./ normcdf( μₛ/σₛ )) .* exp.(-Gₜ.*μₛ + 0.5*((Gₜ).^2)*σₛ²)
+
+  end
+
+  return jlms_uit, bc_uit
+end
+
+
+
+
+
 #? ---------- panel FE CSW (JoE 2014), Half normal -----------
 
 function jlmsbc(::Type{PFECSWH}, PorC::Int64, pos::NamedTuple, coef::Array{Float64, 1}, 

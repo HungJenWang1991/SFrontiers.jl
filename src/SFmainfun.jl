@@ -949,10 +949,15 @@ end # sfmodel_fit
 """
     sfmodel_boot_marginal(<keyword arguments>)
 
-Bootstrap standard errors of the mean marginal effects of inefficiency
-determinants. Return a vector of standard errors of ``K x 1`` where ``K``
-is the number of exogenous inefficiency determinants. Optionally returns
-bootstrapped data (``R x K`` with `getBootData=true`). 
+Bootstrap standard errors and obtain bias-corrected (BC) confidence intervals
+for the mean marginal effects of inefficiency determinants. In default, return
+a ``K x 2``` matrix of standard errors (1st column) and confidence intervals
+(tuples, 2nd column), where ``K`` is the number of exogenous inefficiency
+determinants. With `getBootData=true`, return two matrices: the first is the
+same as in the default return, and the second is the ``R x K`` bootstrapped
+data.
+
+See also the help file on `sfmodel_CI()`.
 
 # Arguments
 - result=<returned result>: The returned result from `sfmodel_fit()`.
@@ -961,6 +966,10 @@ bootstrapped data (``R x K`` with `getBootData=true`).
   (instead of DataFrame; i.e., the Method 2 of `sfmodel_spec()`), this option
   should be skipped.
 - R::Integer=<number>: The number of bootstrapped samples. The default is 500.
+- level::Real=<number>: The significance level (default=0.05) of the bias-corrected
+  confidence intervals. If `level`>0.5, it is automatically transformed to
+  `1-level`, such that `level=0.05` and `level=0.95` both return 95%
+  confidene intervals at the 5% significance level.
 - seed::Integer=<number>: A postive integer used to seed the random
   number generator (rng) for resampling, which ensures reproducibility.
   This rng is not global and is only effective in this function. If not
@@ -971,43 +980,63 @@ bootstrapped data (``R x K`` with `getBootData=true`).
   specified in `sfmodel_opt()` which is the default.
 - getBootData::Bool=false: Whether to return the bootstrapped data which is
   ``R x K`` where K is the number of exogenous determinants of inefficiency.
-  Default return only the bootstrapped standard errors (which is ``K x 1``).
 - every::Integer=10: Print bootstrapping progress for every `every` samples.
 
 # Remarks
 - Bootstrap samples are with replacement. For panel data, it samples
   cross-sectional units with replacement.
 - In the MLE estimation, estimated
-  coefficients  from the main result is used as initial values. There is no
+  coefficients from the main result is used as initial values. There is no
   `warmstart`. The `main_solver`, `main_maxIT`, and `tolerance` specified in
   `sfmodel_opt()` are used as default, but the value of `main_maxIT` may be
   replaced by the `iter` option.
 
 # Examples
 ```julia
-julia> b_err = sfmodel_boot_marginal(result=res, data=df, 
-                 R=250, seed=123)  
+julia> std_ci = sfmodel_boot_marginal(result=res, data=df, R=250, seed=123)
+bootstrap in progress..10..20..30..40..50..60..70..80..90..100..110..120..130..140..150..160..170..180..190..200..210..220..230..240..250..Done!
 
-┌────────┬──────────────────────┬──────────────────────┐
-│        │ mean of the marginal │      std.err. of the │
-│        │       effect on E(u) │ mean marginal effect │
-├────────┼──────────────────────┼──────────────────────┤
-│    age │            -0.002645 │               0.0022 │
-│ school │           -0.0119745 │               0.0176 │
-│     yr │           -0.0265006 │               0.0123 │
-└────────┴──────────────────────┴──────────────────────┘
+┌────────┬──────────────────────┬─────────────────┬──────────────────────┐
+│        │ mean of the marginal │ std.err. of the │       bias-corrected │
+│        │       effect on E(u) │     mean effect │    95.0%  conf. int. │
+├────────┼──────────────────────┼─────────────────┼──────────────────────┤
+│    age │             -0.00264 │         0.00225 │   (-0.00734, 0.0016) │
+│ school │             -0.01197 │         0.01765 │    (-0.048, 0.01224) │
+│     yr │             -0.02650 │         0.01221 │ (-0.05257, -0.00447) │
+└────────┴──────────────────────┴─────────────────┴──────────────────────┘
 
-3×1 adjoint(::Matrix{Float64}) with eltype Float64:
- 0.0022466588714701637
- 0.01761274009269851
- 0.012314936361028156
+3×2 Matrix{Any}:
+ 0.00224786  (-0.00734, 0.0016)
+ 0.0176472   (-0.048, 0.01224)
+ 0.012213    (-0.05257, -0.00447)
 
-julia> b_err, b_data = sfmodel_boot_marginal(result=res, 
-       data=df, R=250, seed=123, getBootData=true); 
+julia> std_ci, bsdata = sfmodel_boot_marginal(result=res, data=df, R=250, seed=123, getBootData=true);
+
+ (output omitted)
+
+julia> bsdata
+250×3 adjoint(::Matrix{Real}) with eltype Real:
+-0.000493033  -0.00840051   -0.0339088
+-0.00510175   -0.0128184    -0.0147759
+-0.0024987    -0.00971428   -0.00989262
+-0.00157346   -0.0265515    -0.0140001
+-0.00352179   -0.00670365   -0.0246122
+-0.00375162   -0.0070496    -0.0306034
+-0.00153094   -0.0154201    -0.0367731
+0.000149329   0.00672036   -0.0461389
+⋮
+-0.00373306   -0.0108364    -0.00871898
+-0.00170254   -0.0393002    -0.0500638
+0.000686169   0.00241594   -0.018542
+0.000258745   0.000183392  -0.039621
+-0.00408104   -0.014574     -0.024126
+-0.00417206   -0.0192443    -0.0406959
+0.00266017   -0.0396552    -0.0359759
 ```
 """
 function sfmodel_boot_marginal(; result::Any=nothing,  data::Any=nothing, 
                                  R::Integer=500, 
+                                 level::Real=0.05,
                                  mymisc=nothing,
                                  iter::Integer=-1,
                                  getBootData::Bool=false,
@@ -1024,7 +1053,6 @@ function sfmodel_boot_marginal(; result::Any=nothing,  data::Any=nothing,
       throw("`data=` needs to be a DataFrame.")
   end      
 
-
    # getvar still use info from _dicM 
 
   if result.marginal_mean==NamedTuple() || result.marginal_mean === nothing
@@ -1032,12 +1060,18 @@ function sfmodel_boot_marginal(; result::Any=nothing,  data::Any=nothing,
                =# "or you didn't compute the marginal effect in the main estimation. Abort the bootstrap.\n"; color = :red)
       throw("No statistics to bootstrap.")               
   end    
- 
+
+
+  ((level > 0.0) && (level < 1.0)) || throw("The significance level (`level`) should be between 0 and 1.")
+  
+  if level > 0.5
+     level = 1-level  # 0.95 -> 0.05
+  end
+
      # In the following lines, the integer part had been taken care of in Type.
   (seed == -1) || ( seed > 0) || throw("`seed` needs to be a positive integer.")
   (iter == -1) || ( iter > 0) || throw("`iter` needs to be a positive integer.")
   (R > 0) || throw("`R` needs to be a positive integer.")
-
 
 #* ##### Get parameters #######
 
@@ -1052,9 +1086,7 @@ function sfmodel_boot_marginal(; result::Any=nothing,  data::Any=nothing,
            sf_maxit = iter
        end 
 
-
 #* ########  parepare data  ##########
-
 
   (minfo1, minfo2, pos, num, eqvec, eqvec2, yvar, xvar, zvar, qvar, wvar, 
    vvar,         rowIDT, varlist) = SFrontiers.getvar(result.modelid, data)
@@ -1199,17 +1231,18 @@ function sfmodel_boot_marginal(; result::Any=nothing,  data::Any=nothing,
 
 end   # for i=1:R
 
- sim_res = sim_res'  # ith row = ith replication, column = statistics
+ sim_res = sim_res'  # nofobs x K; ith row = ith replication, column = statistics
 
  #*###### compute statistics for the mean marginal effect #####*#
 
-   theMean = mean.(eachcol(result.marginal))  # 1 x K
+   theMean = mean.(eachcol(result.marginal))  # Kx1 vector
    theSTD  = sqrt.( sum((sim_res .- theMean').^2, dims=1) ./(R-1)) # 1 x K
 
+   ci_mat = sfmodel_CI(bootdata=sim_res, observed=theMean, level=level, verbose=false);
 
    if result.verbose 
 
-      table = Array{Any}(undef, length(theMean), 3)
+      table = Array{Any}(undef, length(theMean), 3+1)
       vname = names(result.marginal)
 
       for j in 1:length(theMean) 
@@ -1217,15 +1250,18 @@ end   # for i=1:R
       end
       
       table[:,2], table[:,3] = theMean, theSTD
+      table[:,4] = ci_mat
 
-      table = [" " "mean of the marginal" "std.err. of the" ; 
-               " " "effect on E(u)"      "mean marginal effect";
+       mylevel = 100*(1-level)
+
+      table = [" " "mean of the marginal" "std.err. of the"  "bias-corrected"; 
+               " " "effect on E(u)"       "mean effect"      "$(mylevel)%  conf. int.";
                table]  
 
             pretty_table(table,
                          noheader= true,
                          body_hlines = [2],
-                         formatters = ft_printf("%5.4f", 3:8),
+                         formatters = ft_printf("%0.5f", 2:4),
                          compact_printing = true,
                          backend = Val(sf_table))
             println()
@@ -1233,9 +1269,9 @@ end   # for i=1:R
    end
 
    if getBootData == false   # most likely
-      return theSTD' # K x 1
+      return hcat(theSTD', ci_mat) # K x 1
    else
-      return theSTD', sim_res
+      return hcat(theSTD', ci_mat), sim_res
    end
 
 end # sfmodel_boot_marginal
@@ -1263,7 +1299,110 @@ function mySample2!(rowIDT, data, select)
   return temp1
 end
 
+"""
+function sfmodel_CI(; bootdata::Any=nothing, observed::Union{Vector, Real, Tuple, NamedTuple}=nothing, level::Real=0.05, verbose::Bool=true)
 
+    sfmodel_CI(<keyword arguments>)
+
+A general purpose (not specific to stochastic frontier models) function for
+obtaining bias-correctred (BC) confidence intervals from bootstrapped data.
+Return a ``K x 1`` matrix of confidence intervals in the form of tuples, where
+``K`` is the number of bootstrap statistics.
+
+See also the help file on `sfmodel_boot_marginal()`.
+
+# Arguments
+- bootdata::Array=<data>: The bootstrapped data of size ``R x K``,
+  where ``R`` is the number of bootstrap samples (replications) and ``K`` is
+  the number of statistics. An example is the bootstrapped data from
+  `sfmodel_boot_marginal(, ... getBootData=true)`.
+- observed::Union{Vector, Real, Tuple, NamedTuple}=<a vector of numbers>: The
+  observed values of the statistics to which the confidence intervals are to
+  be calculated. The length of `observed` should be equal to ``K``. It could take
+  the form of a single value (if ``K=1``), a vector, a tuple, or a NamedTuple.
+- level::Real=<number>: The significance level (default=0.05) of the bias-corrected
+  confidence intervals. If `level`>0.5, it is automatically transformed to
+  `1-level`, such that `level=0.05` and `level=0.95` both return 95%
+  confidene intervals at the 5% significance level.  
+- verbose::Bool=true: Print the result.
+
+# Examples
+```julia
+julia> myans = sfmodel_fit(useData(df));
+
+ (output omitted)
+
+julia> std_ci, bsdata = sfmodel_boot_marginal(result=myans, data=df, R=250, seed=123, getBootData=true);
+
+ (output omitted)
+
+julia> sfmodel_CI(bootdata=bsdata, observed=myans.marginal_mean, level=0.10) 
+
+Bias-Corrected 90.0% Confidence Interval:
+ 
+3×1 Matrix{Any}:
+ (-0.00655, 0.0009)
+ (-0.04064, 0.0086)
+ (-0.04663, -0.00872)
+
+julia> # manually input observed values
+
+julia> sfmodel_CI(bootdata=bsdata, observed=(-0.00264, -0.01197, -0.0265), level=0.10)
+ 
+Bias-Corrected 90.0% Confidence Interval:
+ 
+3×1 Matrix{Any}:
+ (-0.00655, 0.0009)
+ (-0.04064, 0.0086)
+ (-0.04663, -0.00872)
+```
+"""
+function sfmodel_CI(; bootdata::Any=nothing, observed::Union{Vector, Real, Tuple, NamedTuple}=nothing, level::Real=0.05, verbose::Bool=true)
+
+    # bias-corrected (but not accelerated) confidence interval 
+    # For the "accelerated" factor, need to estimate the SF model 
+    #    for every jack-knifed sample, which is expensive.
+
+    if (observed isa NamedTuple)
+        observed = values(observed)
+    end
+
+   ((level > 0.0) && (level < 1.0)) || throw("The significance level (`level`) should be between 0 and 1.")
+
+   if level > 0.50
+      level = 1-level  # 0.95 -> 0.05
+   end
+
+    nofobs, nofK = size(bootdata)  # number of statistics
+
+    (nofK == length(observed)) || throw("The number of statistics (`observed`) does not fit the number of columns of bootstrapped data.")
+    
+    ci = Array{Any}(undef, nofK, 1)
+
+    z1 = quantile(Normal(), level/2)
+    z2 = quantile(Normal(), 1 - level/2)  #! why z1 != z2?
+
+    for i in 1:nofK
+        @views data = bootdata[:,i]
+
+        count = sum(data .< observed[i])
+        z0 = quantile(Normal(), count/nofobs) # bias corrected factor
+
+        alpha1 = cdf(Normal(), z0 + ((z0 + z1) ))
+        alpha2 = cdf(Normal(), z0 + ((z0 + z2) ))
+        
+        order_data = sort(data)
+
+        ci[i,1] = (  round(order_data[Int(ceil(nofobs*alpha1))], digits=5),    round(order_data[Int(ceil(nofobs*alpha2))], digits=5)  )
+    end
+
+    if verbose == true
+       mylevel = 100*(1-level)
+       println("\nBias-Corrected $(mylevel)% Confidence Interval:\n")
+    end
+
+    return ci
+end
 
 ########################################################
 ####            catching type error                 ####

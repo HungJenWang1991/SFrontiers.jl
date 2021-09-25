@@ -32,6 +32,7 @@ export sfmodel_spec, sfmodel_init, sfmodel_opt,
         ineff_index, marginal, table_format,
        # functions for sfmodel_fit
          useData,
+         sfmodel_CI,
        # functions for JLMS and BC index
         jlmsbc, jlmsbc_marg,
        # the table for regular and mixed Chi-square test
@@ -50,7 +51,9 @@ export sfmodel_spec, sfmodel_init, sfmodel_opt,
       # Optim's algorithms  
         NelderMead, SimulatedAnnealing, SAMIN, ParticleSwarm,
         ConjugateGradient, GradientDescent, BFGS, LBFGS,
-        Newton, NewtonTrustRegion, IPNewton
+        Newton, NewtonTrustRegion, IPNewton 
+  
+
 
 using Optim
 using DataFrames

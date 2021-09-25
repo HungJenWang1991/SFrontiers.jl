@@ -277,6 +277,10 @@ end
 	@test boot1[1] ≈ 1.60067 atol=7e-5
 	@test d1[1] ≈ -0.47043 atol=1e-5
 
+    ci90 = sfmodel_CI(bootdata=d1, observed=res.marginal_mean, level=0.10, verbose=false);
+    @test ci90[1][1] ≈ -0.38963 atol=1e-5
+
+
 	pred1 = sfmodel_predict(@eq(frontier))
 	@test pred1[1] ≈ 0.33963 atol=1e-5 
 

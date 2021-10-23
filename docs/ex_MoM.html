@@ -1,0 +1,113 @@
+<!DOCTYPE html>
+<html lang="en"><head><meta charset="UTF-8"/><meta name="viewport" content="width=device-width, initial-scale=1.0"/><title>MoM test and estimation · Stochastic Frontier Analysis using Julia</title><script async src="https://www.googletagmanager.com/gtag/js?id=UA-134239283-1"></script><script>  window.dataLayer = window.dataLayer || [];
+  function gtag(){dataLayer.push(arguments);}
+  gtag('js', new Date());
+  gtag('config', 'UA-134239283-1', {'page_path': location.pathname + location.search + location.hash});
+</script><script data-outdated-warner src="assets/warner.js"></script><link href="https://cdnjs.cloudflare.com/ajax/libs/lato-font/3.0.0/css/lato-font.min.css" rel="stylesheet" type="text/css"/><link href="https://cdnjs.cloudflare.com/ajax/libs/juliamono/0.039/juliamono-regular.css" rel="stylesheet" type="text/css"/><link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/5.15.3/css/fontawesome.min.css" rel="stylesheet" type="text/css"/><link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/5.15.3/css/solid.min.css" rel="stylesheet" type="text/css"/><link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/5.15.3/css/brands.min.css" rel="stylesheet" type="text/css"/><link href="https://cdnjs.cloudflare.com/ajax/libs/KaTeX/0.13.11/katex.min.css" rel="stylesheet" type="text/css"/><script>documenterBaseURL="."</script><script src="https://cdnjs.cloudflare.com/ajax/libs/require.js/2.3.6/require.min.js" data-main="assets/documenter.js"></script><script src="siteinfo.js"></script><script src="../versions.js"></script><link class="docs-theme-link" rel="stylesheet" type="text/css" href="assets/themes/documenter-dark.css" data-theme-name="documenter-dark" data-theme-primary-dark/><link class="docs-theme-link" rel="stylesheet" type="text/css" href="assets/themes/documenter-light.css" data-theme-name="documenter-light" data-theme-primary/><script src="assets/themeswap.js"></script></head><body><div id="documenter"><nav class="docs-sidebar"><a class="docs-logo" href="index.html"><img src="assets/logo.png" alt="Stochastic Frontier Analysis using Julia logo"/></a><div class="docs-package-name"><span class="docs-autofit"><a href="index.html">Stochastic Frontier Analysis using Julia</a></span></div><form class="docs-search" action="search.html"><input class="docs-search-query" id="documenter-search-query" name="q" type="text" placeholder="Search docs"/></form><ul class="docs-menu"><li><a class="tocitem" href="index.html">Home of SFrontiers.jl</a></li><li><span class="tocitem">User Guide</span><ul><li><a class="tocitem" href="installation.html">Installation</a></li><li><a class="tocitem" href="overview.html">Estimation Overview</a></li><li><a class="tocitem" href="ex_detail.html">A Detailed Example</a></li><li><input class="collapse-toggle" id="menuitem-2-4" type="checkbox" checked/><label class="tocitem" for="menuitem-2-4"><span class="docs-label">Other Examples</span><i class="docs-chevron"></i></label><ul class="collapsed"><li><a class="tocitem" href="ex_cross.html">cross-sectional models</a></li><li><a class="tocitem" href="ex_panel.html">panel models</a></li><li class="is-active"><a class="tocitem" href="ex_MoM.html">MoM test and estimation</a></li></ul></li><li><a class="tocitem" href="api.html">API Reference</a></li></ul></li><li><a class="tocitem" href="LICENSE.html">License</a></li></ul><div class="docs-version-selector field has-addons"><div class="control"><span class="docs-label button is-static is-size-7">Version</span></div><div class="docs-selector control is-expanded"><div class="select is-fullwidth is-size-7"><select id="documenter-version-selector"></select></div></div></div></nav><div class="docs-main"><header class="docs-navbar"><nav class="breadcrumb"><ul class="is-hidden-mobile"><li><a class="is-disabled">User Guide</a></li><li><a class="is-disabled">Other Examples</a></li><li class="is-active"><a href="ex_MoM.html">MoM test and estimation</a></li></ul><ul class="is-hidden-tablet"><li class="is-active"><a href="ex_MoM.html">MoM test and estimation</a></li></ul></nav><div class="docs-right"><a class="docs-settings-button fas fa-cog" id="documenter-settings-button" href="#" title="Settings"></a><a class="docs-sidebar-button fa fa-bars is-hidden-desktop" id="documenter-sidebar-button" href="#"></a></div></header><article class="content" id="documenter-page"><h1 id="panel"><a class="docs-heading-anchor" href="#panel">Examples of Moment-Based Estimation and Hypothesis Testing</a><a id="panel-1"></a><a class="docs-heading-anchor-permalink" href="#panel" title="Permalink"></a></h1><ul><li><a href="ex_MoM.html#panel">Examples of Moment-Based Estimation and Hypothesis Testing</a></li><ul><ul><ul><li><a href="ex_MoM.html#Normal-Half-Normal-Model">Normal Half-Normal Model</a></li><li><a href="ex_MoM.html#Normal-Exponential-Model">Normal Exponential Model</a></li><li><a href="ex_MoM.html#Test-the-Distribution-Assumptions">Test the Distribution Assumptions</a></li><li><a href="ex_MoM.html#Test-the-Distribution-Assumptions,-Estimate-Model-Parameters,-Obtain-Inefficiency-Index">Test the Distribution Assumptions, Estimate Model Parameters, Obtain Inefficiency Index</a></li></ul></ul></ul></ul><p>In addition to the MLE-based estimation, stochastic frontier models may also be estimated using other methods including the method of moments (MoM). We provide <code>sfmodel_MoMTest()</code> which uses the MoM to test and estimate the normal-half normal and the normal-exponential models. This is based on <a href="index.html#literature">Chen and Wang (2012)</a>.</p><p>There are advantages of the MoM estimator over the MLE in general and in regard with <code>sfmodel_MoMTest()</code> in particular.</p><ul><li>MoM estimators usually run much faster and are less prone to numerical issues. In fact, <code>sfmodel_MoMTest()</code> uses closed-form solutions for all of the model parameters; there is no need for numerical optimization or root-finding procedures.</li><li>The <code>sfmodel_MoMTest()</code> provides formal hypothesis testings on the joint distribution assumptions on <span>$v$</span> and <span>$u$</span> of the model&#39;s composed error (e.g., <span>$\epsilon = v-u$</span>). The test may be used for formally justifying the distribution assumptions of the model, or for data exploration. The result is valid regardless whether you decide to proceed with the MLE or the MoM for subsequent parameter estimation. </li></ul><p>Because of its simplicity, the MoM estimation and test are done using a single command <code>sfmodel_MoMTest()</code>. In contrast, the MLE approach requires multiple estimation commands to accomplish (e.g., <code>sfmodel_spec()</code>, <code>sfmodel_init()</code>, <code>sfmodel_opt()</code>, <code>sfmodel_fit()</code>).</p><p>Currently, <code>sfmodel_MoMTest()</code> does not have panel data feature and it assumes all the observations are iid.</p><h4 id="Normal-Half-Normal-Model"><a class="docs-heading-anchor" href="#Normal-Half-Normal-Model">Normal Half-Normal Model</a><a id="Normal-Half-Normal-Model-1"></a><a class="docs-heading-anchor-permalink" href="#Normal-Half-Normal-Model" title="Permalink"></a></h4><p>A general setup of the model is:</p><p class="math-container">\[\begin{aligned}
+  y_i &amp; = x_i \beta + \epsilon_i,\\
+  \epsilon_i &amp; = v_i - u_i,\\
+  v_i \sim N(0, \sigma_v^2),  &amp; \quad u_i  \sim N^+(0, \sigma_u^2),
+\end{aligned} \]</p><p>where <span>$\sigma_v^2$</span> and <span>$\sigma_u^2$</span> are both constant. Here <span>$N^+(0, \sigma_u^2)$</span> is a <em>half-normal distribution</em> obtained by truncating the normal distribution <span>$N(0, \sigma_u^2)$</span> from below at 0. There is no variables of inefficiency determinants (<span>$z_i$</span>) in the model.</p><h4 id="Normal-Exponential-Model"><a class="docs-heading-anchor" href="#Normal-Exponential-Model">Normal Exponential Model</a><a id="Normal-Exponential-Model-1"></a><a class="docs-heading-anchor-permalink" href="#Normal-Exponential-Model" title="Permalink"></a></h4><p>This model assumes <span>$u_i$</span> follows an exponential distribution. </p><p class="math-container">\[\begin{aligned}
+u_i  \sim \mathrm{Exp}(\sigma_u^2),
+\end{aligned} \]</p><p>where <span>$\sigma_u^2$</span> is the scale parameter such that <span>$E(u_i) = \sigma_u$</span> and <span>$Var(u_i) = \sigma_u^2$</span>. The <span>$\sigma_u^2$</span> may be parameterized by a vector of variables, as we show in the following example. There is no variables of inefficiency determinants (<span>$z_i$</span>) in the model.</p><h4 id="Test-the-Distribution-Assumptions"><a class="docs-heading-anchor" href="#Test-the-Distribution-Assumptions">Test the Distribution Assumptions</a><a id="Test-the-Distribution-Assumptions-1"></a><a class="docs-heading-anchor-permalink" href="#Test-the-Distribution-Assumptions" title="Permalink"></a></h4><p>Suppose we want to conduct a hypothesis test on the assumption that <span>$v_i$</span> follows a normal distribution and <span>$u_i$</span> follows an exponential distribution in the data.</p><pre><code class="language-julia hljs">julia&gt; using SFrontiers        # main packages
+julia&gt; using DataFrames, CSV   # handling data
+
+julia&gt; df = DataFrame(CSV.File(&quot;sampledata.csv&quot;)) 
+julia&gt; df[!, :_cons] .= 1.0;         # append column _cons as a column of 1 
+
+julia&gt; sfmodel_MoMTest(sftype(prod), sfdist(expo),
+               @depvar(yvar), @frontier( Lland, PIland, Llabor, Lbull, Lcost, _cons),
+               data=df, 
+               ω=(0.5, 1, 2),
+               testonly = true
+               )</code></pre><ul><li><code>sftype(prod)</code> indicates a production-frontier type of model. The alternative is <code>cost</code> for cost frontier where the composed error is <span>$v_i + u_i$</span>.</li><li><code>sfdist(expo)</code> specifies the exponential distribution assumption on <span>$u_i$</span>. An alternative is <code>half</code> for half-normal.</li><li><code>@depvar(.)</code> specifies the dependent variable.</li><li><code>@frontier(.)</code> specifies the list of variables used in the frontier equation. The variables are assumed to be linear in the equation.</li><li><code>data=df</code> specifies the dataset, which has to be in the DataFrame format.</li><li><code>ω=(0.5, 1, 2)</code> or <code>omega=(0.5, 1, 2)</code> specifies the test parameter, which may be a single scalar (e.g., <code>ω=1</code>) or a list of scalars (e.g., <code>ω=(0.5, 1, 2)</code>). Chen and Wang (2012) suggests that <code>ω=1</code> usually works well. </li><li><code>testonly=true</code> specifies to show only the test results. Default is <code>false</code>, which print both the test and the estimation results on the screen.</li><li>Other options include <code>level=</code> to set the significance level of the confidence intervals.</li></ul><p>Here is the result.</p><pre><code class="language-julia hljs">****************************************
+** Moment Based Tests and Estimations **
+****************************************
+
+* Null Hypothesis: v is normal AND u is exponential.
+
+  Test Statistics (χ² distribution)
+┌─────┬─────────┬─────────┐
+│   ω │    sine │  cosine │
+├─────┼─────────┼─────────┤
+│ 0.5 │ 3.78229 │ 4.95490 │
+│   1 │ 3.94102 │ 4.99217 │
+│   2 │ 4.41290 │ 3.59071 │
+└─────┴─────────┴─────────┘
+  Note: Chen and Wang (2012 EReviews) indicates that cosine test 
+with ω=1 has good overall performance.
+
+
+  Critical Values (χ²(1))
+┌─────────┬─────────┬─────────┐
+│      1% │      5% │     10% │
+├─────────┼─────────┼─────────┤
+│ 6.63490 │ 3.84146 │ 2.70554 │
+└─────────┴─────────┴─────────┘</code></pre><p>If we take the cosine test at <span>$\omega=1$</span>, the test statistic is <span>$4.992$</span> which is larger than the 5% significance level (though smaller than the 1% level). We may conclude that the null hypothesis (<span>$v$</span> is normal and <span>$u$</span> is exponential) is rejected at the 5% level.</p><h4 id="Test-the-Distribution-Assumptions,-Estimate-Model-Parameters,-Obtain-Inefficiency-Index"><a class="docs-heading-anchor" href="#Test-the-Distribution-Assumptions,-Estimate-Model-Parameters,-Obtain-Inefficiency-Index">Test the Distribution Assumptions, Estimate Model Parameters, Obtain Inefficiency Index</a><a id="Test-the-Distribution-Assumptions,-Estimate-Model-Parameters,-Obtain-Inefficiency-Index-1"></a><a class="docs-heading-anchor-permalink" href="#Test-the-Distribution-Assumptions,-Estimate-Model-Parameters,-Obtain-Inefficiency-Index" title="Permalink"></a></h4><p>What if <span>$u_i$</span> is assumed to follow a half-normal distribution? It can be tested in a similar way. In the following example, we do not set <code>testonly=true</code> so that we will see results of both of the test and the parameter estimation. We also use <code>res</code> in the beginning of the command to receive returns of the command for later analysis. The returned results include the Jondrow et al.(1982) inefficiency index (JLMS), the Battese and Coelli (1988) efficiency index, and others.</p><pre><code class="language-julia hljs">julia&gt; res = sfmodel_MoMTest(sftype(prod), sfdist(half),
+                     @depvar(yvar), @frontier( Lland, PIland, Llabor, Lbull, Lcost, _cons),
+                     data = df,
+                     ω = (0.5, 1, 2)
+                     )
+
+
+****************************************
+** Moment Based Tests and Estimations **
+****************************************
+
+* Null Hypothesis: v is normal AND u is half-normal.
+
+  Test Statistics (χ² distribution)
+┌─────┬─────────┬─────────┐
+│   ω │    sine │  cosine │
+├─────┼─────────┼─────────┤
+│ 0.5 │ 0.03301 │ 1.25844 │
+│   1 │ 0.05283 │ 1.37552 │
+│   2 │ 0.16846 │ 1.81301 │
+└─────┴─────────┴─────────┘
+  Note: Chen and Wang (2012 EReviews) indicates that cosine test with ω=1 has good overall performance.
+
+
+  Critical Values (χ²(1))
+┌─────────┬─────────┬─────────┐
+│      1% │      5% │     10% │
+├─────────┼─────────┼─────────┤
+│ 6.63490 │ 3.84146 │ 2.70554 │
+└─────────┴─────────┴─────────┘
+
+
+* Method of Moments Estimates of the Model (Chen and Wang 2012 EReviews)
+  ** Model type: normal and half-normal
+  ** The constant variable (for intercept) in the model: _cons.
+  ** Number of observations: 271
+  ** Log-likelihood value: -114.87749
+
+┌────────┬──────────┬───────────┬──────────┬─────────┬──────────┬──────────┐
+│        │    Coef. │ Std. Err. │        z │   P&gt;|z| │  95%CI_l │  95%CI_u │
+├────────┼──────────┼───────────┼──────────┼─────────┼──────────┼──────────┤
+│  Lland │  0.34560 │   0.07801 │  4.43006 │ 0.00001 │  0.19270 │  0.49851 │
+│ PIland │  0.37290 │   0.20402 │  1.82772 │ 0.06872 │ -0.02698 │  0.77278 │
+│ Llabor │  1.10329 │   0.08261 │ 13.35565 │ 0.00000 │  0.94138 │  1.26520 │
+│  Lbull │ -0.43908 │   0.06459 │ -6.79833 │ 0.00000 │ -0.56567 │ -0.31249 │
+│  Lcost │  0.01876 │   0.01514 │  1.23940 │ 0.21630 │ -0.01091 │  0.04842 │
+│  _cons │  2.18283 │   0.35326 │  6.17901 │ 0.00000 │  1.49044 │  2.87521 │
+│    σᵥ² │  0.00621 │   0.01441 │     n.a. │    n.a. │  0.00528 │  0.00741 │
+│    σᵤ² │  0.37867 │   0.06534 │     n.a. │    n.a. │  0.32211 │  0.45164 │
+└────────┴──────────┴───────────┴──────────┴─────────┴──────────┴──────────┘
+  Note: CI of σᵥ² and σᵤ² is calculated based on the χ² distribution.
+
+
+***** Additional Information *********
+* OLS (frontier-only) log-likelihood: -121.79668
+* Skewness of OLS residuals: -0.90075
+* The sample mean of the JLMS inefficiency index: 0.49424
+* The sample mean of the BC efficiency index: 0.64701
+
+* Use `name.list` to see saved results (keys and values) where `name` is the return specified in `name = sfmodel_MoMTest(..)`. Values may be retrieved using the keys. For instance:
+   ** `name.MoM_loglikelihood`: the log-likelihood value of the model;
+   ** `name.jlms`: Jondrow et al. (1982) inefficiency index;
+   ** `name.bc`: Battese and Coelli (1988) efficiency index;
+* Use `keys(name)` to see available keys.
+**************************************
+
+
+</code></pre></article><nav class="docs-footer"><a class="docs-footer-prevpage" href="ex_panel.html">« panel models</a><a class="docs-footer-nextpage" href="api.html">API Reference »</a><div class="flexbox-break"></div><p class="footer-message">Powered by <a href="https://github.com/JuliaDocs/Documenter.jl">Documenter.jl</a> and the <a href="https://julialang.org/">Julia Programming Language</a>.</p></nav></div><div class="modal" id="documenter-settings"><div class="modal-background"></div><div class="modal-card"><header class="modal-card-head"><p class="modal-card-title">Settings</p><button class="delete"></button></header><section class="modal-card-body"><p><label class="label">Theme</label><div class="select"><select id="documenter-themepicker"><option value="documenter-light">documenter-light</option><option value="documenter-dark">documenter-dark</option></select></div></p><hr/><p>This document was generated with <a href="https://github.com/JuliaDocs/Documenter.jl">Documenter.jl</a> version 0.27.5 on <span class="colophon-date" title="Saturday 23 October 2021 11:50">Saturday 23 October 2021</span>. Using Julia version 1.6.2.</p></section><footer class="modal-card-foot"></footer></div></div></div></body></html>

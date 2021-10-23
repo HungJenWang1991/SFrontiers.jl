@@ -22,7 +22,7 @@ not `depvar()`).
   `exponential` (or `expo`, `e`), and `trun_scale` (or `trun_scaling`, `ts`).
 - `sftype(::Vararg)`: whether the model is a `production` (or `prod`) frontier
   or a `cost` frontier.
-- `sfpanel(::Vararg)`: the type of panel model. Choices include `FE_WH2010`
+- `sfpanel(::Vararg)`: the type of panel model. Choices include `TFE_WH2010`
   (true fixed effect model of Wang and Ho 2010 JE), `TFE_CSW2014` (true fixed
   model of Chen, Schmidt, and Wang 2014 JE),  `TRE` (true random effect model
   of Greene 2004), `TimeDecay` (time decay model of Battese and Coelli 1992).
@@ -64,7 +64,7 @@ available), e.g., `sigma_u_2` instead of `σᵤ²`.
   `exponential` (or `expo`, `e`), and `trun_scale` (or `trun_scaling`, `ts`).
 - `sftype(::Vararg)`: whether the model is a `production` (or `prod`) frontier
   or a `cost` frontier.
-- `sfpanel(::Vararg)`: the type of panel model. Choices include `FE_WH2010`
+- `sfpanel(::Vararg)`: the type of panel model. Choices include `TFE_WH2010`
   (true fixed effect model of Wang and Ho 2010 JE), `TFE_CSW2014` (true fixed
   model of Chen, Schmidt, and Wang 2014 JE),  `TRE` (true random effect model
   of Greene 2004), `TimeDecay` (time decay model of Battese and Coelli 1992).
@@ -525,10 +525,15 @@ function sfmodel_fit(sfdat::DataFrame) #, D1::Dict = _dicM, D2::Dict = _dicINI, 
   #* ########## Process initial value dictionary  #####
      #* --- Get OLS results and other auxiliary values. --- #
 
+     noffixed = 0  # number of fixed effect parameter
+     if _dicM[:panel] == [:TFE_WH2010] || _dicM[:panel] == [:TFE_CSW2014]  # the fixed effects and differenced off
+        noffixed = size(rowIDT,1) 
+     end  
+
      β0     = xvar \ yvar;  # OLS estiamte, uses a pivoted QR factorization;
      resid  = yvar - xvar*β0
      sse    = sum((resid).^2)  
-     ssd    = sqrt(sse/(size(resid,1)-1)) # sample standard deviation; σ² = (1/(N-1))* Σ ϵ^2
+     ssd    = sqrt(sse/(size(resid,1)-(num.nofx + noffixed ))) # sample standard deviation; σ² = (1/(N-K))* Σ ϵ^2
      ll_ols = sum(normlogpdf.(0, ssd, resid)) # ols log-likelihood
      sk_ols = sum((resid).^3) / ((ssd^3)*(size(resid,1))) # skewnewss of ols residuals
 

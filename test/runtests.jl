@@ -1,4 +1,27 @@
-using SFrontiers, Test
+using SFrontiers, DataFrames, Test
+
+
+@testset verbose=true "Method of Moments" begin
+
+	data= [-1.06966    1.53076     0.346522  1
+			-1.55598   -1.54822     0.0296991  1
+			-1.06309    0.0860199  -0.546911  1
+			0.396344  -1.59922    -1.62234  1
+			-0.367106  -1.31003     1.67005  1]
+
+	 df = DataFrame(data, [:y, :x1, :x2, :cons])
+
+    re1 = sfmodel_MoMTest(sftype(prod), sfdist(half),
+                     @depvar(y), @frontier( cons, x1),
+                     data = df,
+                     ω = (0.5, 1, 2),
+                     verbose=false )
+
+	@test re1.coeff[1]  ≈ -0.31582 atol = 1e-5
+	@test re1.jlms[1]   ≈  0.44173 atol = 1e-5
+	@test re1.MoM_loglikelihood ≈ -4.74344 atol = 1e-5
+end
+
 
 @testset verbose=true "Part 1 (cross-section) of log-likelihood functions, marginal effect, jlms & bc index" begin
 

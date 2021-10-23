@@ -23,7 +23,7 @@ export sfmodel_spec, sfmodel_init, sfmodel_opt,
         frontier, 
         μ, mu, σᵤ², sigma_u_2, σᵥ², sigma_v_2, 
         σₐ², sigma_a_2, 
-        misc,
+        misc, 
         hscale,  gamma,
         all_init,
        # functions for sfmodel_opt
@@ -31,8 +31,10 @@ export sfmodel_spec, sfmodel_init, sfmodel_opt,
         main_solver, main_maxIT, tolerance, verbose, banner,
         ineff_index, marginal, table_format,
        # functions for sfmodel_fit
-         useData,
-         sfmodel_CI,
+        useData,
+        sfmodel_CI,
+       # MoM Test
+        sfmodel_MoMTest,
        # functions for JLMS and BC index
         jlmsbc, jlmsbc_marg,
        # the table for regular and mixed Chi-square test
@@ -44,6 +46,7 @@ export sfmodel_spec, sfmodel_init, sfmodel_opt,
         Expo, expo, e,
         Trun_Scale, trun_scale, trun_scaling, s,
         Half_Scale, half_scale, half_scaling,
+        MoM,
         production, cost, #* not prod, b/c conflict with Base
         text, html, latex,
         PFEWHH, PFEWHT, PTREH,  PTRET,  PFECSWH, PanDecay, get_marg, PanKumb90,  #* export for testing purpose
@@ -51,26 +54,30 @@ export sfmodel_spec, sfmodel_init, sfmodel_opt,
       # Optim's algorithms  
         NelderMead, SimulatedAnnealing, SAMIN, ParticleSwarm,
         ConjugateGradient, GradientDescent, BFGS, LBFGS,
-        Newton, NewtonTrustRegion, IPNewton 
-  
+        Newton, NewtonTrustRegion, IPNewton, 
+      # sfmodel_mtest()
+        pickConsNameFromDF
+ 
 
 
-using Optim
+
 using DataFrames
+using DataStructures             # for OrderedDict
+using Distributions              # for TDist, Normal
+using FLoops                     # multithreading
+using ForwardDiff                # for marginal effect
+using HypothesisTests            # for pvalue()
+using KahanSummation             # for time decay model, true random effect model
+using LinearAlgebra              # extract diagnol and Matrix(I,...)
 using NLSolversBase              # for hessian!
+using Optim
+using PrettyTables               # making tables 
+using QuadGK                     # for TFE_CSW2014 model
+using Random                     # for sfmodel_boot_marginal
+using RowEchelon                 # for checkCollinear, check multi-collinearity
+using SpecialFunctions           # for erfi used in sfmodel_MoMTest 
 using StatsFuns                  # for normlogpdf(), normlogcdf()
 using Statistics                 #
-using HypothesisTests            # for pvalue()
-using LinearAlgebra              # extract diagnol and Matrix(I,...)
-using Distributions              # for TDist, Normal
-using DataStructures             # for OrderedDict
-using PrettyTables               # making tables 
-using ForwardDiff                # for marginal effect
-using QuadGK                     # for TFE_CSW2014 model
-using RowEchelon                 # for checkCollinear, check multi-collinearity
-using FLoops                     # multithreading
-using KahanSummation             # for time decay model, true random effect model
-using Random                     # for sfmodel_boot_marginal
 
 
 
@@ -97,6 +104,7 @@ abstract type Sfmodeltype end
   struct Half_Scale   <: Sfmodeltype end
   struct half_scale   <: Sfmodeltype end
   struct half_scaling <: Sfmodeltype end
+  struct MoM          <: Sfmodeltype end
 
   struct PFEWHT   <: Sfmodeltype end # panel fixed-effet of Wang and Ho 2010, truncated normal
   struct PFEWHH   <: Sfmodeltype end # panel fixed-effet of Wang and Ho 2010, half normal
@@ -132,7 +140,8 @@ abstract type TableFormat end
 
 include("SFmacfun.jl")
 include("SFloglikefun.jl")
-include("SFcheck.jl")
+include("SFutil.jl")
+include("SFmtest.jl")
 include("SFgetvars.jl")
 include("SFindex.jl")
 include("SFpredict.jl")

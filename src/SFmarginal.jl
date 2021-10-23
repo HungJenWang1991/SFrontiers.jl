@@ -4,45 +4,6 @@
 #                                                       #
 #########################################################
 
-#? ------------ Utilities --------------------- #
-
-function nonConsDataFrame(D::DataFrame, M::Matrix)
-       # Given a DataFrame containing the marginal effects 
-       # of a set of exogenous determinants $(x1, x2, ..., xn)$
-       # on E(u), it return the DataFrame where the marginal 
-       # effect of constant $x$s are removed.
-
-       # D: the marginal effect DataFrame; 
-       # M: the matrix of (x1, .., xn) where the marginal 
-       #    efect is calculated from.
-
-      counter = 0      
-      for w in collect(names(D),)
-           counter += 1
-           if length(unique(M[:, counter])) == 1 # is a constant
-               select!(D, Not(Symbol(w)))
-           end
-      end 
-      return D
-end
-
-         #? ------------------------ #
-
-function addDataFrame(Main::DataFrame, A::DataFrame)
-         # Combine two DataFrame with unions of columns.
-         # For same-name columns, the values are added together.
-
-       for k in collect(names(A),) # deal with the wvar
-                 if k ∈ names(Main)
-                      Main[:, Symbol(k)] = Main[:, Symbol(k)] + A[:, Symbol(k)]
-                 else 
-                      insertcols!(Main, Symbol(k) => A[:, Symbol(k)])
-                 end
-        end 
-        return Main  
-end 
-
-
 
 #? ----------- truncated normal, marginal effect function -------
 

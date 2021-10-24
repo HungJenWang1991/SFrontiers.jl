@@ -12,7 +12,7 @@ __SFrontiers.jl__ provides commands for estimating various parametric _stochasti
 The package uses `Optim.jl` as the main driver for the maximum likelihood estimation.
 
 #### Updates
-* Oct. 23, 2021: New command `sfmodel_MoMTest()` for testing distribution assumptions and estimating model parameters using the MoM.
+* Oct. 23, 2021: Add `sfmodel_MoMTest()` for testing distribution assumptions and estimating model parameters using the method of moments (v0.2.1).
 
 #### Coverage
 * cross-sectional: models where the one-sided stochastic term (i.e., $u_i$) follows half normal, truncated normal, or exponential distributions, with the distributions flexibly parameterized by vectors of exogenous determinants. Also, the scaling property model. 

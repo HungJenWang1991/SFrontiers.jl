@@ -1,7 +1,7 @@
 name = "SFrontiers"
 uuid = "450466ac-e45e-40ce-9385-fade81a2016c"
 authors = ["Hung-Jen Wang <hjw.econ.1991@gmail.com>"]
-version = "0.1.0"
+version = "0.2.1"
 
 [deps]
 DataFrames = "a93c6f00-e57d-5684-b7b6-d8193f3e46c0"

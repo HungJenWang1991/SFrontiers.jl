@@ -143,7 +143,7 @@ function sfmodel_spec(arg::Vararg; message::Bool=false)
    
                   @views comDF = hcat(comDF, _dicM[k][1]) # combine the data
                   aa = Symbol[]
-                  for i in 1:size(_dicM[k][1], 2)
+                  for i in axes(_dicM[k][1], 2)
                       push!(aa, Symbol(String(k)*"_var$(i)")) # create name for the data
                   end                  
                   varname = vcat(varname, aa) # combine the dataname
@@ -166,7 +166,7 @@ function sfmodel_spec(arg::Vararg; message::Bool=false)
         #* --- get the model identifier -------
 
         s = uppercase(String(_dicM[:dist][1])[1:1])
-        
+
         global tagD
         if _dicM[:panel] === nothing  # not panel 
             if (s == "T")
@@ -217,6 +217,7 @@ function sfmodel_spec(arg::Vararg; message::Bool=false)
             throw("The `sfpanel()` and/or `sfdist()` are not specified correctly.")
         end
 
+        
         #* ---- check if the model has the correct syntax ---
 
         SFrontiers.checksyn(tagD[:modelid])
@@ -584,7 +585,7 @@ function sfmodel_fit(sfdat::DataFrame) #, D1::Dict = _dicM, D2::Dict = _dicINI, 
     #* ----- Define the problem's Hessian -----#
 
 
-     _Hessian = TwiceDifferentiable(rho -> SFrontiers.LL_T(tagD[:modelid], 
+     _myfun = TwiceDifferentiable(rho -> SFrontiers.LL_T(tagD[:modelid], 
                            yvar, xvar, zvar, qvar, wvar, vvar, 
                            _porc, num.nofobs, pos, rho,
                                    rowIDT, _dicM[:misc]),
@@ -613,7 +614,7 @@ function sfmodel_fit(sfdat::DataFrame) #, D1::Dict = _dicM, D2::Dict = _dicINI, 
         sf_ini_maxit_dic = copy(sf_ini_maxit)
 
         # @time  
-               mfun = optimize(_Hessian, 
+               _optres = optimize(_myfun, 
                                sf_init,         # initial values  
                                sf_ini_algo,                   
                                Optim.Options(g_tol = sf_tol,
@@ -622,15 +623,15 @@ function sfmodel_fit(sfdat::DataFrame) #, D1::Dict = _dicM, D2::Dict = _dicINI, 
                                              show_trace  = false))
 
 
-        sf_total_iter += Optim.iterations(mfun) # for later use
+        sf_total_iter += Optim.iterations(_optres) # for later use
 
-        sf_init = Optim.minimizer(mfun)  # save as initials for the next run
+        sf_init = Optim.minimizer(_optres)  # save as initials for the next run
         _run    = 2                      # modify the flag
 
         if _dicOPT[:verbose] 
             println()
-            print("$mfun \n")
-            print("The warmstart results are:\n"); printstyled(Optim.minimizer(mfun); color=:yellow); println("\n")
+            print("$_optres \n")
+            print("The warmstart results are:\n"); printstyled(Optim.minimizer(_optres); color=:yellow); println("\n")
         end
 
    end  # if  (do_warmstart_search == 1) && (_run == 1)  
@@ -645,29 +646,29 @@ function sfmodel_fit(sfdat::DataFrame) #, D1::Dict = _dicM, D2::Dict = _dicINI, 
        end 
        
        # @time 
-              mfun = optimize(_Hessian, 
+              _optres = optimize(_myfun, 
                               sf_init,       # initial values  
                               sf_algo,       # different from search run
                               Optim.Options(g_tol = sf_tol,
                                             iterations  = sf_maxit, # different from search run
                                             store_trace = true,
                                             show_trace  = false))
-       sf_total_iter += Optim.iterations(mfun)
+       sf_total_iter += Optim.iterations(_optres)
 
        if _dicOPT[:verbose] 
              println()
-             print("$mfun \n")  
-             print("The resulting coefficient vector is:\n"); printstyled(Optim.minimizer(mfun); color=:yellow); println("\n")
+             print("$_optres \n")  
+             print("The resulting coefficient vector is:\n"); printstyled(Optim.minimizer(_optres); color=:yellow); println("\n")
        end 
 
 
-       if isnan(Optim.g_residual(mfun)) || (Optim.g_residual(mfun) > 0.1) 
+       if isnan(Optim.g_residual(_optres)) || (Optim.g_residual(_optres) > 0.1) 
             redflag = 1
             printstyled("Note that the estimation may not have converged properly. The gradients are problematic (too large, > 0.1, or others).\n\n", color = :red)
        end 
 
 
-       if Optim.iteration_limit_reached(mfun) 
+       if Optim.iteration_limit_reached(_optres) 
              redflag = 1
              printstyled("Caution: The number of iterations reached the limit.\n\n"; color= :red)  
        end  
@@ -677,8 +678,8 @@ function sfmodel_fit(sfdat::DataFrame) #, D1::Dict = _dicM, D2::Dict = _dicINI, 
 
   #* ###### Post-estimation process ############### 
 
-      _coevec            = Optim.minimizer(mfun)  # coef. vec.
-      numerical_hessian  = hessian!(_Hessian, _coevec)  # Hessain
+      _coevec            = Optim.minimizer(_optres)  # coef. vec.
+      numerical_hessian  = hessian!(_myfun, _coevec)  # Hessain
 
      #* ------ Check if the matrix is invertible. ----
 
@@ -774,13 +775,13 @@ function sfmodel_fit(sfdat::DataFrame) #, D1::Dict = _dicM, D2::Dict = _dicINI, 
          print("Model type: "); printstyled(minfo1; color=:yellow); println()
          print("Number of observations: "); printstyled(num.nofobs; color=:yellow); println()
          print("Number of total iterations: "); printstyled(sf_total_iter; color=:yellow); println()
-         if Optim.converged(mfun) 
-             print("Converged successfully: "); printstyled(Optim.converged(mfun); color=:yellow); println()
-         elseif Optim.converged(mfun) == false
-             print("Converged successfully: "); printstyled(Optim.converged(mfun); color=:red); println()
+         if Optim.converged(_optres) 
+             print("Converged successfully: "); printstyled(Optim.converged(_optres); color=:yellow); println()
+         elseif Optim.converged(_optres) == false
+             print("Converged successfully: "); printstyled(Optim.converged(_optres); color=:red); println()
              redflag = 1
          end         
-         print("Log-likelihood value: "); printstyled(round(-1*Optim.minimum(mfun); digits=5); color=:yellow); println()
+         print("Log-likelihood value: "); printstyled(round(-1*Optim.minimum(_optres); digits=5); color=:yellow); println()
          println()
      
          pretty_table(table[2:end,:],    # could print the whole table as is, but this prettier
@@ -857,11 +858,11 @@ function sfmodel_fit(sfdat::DataFrame) #, D1::Dict = _dicM, D2::Dict = _dicINI, 
   #* ########### create a dictionary and make a tuple for return ########### *#
      
       _dicRES = OrderedDict{Symbol, Any}()     
-      _dicRES[:converged]          = Optim.converged(mfun)
-      _dicRES[:iter_limit_reached] = Optim.iteration_limit_reached(mfun)
+      _dicRES[:converged]          = Optim.converged(_optres)
+      _dicRES[:iter_limit_reached] = Optim.iteration_limit_reached(_optres)
       _dicRES[:_______________] = "___________________"  #33
       _dicRES[:n_observations]  = num.nofobs
-      _dicRES[:loglikelihood]   = -Optim.minimum(mfun)
+      _dicRES[:loglikelihood]   = -Optim.minimum(_optres)
       _dicRES[:table]           = [table][1]
       _dicRES[:coeff]           = _coevec
       _dicRES[:std_err]         = stddev
@@ -903,9 +904,9 @@ function sfmodel_fit(sfdat::DataFrame) #, D1::Dict = _dicM, D2::Dict = _dicINI, 
 
       _dicRES[:________________]  = "___________________" #34
       _dicRES[:Hessian]           = [numerical_hessian][1]
-      _dicRES[:gradient_norm]     = Optim.g_residual(mfun)
-    # _dicRES[:trace]             = Optim.trace(mfun)     # comment out because not very informative and size could be large
-      _dicRES[:actual_iterations] = Optim.iterations(mfun)
+      _dicRES[:gradient_norm]     = Optim.g_residual(_optres)
+    # _dicRES[:trace]             = Optim.trace(_optres)     # comment out because not very informative and size could be large
+      _dicRES[:actual_iterations] = Optim.iterations(_optres)
       _dicRES[:______________] = "______________________" #32
       _dicRES[:warmstart_solver] = sf_ini_algo_dic
       _dicRES[:warmstart_ini]    = sf_init_1st_dic
@@ -955,8 +956,10 @@ end # sfmodel_fit
     sfmodel_boot_marginal(<keyword arguments>)
 
 Bootstrap standard errors and obtain bias-corrected (BC) confidence intervals
-for the mean marginal effects of inefficiency determinants. In default, return
-a ``K x 2``` matrix of standard errors (1st column) and confidence intervals
+for the mean marginal effects of inefficiency determinants. Note that the 
+standard error may be influenced by extreme values of the bootstrapped while 
+the percentile-based CI is less sensitive to them. In default, return a
+``K x 2``` matrix of standard errors (1st column) and confidence intervals
 (tuples, 2nd column), where ``K`` is the number of exogenous inefficiency
 determinants. With `getBootData=true`, return two matrices: the first is the
 same as in the default return, and the second is the ``R x K`` bootstrapped
@@ -1108,7 +1111,7 @@ function sfmodel_boot_marginal(; result::Any=nothing,  data::Any=nothing,
  sim_res = Array{Real}(undef, ncol(result.marginal), R)
 
  if seed > 0
-    rng = MersenneTwister(seed)
+    rng = Xoshiro(seed)
  end
 
 
@@ -1121,7 +1124,7 @@ function sfmodel_boot_marginal(; result::Any=nothing,  data::Any=nothing,
    if result.idvar === nothing  # i.e., cross-sectional
 
      if seed == -1
-        select_row = sample( 1:nrow(data), nrow(data); replace=true)  # require StatsBase.jl
+        select_row = sample(     1:nrow(data), nrow(data); replace=true)  # require StatsBase.jl
      else
         select_row = sample(rng, 1:nrow(data), nrow(data); replace=true)  # require StatsBase.jl
      end
@@ -1140,22 +1143,20 @@ function sfmodel_boot_marginal(; result::Any=nothing,  data::Any=nothing,
    if result.idvar !== nothing  # i.e., panel data  
 
       if seed == -1
-        select_row = sample(     1:size(rowIDT0,1), size(rowIDT0,1); replace=true)  # require StatsBase.jl
+        select_row = sample(     axes(rowIDT0,1), size(rowIDT0,1); replace=true)  # require StatsBase.jl
       else
-        select_row = sample(rng, 1:size(rowIDT0,1), size(rowIDT0,1); replace=true)  # require StatsBase.jl
+        select_row = sample(rng, axes(rowIDT0,1), size(rowIDT0,1); replace=true)  # require StatsBase.jl
       end
 
-      yvar = mySample(rowIDT0, yvar0, select_row)
+      yvar, newidvar = mySample(rowIDT0, yvar0, select_row)
+      xvar, _ = mySample(rowIDT0, xvar0, select_row)
 
-      xvar = mySample(rowIDT0, xvar0, select_row)
-      (zvar0 == ()) ||  (zvar = mySample(rowIDT0, zvar0, select_row))
-      (qvar0 == ()) ||  (qvar = mySample(rowIDT0, qvar0, select_row))
-      (wvar0 == ()) ||  (wvar = mySample(rowIDT0, wvar0, select_row))
-      (vvar0 == ()) ||  (vvar = mySample(rowIDT0, vvar0, select_row))
+      (zvar0 == ()) ||  ((zvar, _) = mySample(rowIDT0, zvar0, select_row))
+      (qvar0 == ()) ||  ((qvar, _) = mySample(rowIDT0, qvar0, select_row))
+      (wvar0 == ()) ||  ((wvar, _) = mySample(rowIDT0, wvar0, select_row))
+      (vvar0 == ()) ||  ((vvar, _) = mySample(rowIDT0, vvar0, select_row))
 
-       newidvar = mySample2!(rowIDT0, ones(size(yvar,1)), select_row) # a trick to get new id; note not yvar0
-       rowIDT = get_rowIDT(vec(newidvar))
-       # yvar = vec(yvar)
+      rowIDT = get_rowIDT(vec(newidvar))
 
     end
 
@@ -1166,7 +1167,8 @@ function sfmodel_boot_marginal(; result::Any=nothing,  data::Any=nothing,
 
   #* ----- Define the problem's Hessian -----#
 
-   _Hessian = TwiceDifferentiable(rho -> SFrontiers.LL_T(result.modelid, 
+
+   _myfun = TwiceDifferentiable(rho -> SFrontiers.LL_T(result.modelid, 
                          yvar, xvar, zvar, qvar, wvar, vvar, 
                          _porc, nofobs1, pos, rho,
                                  rowIDT, mymisc),
@@ -1175,11 +1177,13 @@ function sfmodel_boot_marginal(; result::Any=nothing,  data::Any=nothing,
 
   #* ---- estimate ----------------- *#
 
-             mfun = try
-                       optimize(_Hessian, 
+             _optres = try
+                       optimize(_myfun, 
                                 sf_init,       # initial values  
                                 sf_algo,       # different from search run
                                 Optim.Options(g_tol = sf_tol,
+                                              f_tol=0.0, # force `Optim` to ignore this, but sometimes it does meet the 0.0 criterion
+                                              x_tol=0.0, # same above                                
                                               iterations  = sf_maxit, # different from search run
                                               store_trace = false,
                                               show_trace  = false))
@@ -1189,14 +1193,15 @@ function sfmodel_boot_marginal(; result::Any=nothing,  data::Any=nothing,
 
 #* ###### check if valid ############### 
 
-  if (Optim.iteration_limit_reached(mfun) ) || 
-     (isnan(Optim.g_residual(mfun)) ) ||  
-     (Optim.g_residual(mfun) > 1e-1)
+
+if (Optim.iteration_limit_reached(_optres) ) || 
+     (isnan(Optim.g_residual(_optres)) ) ||  
+     (Optim.g_residual(_optres) > sf_tol)  # hjw!! was: 1e-1
          @goto start1
   end  
 
-    _coevec            = Optim.minimizer(mfun)  # coef. vec.
-    numerical_hessian  = hessian!(_Hessian, _coevec)  # Hessain
+    _coevec            = Optim.minimizer(_optres)  # coef. vec.
+    numerical_hessian  = hessian!(_myfun, _coevec)  # Hessain
 
    #* ------ Check if the matrix is invertible. ----
 
@@ -1264,7 +1269,7 @@ end   # for i=1:R
                table]  
 
             pretty_table(table,
-                         noheader= true,
+                         show_header = false,
                          body_hlines = [2],
                          formatters = ft_printf("%0.5f", 2:4),
                          compact_printing = true,
@@ -1285,34 +1290,59 @@ end # sfmodel_boot_marginal
 # --- utilities for sfmodel_boot_marginal -------#
 # -----------------------------------------------#
 
-function mySample(rowIDT, data, select)
-  temp1 = Array{Float64}(undef, 0, size(data,2))
-  @inbounds for i=1:size(rowIDT,1)
-       @views   cc = data[rowIDT[select[i],1], :] 
-                temp1 = vcat(temp1, cc)
-            end
-  return temp1
-end
-
-function mySample2!(rowIDT, data, select)
-  temp1 = Array{Float64}(undef, 0, size(data,2))
-  @inbounds for i=1:size(rowIDT,1)
-       @views   cc = data[rowIDT[select[i],1], :] 
-                cc[:,1] .= i     # caution, it changes data
-                temp1 = vcat(temp1, cc)
-            end
-  return temp1
-end
 
 """
-function sfmodel_CI(; bootdata::Any=nothing, observed::Union{Vector, Real, Tuple, NamedTuple}=nothing, level::Real=0.05, verbose::Bool=true)
+    mySample(rowIDT, data, select)
 
+A utility to construct sampled panel data, for both balanced and 
+unbalanced panels. The `select` indicates the ith firm that is chosen 
+to be included in the sample. The firm's row number is in `rowIDT`. 
+The information is then used to obtained the ith firm data from `data`. 
+It returns the sampled data and a vector of generated individual id.
+
+# Arguments
+- rowIDT: Typically from `get_rowIDT()`, which is a Nx2 matrix of the 
+  following form:
+
+  [ [1, 2, 3]     3
+    [4, 5, 6, 7]  4 ]
+
+   where the first colum is the row number of an individual, and the 2nd
+   column is the number of time periods in the firm.
+ - data: The data to take the sample from.
+ - select: a vector indicating the selected rows. Typically an output
+   from `sample()`.
+"""
+
+function mySample(rowIDT, data, select)
+  newobs = 0.0  # number of obs in the new dataset
+  for i in 1:length(select)  
+      newobs += rowIDT[select[i], 2]  
+  end
+
+  sampled = Array{Float64}(undef, Int(newobs), size(data,2))  # this is why we need newobs
+    newid = Array{Float64}(undef, Int(newobs), 1)
+
+  start_row = 1  
+  for i in 1:length(select)
+      nrows = rowIDT[select[i], 2]  # n of obs of the chosen individual
+      sampled[start_row : start_row + nrows-1, :] .= data[rowIDT[select[i],1], :]  # the ith firm data
+        newid[start_row : start_row + nrows-1, :] .= reshape(ones(nrows)*i, :, 1)
+      start_row += nrows  
+  end
+  return sampled, newid
+end
+
+
+"""
     sfmodel_CI(<keyword arguments>)
 
 A general purpose (not specific to stochastic frontier models) function for
-obtaining bias-correctred (BC) confidence intervals from bootstrapped data.
-Return a ``K x 1`` matrix of confidence intervals in the form of tuples, where
-``K`` is the number of bootstrap statistics.
+obtaining the standard error and the bias-correctred (BC) confidence intervals 
+from bootstrapped data. Note that the standard error may be influenced by
+extreme values of the bootstrapped while the percentile-based CI is less
+sensitive to them. Return a ``K x 1`` matrix of confidence intervals in the 
+form of tuples, where ``K`` is the number of bootstrap statistics.
 
 See also the help file on `sfmodel_boot_marginal()`.
 
@@ -1387,6 +1417,7 @@ function sfmodel_CI(; bootdata::Any=nothing, observed::Union{Vector, Real, Tuple
     z1 = quantile(Normal(), level/2)
     z2 = quantile(Normal(), 1 - level/2)  #! why z1 != z2?
 
+
     for i in 1:nofK
         @views data = bootdata[:,i]
 
@@ -1395,10 +1426,13 @@ function sfmodel_CI(; bootdata::Any=nothing, observed::Union{Vector, Real, Tuple
 
         alpha1 = cdf(Normal(), z0 + ((z0 + z1) ))
         alpha2 = cdf(Normal(), z0 + ((z0 + z2) ))
-        
+
         order_data = sort(data)
 
-        ci[i,1] = (  round(order_data[Int(ceil(nofobs*alpha1))], digits=5),    round(order_data[Int(ceil(nofobs*alpha2))], digits=5)  )
+        pos1 = max(Int(ceil(nofobs*alpha1)), 1) # make sure it is not 0 which will cause error
+        pos2 = max(Int(ceil(nofobs*alpha2)), 1)
+
+        ci[i,1] = (  round(order_data[pos1], digits=5),    round(order_data[pos2], digits=5)  )
     end
 
     if verbose == true

@@ -132,12 +132,12 @@ function jlmsbc(::Type{PFEWHH}, PorC::Int64, pos::NamedTuple, coef::Array{Float6
     μ = 0.0
     
     nofobs = length(Y)
-    N = size(idt)[1]
+    N = size(idt,1)
 
     jlms = zeros(nofobs, 1)
       bc = zeros(nofobs, 1)
 
-    for i = 1:N
+    for i in 1:N
       # @views Π⁻  = INVtrM[i]*(1/σᵥ²) 
         @views ind = idt[i,1]
       # @views trM = Matrix(I, idt[i,2], idt[i,2]) .- (1/idt[i,2])
@@ -171,12 +171,12 @@ function jlmsbc(::Type{PFEWHT}, PorC::Int64, pos::NamedTuple, coef::Array{Float6
     σᵥ² = exp(v_pre)
     
     nofobs = length(Y)
-         N = size(idt)[1]
+         N = size(idt,1)
     
     jlms = zeros(nofobs, 1)
       bc = zeros(nofobs, 1)
     
-    for i = 1:N
+    for i in 1:N
       # @views Π⁻  = INVtrM[i]*(1/σᵥ²) 
         @views ind = idt[i,1]
       # @views trM = Matrix(I, idt[i,2], idt[i,2]) .- (1/idt[i,2])
@@ -206,7 +206,7 @@ function jlmsbc(::Type{PanDecay}, PorC::Int64, pos::NamedTuple, coef::Array{Floa
   v_pre =   coef[pos.begv] # log_σᵥ²
   
   nofobs = length(Y)
-  N = size(idt)[1]
+  N = size(idt,1)
 
   σᵤ² = exp(w_pre)    # should be W*log_σᵤ² where W is a _cons =1; make a short cut here
   σᵥ² = exp(v_pre)
@@ -216,7 +216,7 @@ function jlmsbc(::Type{PanDecay}, PorC::Int64, pos::NamedTuple, coef::Array{Floa
   jlms_uit = zeros(nofobs, 1)
   bc_uit   = zeros(nofobs, 1)
   
-  @inbounds for i = 1:N
+  @inbounds for i in 1:N
       @views ind = idt[i,1]
       @views Tᵢ  = idt[i,2] 
       @views ε   = PorC*(Y[ind] - x_pre[ind])
@@ -255,7 +255,7 @@ function jlmsbc(::Type{PanKumb90}, PorC::Int64, pos::NamedTuple, coef::Array{Flo
   v_pre =   coef[pos.begv] # log_σᵥ²
   
   nofobs = length(Y)
-  N = size(idt)[1]
+  N = size(idt,1)
 
   σᵤ² = exp(w_pre)    # should be W*log_σᵤ² where W is a _cons =1; make a short cut here
   σᵥ² = exp(v_pre)
@@ -265,7 +265,7 @@ function jlmsbc(::Type{PanKumb90}, PorC::Int64, pos::NamedTuple, coef::Array{Flo
   jlms_uit = zeros(nofobs, 1)
   bc_uit   = zeros(nofobs, 1)
   
-  @inbounds for i = 1:N
+  @inbounds for i in 1:N
       @views ind = idt[i,1]
       @views Tᵢ  = idt[i,2] 
       @views ε   = PorC*(Y[ind] - x_pre[ind])
@@ -326,7 +326,7 @@ function jlmsbc(::Type{PFECSWH}, PorC::Int64, pos::NamedTuple, coef::Array{Float
     jlms = zeros(nofobs, 1)
     bc = zeros(nofobs, 1)
 
-    for i = 1:N   
+    for i in 1:N   
 
         @views ind = idt[i,1]
         @views αᵢᴹ = mean(αϵ[ind]) + PorC*( sqrt(2/π)*σᵤ )

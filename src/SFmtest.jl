@@ -21,7 +21,7 @@ efficiency (BC) index. Return various results in a distionary.
   The `ω` parameter used in the test. It could take the form of a single value
   (e.g., `ω=1`) or a vector or tuple (e.g., `ω=(0.5, 1, 2)`). Default is
   `ω=1.0`.
-- level::Real=<number>: The significance level (default=0.05) of the bias-corrected
+- `level::Real=<number>`: The significance level (default=0.05) of the bias-corrected
   confidence intervals. If `level`>0.5, it is automatically transformed to
   `1-level`, such that `level=0.05` and `level=0.95` both return 95%
   confidene intervals at the 5% significance level.  

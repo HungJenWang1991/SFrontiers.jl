@@ -38,7 +38,7 @@ variable (aka inefficiency term) of the model. Possible choices include `truncat
 See the help on `sfmodel_spec()` for more information.
 
 # Examples
-```julia-repl
+```julia
 sfmodel_spec(sfdist(t), ...)
 sfmodel_spec(sfdist(h), ...)
 ```
@@ -87,7 +87,7 @@ or a `cost` frontier.
 See the help on `sfmodel_spec()` for more information.
 
 # Examples
-```julia-repl
+```julia
 sftype(production)
 sftype(cost)
 ```
@@ -119,7 +119,7 @@ column name from a DataFrame.
 See the help on `sfmodel_spec()` for more information.
  
 # Examples
-```julia-repl
+```julia
 julia> df
 100×5 DataFrame
 │ Row │ yvar  │ xvar1     │ xvar2     │ zvar      │ _cons   │
@@ -154,7 +154,7 @@ is used as the data of the dependent variable.
 See the help on `sfmodel_spec()` for more information.
  
 # Examples
-```julia-repl
+```julia
 julia> ymat
 100×1 Matrix{Float64}:
   0.0005852467656204083
@@ -189,7 +189,7 @@ function using column names from a DataFrame.
 See the help on `sfmodel_spec()` for more information.
  
 # Examples
-```julia-repl
+```julia
 julia> df
 100×5 DataFrame
 │ Row │ yvar  │ xvar1     │ xvar2     │ zvar      │ _cons   │
@@ -224,7 +224,7 @@ used as the data of the `frontier` function.
 See the help on `sfmodel_spec()` for more information.
  
 # Examples
-```julia-repl
+```julia
 julia> xmat
 100×3 Matrix{Float64}:
  -0.682942    0.440045   1.0
@@ -260,7 +260,7 @@ the `frontier` function.
 See the help on `sfmodel_init()` for more information.
  
 # Examples
-```julia-repl
+```julia
 sfmodel_init(frontier(0.1, 0.2, 0.5), ...)
 b0 = ones(3)*0.1
 sfmodel_init( frontier(b0), ...)
@@ -282,7 +282,7 @@ sfmodel_init( frontier(b0), ...)
   See the help on `sfmodel_spec()` for more information.
    
   # Examples
-  ```julia-repl
+  ```julia
   julia> df
   100×5 DataFrame
   │ Row │ yvar  │ xvar1     │ xvar2     │ zvar      │ _cons   │
@@ -318,7 +318,7 @@ sfmodel_init( frontier(b0), ...)
  See the help on `sfmodel_spec()` for more information.
   
  # Examples
- ```julia-repl
+ ```julia
  julia> mumat
  100×2 Matrix{Float64}:
   -0.943133   1.0
@@ -354,7 +354,7 @@ the `μ` function.
 See the help on `sfmodel_init()` for more information.
  
 # Examples
-```julia-repl
+```julia
 sfmodel_init( μ(0.1, 0.2, 0.5), ...)
 
 b0 = ones(3)*0.1
@@ -407,7 +407,7 @@ sfmodel_init( μ(b0), ...)
   See the help on `sfmodel_spec()` for more information.
    
   # Examples
-  ```julia-repl
+  ```julia
   julia> df
   100×5 DataFrame
   │ Row │ yvar  │ xvar1     │ xvar2     │ zvar      │ _cons   │
@@ -441,7 +441,7 @@ sfmodel_init( μ(b0), ...)
  See the help on `sfmodel_spec()` for more information.
   
  # Examples
- ```julia-repl
+ ```julia
  julia> zmat
  100×2 Matrix{Float64}:
   -0.943133   1.0
@@ -476,7 +476,7 @@ the `σᵤ²` function.
 See the help on `sfmodel_init()` for more information.
  
 # Examples
-```julia-repl
+```julia
 sfmodel_init( σᵤ²(0.1, 0.2, 0.5), ...)
 
 b0 = ones(3)*0.1
@@ -529,7 +529,7 @@ sfmodel_init( σᵤ²(b0), ...)
   See the help on `sfmodel_spec()` for more information.
    
   # Examples
-  ```julia-repl
+  ```julia
   julia> df
   100×5 DataFrame
   │ Row │ yvar  │ xvar1     │ xvar2     │ zvar      │ _cons   │
@@ -563,7 +563,7 @@ sfmodel_init( σᵤ²(b0), ...)
  See the help on `sfmodel_spec()` for more information.
   
  # Examples
- ```julia-repl
+ ```julia
  julia> sigv2mat
  100×2 Matrix{Float64}:
   -0.943133   1.0
@@ -597,7 +597,7 @@ the `σᵥ²` function.
 See the help on `sfmodel_init()` for more information.
  
 # Examples
-```julia-repl
+```julia
 sfmodel_init( σᵥ²(0.1, 0.2, 0.5), ...)
 
 b0 = ones(3)*0.1
@@ -649,7 +649,7 @@ alias of σᵥ². See help on σᵥ².
  See the help on `sfmodel_spec()` for more information.
   
  # Examples
- ```julia-repl
+ ```julia
  julia> df
  100×5 DataFrame
  │ Row │ yvar  │ xvar1     │ xvar2     │ zvar      │ _cons   │
@@ -683,7 +683,7 @@ used as the data of the `σₐ²` function.
 See the help on `sfmodel_spec()` for more information.
  
 # Examples
-```julia-repl
+```julia
 julia> amat
 100×2 Matrix{Float64}:
  -0.943133   1.0
@@ -718,7 +718,7 @@ the `σₐ²` function.
 See the help on `sfmodel_init()` for more information.
  
 # Examples
-```julia-repl
+```julia
 sfmodel_init( σₐ²(0.1, 0.2, 0.5), ...)
 
 b0 = ones(3)*0.1
@@ -841,7 +841,7 @@ end
  See the help on `sfmodel_spec()` for more information.
   
  # Examples
- ```julia-repl
+ ```julia
  julia> df
  100×5 DataFrame
  │ Row │ yvar  │ xvar1     │ xvar2     │ zvar      │ _cons   │
@@ -874,7 +874,7 @@ used as the data of the `hscale` function.
 See the help on `sfmodel_spec()` for more information.
  
 # Examples
-```julia-repl
+```julia
 julia> hmat
 100×2 Matrix{Float64}:
  -0.943133   1.0
@@ -908,7 +908,7 @@ the `hscale` function.
 See the help on `sfmodel_init()` for more information.
  
 # Examples
-```julia-repl
+```julia
 sfmodel_init( hscale(0.1, 0.2, 0.5), ...)
 
 b0 = ones(3)*0.1
@@ -932,7 +932,7 @@ end
  See the help on `sfmodel_spec()` for more information.
   
  # Examples
- ```julia-repl
+ ```julia
  julia> df
  100×5 DataFrame
  │ Row │ yvar  │ xvar1     │ xvar2     │ zvar      │ _cons   │
@@ -965,7 +965,7 @@ used as the data of the `gamma` function.
 See the help on `sfmodel_spec()` for more information.
  
 # Examples
-```julia-repl
+```julia
 julia> gmat
 100×2 Matrix{Float64}:
  -0.943133   1.0
@@ -999,7 +999,7 @@ the `gamma` function.
 See the help on `sfmodel_init()` for more information.
  
 # Examples
-```julia-repl
+```julia
 sfmodel_init( gamma(0.1, 0.2, 0.5), ...)
 
 b0 = ones(3)*0.1
@@ -1053,7 +1053,7 @@ end
  See the help on `sfmodel_spec()` for more information.
   
  # Examples
- ```julia-repl
+ ```julia
  julia> df
  100×4 DataFrame
  │ Row │ year  │ firm  │ yvar  │ xvar1     │
@@ -1088,7 +1088,7 @@ matrix containing the time information of the panel data.
 See the help on `sfmodel_spec()` for more information.
  
 # Examples
-```julia-repl
+```julia
 julia> timemat
 100-element Vector{Int64}:
  2019
@@ -1123,7 +1123,7 @@ name of a DataFrame that contain the individual's id information of the panel da
 See the help on `sfmodel_spec()` for more information.
  
 # Examples
-```julia-repl
+```julia
 julia> df
 100×4 DataFrame
 │ Row │ year  │ firm  │ yvar  │ xvar1     │
@@ -1157,7 +1157,7 @@ matrix containing the individual's id information of the panel data.
 See the help on `sfmodel_spec()` for more information.
  
 # Examples
-```julia-repl
+```julia
 julia> idmat
 100-element Vector{Int64}:
   1
@@ -1226,7 +1226,7 @@ parameters in the model.
 See the help on `sfmodel_init()` for more information.
  
 # Examples
-```julia-repl
+```julia
 sfmodel_init( all_init(0.1, 0.2, 0.5, -0.1, -0.1, -0.2), ...)
 
 b0 = ones(6)*0.1
@@ -1261,7 +1261,7 @@ The default is `NelderMead()`. Others include `SimulatedAnnealing()`, `SAMIN()`,
 See the help on `sfmodel_opt()` for more information.
  
 # Examples
-```julia-repl
+```julia
 sfmodel_opt( warmstart_solver(NelderMead()), ...)
 ```
 """
@@ -1285,7 +1285,7 @@ is 100.
 See the help on `sfmodel_opt()` for more information.
  
 # Examples
-```julia-repl
+```julia
 sfmodel_opt( warmstart_maxIT(400), ...)
 ```
 """
@@ -1316,7 +1316,7 @@ An argument in `sfmodel_opt()`. Specify the algorithm used in the 2nd-stage ("ma
 See the help on `sfmodel_opt()` for more information.
  
 # Examples
-```julia-repl
+```julia
 sfmodel_opt( main_solver(Newton()), ...)
 ```
 """
@@ -1342,7 +1342,7 @@ main_maxIT(arg)
  See the help on `sfmodel_opt()` for more information.
   
  # Examples
- ```julia-repl
+ ```julia
  sfmodel_opt( main_maxIT(2500), ...)
  ```
  """
@@ -1369,7 +1369,7 @@ See `Optim`'s `g_tol` option for more information.
 Also see the help on `sfmodel_opt()` for more information.
  
 # Examples
-```julia-repl
+```julia
 sfmodel_opt( tolerance(1.0e-6), ...)
 ```
 """
@@ -1387,7 +1387,7 @@ the default) the information of the model and the optimization results.
 See the help on `sfmodel_opt()` for more information.
  
 # Examples
-```julia-repl
+```julia
 sfmodel_opt( verbose(false), ...)
 ```
 """ 
@@ -1406,7 +1406,7 @@ sfmodel_opt( verbose(false), ...)
  See the help on `sfmodel_opt()` for more information.
   
  # Examples
- ```julia-repl
+ ```julia
  sfmodel_opt( banner(false), ...)
  ```
  """ 
@@ -1424,7 +1424,7 @@ sfmodel_opt( verbose(false), ...)
  See the help on `sfmodel_opt()` for more information.
   
  # Examples
- ```julia-repl
+ ```julia
  sfmodel_opt( ineff_index(false), ...)
  ```
  """ 
@@ -1443,7 +1443,7 @@ marginal(arg::Bool)
  See the help on `sfmodel_opt()` for more information.
   
  # Examples
- ```julia-repl
+ ```julia
  sfmodel_opt( marginal(false), ...)
  ```
 """ 
@@ -1464,7 +1464,7 @@ marginal(arg::Bool)
    See the help on `sfmodel_opt()` for more information.
     
    # Examples
-   ```julia-repl
+   ```julia
    sfmodel_opt( table_format(html), ...)
    ```
   """ 
@@ -1494,7 +1494,7 @@ end
   See the help on `sfmodel_fit()` for more information.
    
 # Examples
-```julia-repl
+```julia
   julia> mydf
   100×4 DataFrame
   │ Row │ year  │ firm  │ yvar  │ xvar1     │
@@ -1529,7 +1529,7 @@ predicted.
 See the help on `sfmodel_predict()` for more information.
  
 # Examples
-```julia-repl
+```julia
 sfmodel_predict( @eq(frontier), ...)
 ```
 """

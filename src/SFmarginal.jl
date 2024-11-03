@@ -272,10 +272,12 @@ function get_marg(::Type{PFEWHH}, # PorC::Int64,
         #* Note that Y and X are within-transformed by `getvar`, 
         #* but Q, W, V are still in the original level.
 
-     mm_q = Array{Float64}(undef, num.nofq, num.nofobs)                  
-     mm_w = Array{Float64}(undef, num.nofw, num.nofobs)    
+     nofobs_new = size(Q, 1) # do not use num.nofobs, because unbalanced panel may have different bootstrapped size
 
-     @inbounds for i in 1:num.nofobs   
+     mm_q = Array{Float64}(undef, num.nofq, nofobs_new)                  
+     mm_w = Array{Float64}(undef, num.nofw, nofobs_new)    
+
+     @inbounds for i in 1:nofobs_new
           @views marg = ForwardDiff.gradient(marg -> marg_fewhh( pos, coef, 
                                              marg[1 : num.nofq],
                                              marg[num.nofq+1 : num.nofmarg]),
@@ -338,11 +340,13 @@ function get_marg(::Type{PFEWHT}, # PorC::Int64,
         #* Note that Y and X are within-transformed by `getvar`, 
         #* but Q, W, V are still in the original level.
 
-     mm_z = Array{Float64}(undef, num.nofz, num.nofobs)  
-     mm_q = Array{Float64}(undef, num.nofq, num.nofobs)                  
-     mm_w = Array{Float64}(undef, num.nofw, num.nofobs)    
+     nofobs_new = size(Z, 1)  # Do not use num.nofobs (which is based on original data). Unbalanced panel may have different nofobs.
 
-     @inbounds for i in 1:num.nofobs   
+     mm_z = Array{Float64}(undef, num.nofz, nofobs_new)  
+     mm_q = Array{Float64}(undef, num.nofq, nofobs_new)                  
+     mm_w = Array{Float64}(undef, num.nofw, nofobs_new)    
+
+     @inbounds for i in 1:nofobs_new   
      @views marg = ForwardDiff.gradient(marg -> marg_fewht( pos, coef, 
                                              marg[1 : num.nofz],
                                              marg[num.nofz+1 : num.nofz+num.nofq],

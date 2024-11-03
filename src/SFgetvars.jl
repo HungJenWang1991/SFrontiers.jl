@@ -7,6 +7,13 @@
 function get_rowIDT(ivar) 
 
     # Create a matrix of panel information.
+    # The `ivar` is a vector of firm id, such as `bb=[1,1,1,2,2,3,3,3,3]`.
+    # The output is 
+    # julia> get_rowIDT(bb)
+    #    3×2 Matrix{Any}:
+    #     [1, 2, 3]     3
+    #     [4, 5]        2
+    #     [6, 7, 8, 9]  4
 
     N  = length(unique(ivar)) # N=number of panels
     id = Array{Any}(undef,N,2)
@@ -16,10 +23,10 @@ function get_rowIDT(ivar)
     end
     @views Tᵢ = id[:,2]
 
-    rowID =  Vector{Vector}()  
+    rowID =  Vector{Vector}(undef, N)  
     @inbounds for i=1:N
         @views cc = findall(x-> x == id[i,1], ivar) # row index of i'th firm
-        push!(rowID, cc) # put the id info in the vector; faster than using UnitRange
+        rowID[i] = cc # put the id info in the vector; faster than using UnitRange
     end    
   
     rowIDT = hcat(rowID, Tᵢ) 

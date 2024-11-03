@@ -25,8 +25,8 @@ function get_rowIDT(ivar)
 
     rowID =  Vector{Vector}(undef, N)  
     @inbounds for i=1:N
-        @views cc = findall(x-> x == id[i,1], ivar) # row index of i'th firm
-        rowID[i] = cc # put the id info in the vector; faster than using UnitRange
+        @views dd = findall(x-> x == id[i,1], ivar) # row index of i'th firm
+        rowID[i] = dd # put the id info in the vector; faster than using UnitRange
     end    
   
     rowIDT = hcat(rowID, Tᵢ) 

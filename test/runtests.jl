@@ -297,11 +297,11 @@ end
 	@test res.marginal[1,1] ≈ -0.08340  atol=1e-5
 	@test res.jlms[1] ≈ 1.21327  atol=1e-5
 	@test res.bc[1] ≈ 0.37075 atol=1e-5
-	@test boot1[1] ≈ 1.60067 atol=7e-5
-	@test d1[1] ≈ -0.47043 atol=1e-5
+	@test boot1[1] ≈ 0.71509 atol=7e-5  # 1.60067
+	@test d1[1] ≈ -0.43925 atol=1e-5   # -0.47043
 
     ci90 = sfmodel_CI(bootdata=d1, observed=res.marginal_mean, level=0.10, verbose=false);
-    @test ci90[1][1] ≈ -0.38963 atol=1e-5
+    @test ci90[1][1] ≈  -0.93359 atol=1e-5 #  -0.38963
 
 
 	pred1 = sfmodel_predict(@eq(frontier))

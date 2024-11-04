@@ -1,7 +1,7 @@
 name = "SFrontiers"
 uuid = "450466ac-e45e-40ce-9385-fade81a2016c"
 authors = ["Hung-Jen Wang <hjw.econ.1991@gmail.com>"]
-version = "0.2.12"
+version = "0.2.13"
 
 [deps]
 DataFrames = "a93c6f00-e57d-5684-b7b6-d8193f3e46c0"
@@ -25,7 +25,7 @@ DataFrames = "1.0 - 1.9"
 DataStructures = "0.16 - 0.19"
 Distributions = "0.24 - 0.26"
 FLoops = "0.1 - 0.9"
-ForwardDiff = "0.1 - 0.9"
+ForwardDiff = "0.10 - 0.20"
 HypothesisTests = "0.1 - 0.9"
 KahanSummation = "0.1 - 0.9"
 NLSolversBase = "7.0 - 7.9"

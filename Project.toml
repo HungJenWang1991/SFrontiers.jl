@@ -20,7 +20,7 @@ SpecialFunctions = "276daf66-3868-5448-9aa4-cd146d93841b"
 StatsFuns = "4c63d2b9-4356-54db-8cca-17b64c39e42c"
 
 [compat]
-julia = ">=1.6, <2.0"
+julia = ">=1.8, <2.0"
 DataFrames = "1.0 - 1.9"
 DataStructures = "0.1 - 1.9"
 Distributions = "0.1 - 1.0"

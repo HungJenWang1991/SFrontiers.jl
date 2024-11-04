@@ -1,7 +1,7 @@
 name = "SFrontiers"
 uuid = "450466ac-e45e-40ce-9385-fade81a2016c"
 authors = ["Hung-Jen Wang <hjw.econ.1991@gmail.com>"]
-version = "0.2.9"
+version = "0.2.10"
 
 [deps]
 DataFrames = "a93c6f00-e57d-5684-b7b6-d8193f3e46c0"
@@ -20,7 +20,6 @@ SpecialFunctions = "276daf66-3868-5448-9aa4-cd146d93841b"
 StatsFuns = "4c63d2b9-4356-54db-8cca-17b64c39e42c"
 
 [compat]
-julia = ">=1.8, <2.0"
 DataFrames = "1.0 - 1.9"
 DataStructures = "0.1 - 1.9"
 Distributions = "0.1 - 1.0"

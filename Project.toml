@@ -1,8 +1,8 @@
 name = "SFrontiers"
 uuid = "450466ac-e45e-40ce-9385-fade81a2016c"
-authors = ["Hung-Jen Wang"]
-version = "1.0.0"
 license = "GPL-3.0-or-later"
+version = "1.0.0"
+authors = ["Hung-Jen Wang"]
 
 [deps]
 ADTypes = "47edcb42-4c32-4615-8424-f2b9edc5f35b"
@@ -33,6 +33,7 @@ OrderedCollections = "1"
 PrettyTables = "2, 3"
 QuadGK = "2"
 SpecialFunctions = "2"
+Statistics = "1"
 StatsFuns = "1"
 julia = "1.9"
 

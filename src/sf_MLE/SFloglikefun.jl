@@ -46,7 +46,7 @@ function LL_T(::Type{Trun}, Y::Matrix, X::Matrix, Z::Matrix, q, W::Matrix, V::Ma
     μₛ  = (σᵥ² .* μ - σᵤ² .* ϵ) ./ σ²
     σₛ² = (σᵥ² .* σᵤ²) ./ σ²
 
-ll = Vector{eltype(Y)}(undef, nobs)
+ll = Vector{eltype(ϵ)}(undef, nobs)
 @floop begin
 @inbounds for i in 1:nobs
        @views ll[i] = (- 0.5 * log(σ²[i])
@@ -218,7 +218,7 @@ function LL_T(::Type{PFEWHT}, Ỹ::Union{Vector,Matrix}, X̃::Matrix, z, Q::Matr
 
     nofid = size(idt,1)
 
-    ll = Vector{eltype(Ỹ)}(undef, nofid)
+    ll = Vector{eltype(ϵ̃)}(undef, nofid)
     @floop begin
       @inbounds for i in 1:nofid
             @views ind = idt[i,1]
@@ -259,7 +259,7 @@ function LL_T(::Type{PanDecay}, Y::Union{Vector,Matrix}, X::Matrix, Z::Matrix, Q
     σᵥ  = sqrt(σᵥ²)
     σₛ² = σᵤ² + σᵥ²
 
-    ll = Vector{eltype(Y)}(undef, nofid)
+    ll = Vector{eltype(rho)}(undef, nofid)
     @floop begin
       @inbounds for i = 1:nofid
             @views ind = idt[i,1]
@@ -308,7 +308,7 @@ function LL_T(::Type{PanKumb90}, Y::Union{Vector,Matrix}, X::Matrix, Z::Matrix, 
   σᵥ  = sqrt(σᵥ²)
   σₛ² = σᵤ² + σᵥ²
 
-  ll = Vector{eltype(Y)}(undef, nofid)
+  ll = Vector{eltype(rho)}(undef, nofid)
   @floop begin
   @inbounds for i = 1:nofid
          @views ind = idt[i,1]
@@ -370,7 +370,7 @@ function LL_T(::Type{PFECSWH}, Ỹ::Union{Vector,Matrix}, X̃::Matrix, z, q, w, 
 
     nofid = size(idt,1)
 
-    ll = Vector{eltype(Ỹ)}(undef, nofid)
+    ll = Vector{eltype(ϵ)}(undef, nofid)
     @floop begin
     @inbounds for i in 1:nofid
            @views Tᵢ    = idt[i, 2]
@@ -401,13 +401,13 @@ function LL_T(::Type{PTREH}, Y::Matrix, X::Matrix, z, Q::Matrix, w, v,
 
        nofid = size(idt,1)
 
-   ll = Vector{eltype(Y)}(undef, nofid)
+   ll = Vector{eltype(ε1)}(undef, nofid)
    @floop begin
           for i = 1:nofid
               @views ind  = idt[i, 1]
               @views T    = idt[i, 2]
               @views ε    = ε1[ind]
-                     μ    = zeros(T)
+                     μ    = zeros(eltype(ε1), T)
                   logdetΣ = log(max(T*σₐ²*(σᵥ²)^(T-1) + (σᵥ²)^T, _MLE_CLAMP.log_lo))
                      invΣ = (1/σᵥ²) * (Matrix(I,T,T) - σₐ²/(σᵥ² + T*σₐ²)*ones(T,T))
                     invΣᵤ = (1/σᵤ²) * Matrix(I,T,T)
@@ -416,7 +416,7 @@ function LL_T(::Type{PTREH}, Y::Matrix, X::Matrix, z, Q::Matrix, w, v,
                    # below is the analytic form of G = inv(inv(Σ)+inv(Σᵤ))
                      γ²   = max(1/(1/σᵤ²+1/σᵥ²), _MLE_CLAMP.exp_lo)
                      g    = -T*1/(1+σₐ²/σᵥ²*T)*σₐ²/σᵥ²^2*1/(1/σᵤ²+1/σᵥ²)
-                     ρ²   = max(1/(1+g) * 1/(1/σᵤ²+1/σᵥ²)^2 * 1/(1 + σₐ²/σᵥ²*T) *(σₐ²/σᵥ²^2), zero(eltype(Y)))
+                     ρ²   = max(1/(1+g) * 1/(1/σᵤ²+1/σᵥ²)^2 * 1/(1 + σₐ²/σᵥ²*T) *(σₐ²/σᵥ²^2), zero(eltype(rho)))
                      G    = γ² * Matrix(I,T,T) + ρ² * ones(T,T)
                      logdetG = log(max(T*ρ²*(γ²)^(T-1) + (γ²)^T, _MLE_CLAMP.log_lo))
 
@@ -453,7 +453,7 @@ function LL_T(::Type{PTRET}, Y::Matrix, X::Matrix, Z::Matrix, Q::Matrix, w, v,
 
     nofid = size(idt, 1)
 
-ll = Vector{eltype(Y)}(undef, nofid)
+ll = Vector{eltype(rho)}(undef, nofid)
 @floop begin
        for i in 1:nofid
           @views ind = idt[i, 1]
@@ -469,7 +469,7 @@ ll = Vector{eltype(Y)}(undef, nofid)
         # below is the analytic form of G = inv(inv(Σ)+inv(Σᵤ))
           γ²   = max(1/(1/σᵤ²+1/σᵥ²), _MLE_CLAMP.exp_lo)
           g    = -T*1/(1+σₐ²/σᵥ²*T)*σₐ²/σᵥ²^2*1/(1/σᵤ²+1/σᵥ²)
-          ρ²   = max(1/(1+g) * 1/(1/σᵤ²+1/σᵥ²)^2 * 1/(1 + σₐ²/σᵥ²*T) *(σₐ²/σᵥ²^2), zero(eltype(Y)))
+          ρ²   = max(1/(1+g) * 1/(1/σᵤ²+1/σᵥ²)^2 * 1/(1 + σₐ²/σᵥ²*T) *(σₐ²/σᵥ²^2), zero(eltype(rho)))
           G    = γ² * Matrix(I,T,T) + ρ² * ones(T,T)
           logdetG = log(max(T*ρ²*(γ²)^(T-1) + (γ²)^T, _MLE_CLAMP.log_lo))
 

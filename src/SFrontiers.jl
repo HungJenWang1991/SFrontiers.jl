@@ -216,6 +216,10 @@ function sfmodel_spec(; depvar, frontier, zvar=nothing,
 
     # --- Helper: build MLE spec for cross-sectional models (returns nothing if not applicable) ---
     _build_mle_cross = () -> begin
+        # MLE scaling only supports TruncatedNormal; skip for other distributions
+        if hetero === :scaling && ineff != :TruncatedNormal
+            return nothing
+        end
         if noise == :Normal && copula == :None &&
            ineff in (:HalfNormal, :TruncatedNormal, :Exponential)
             MLE_Backend.sfmodel_spec(;
@@ -638,6 +642,15 @@ function sfmodel_method(;
     chunks::Int = 10,
     distinct_Halton_length::Int = 2^15-1)
 
+    # Early check: if GPU requested, ensure CUDA was loaded before SFrontiers
+    if GPU
+        if method == :MCI
+            MCI_Backend.check_gpu_overloads()
+        elseif method == :MSLE
+            MSLE_Backend.check_gpu_overloads()
+        end
+    end
+
     if method == :MCI
         _n_draws = isnothing(n_draws) ? 1024 : n_draws
         return MCI_Backend.sfmodel_method(;
@@ -913,6 +926,9 @@ function sfmodel_fit(;
             error("No Panel spec available for `datatype=:panel_TFE`.")
         end
         panel_method = _to_panel_method(method)
+        if panel_method.GPU
+            Panel_Backend.check_gpu_overloads()
+        end
         panel_opt    = _to_panel_opt(optim_options)
 
         return Panel_Backend.sfmodel_panel_fit(;

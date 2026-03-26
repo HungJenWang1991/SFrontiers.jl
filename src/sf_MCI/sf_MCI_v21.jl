@@ -731,10 +731,10 @@ end
 function _maybe_gpu_convert(depvar::AbstractVector, frontier::AbstractMatrix,
                             zvar::AbstractMatrix, gpu::Bool)
     if gpu
-        if !@isdefined(CuArray)
+        if !isdefined(Main, :CUDA)
             error("GPU=true requires CUDA.jl to be loaded. Please run `using CUDA` before calling this function.")
         end
-        return CuArray(depvar), CuArray(frontier), CuArray(zvar)
+        return Main.CUDA.CuArray(depvar), Main.CUDA.CuArray(frontier), Main.CUDA.CuArray(zvar)
     end
     return depvar, frontier, zvar
 end
@@ -2161,12 +2161,12 @@ function sfmodel_MCI_spec(; depvar, frontier, zvar=nothing,
     if GPU
         # Note: Gamma now uses T-approach which is GPU-compatible
         # Check if CUDA.jl has been loaded
-        if !@isdefined(CuArray)
+        if !isdefined(Main, :CUDA)
             error("GPU=true requires CUDA.jl to be loaded. Please run `using CUDA` before calling this function.")
         end
-        depvar_norm = CuArray(depvar_norm)
-        frontier_norm = CuArray(frontier_norm)
-        zvar_norm = CuArray(zvar_norm)
+        depvar_norm = Main.CUDA.CuArray(depvar_norm)
+        frontier_norm = Main.CUDA.CuArray(frontier_norm)
+        zvar_norm = Main.CUDA.CuArray(zvar_norm)
     end
 
     # Validate and compute sign for frontier type

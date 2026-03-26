@@ -738,10 +738,10 @@ if `gpu=false`. Requires `using CUDA` to have been called before use with GPU.
 """
 function _maybe_gpu_convert(depvar, frontier, zvar, gpu::Bool)
     if gpu
-        if !@isdefined(CuArray)
+        if !isdefined(Main, :CUDA)
             error("GPU=true requires CUDA.jl to be loaded. Please run `using CUDA` before calling this function.")
         end
-        return CuArray(depvar), CuArray(frontier), CuArray(zvar)
+        return Main.CUDA.CuArray(depvar), Main.CUDA.CuArray(frontier), Main.CUDA.CuArray(zvar)
     end
     return depvar, frontier, zvar
 end

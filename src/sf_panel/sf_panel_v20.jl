@@ -2334,12 +2334,12 @@ function _assemble_panel_spec(spec::PanelModelSpec{T}, method::PanelMethodSpec) 
 
     # 2. GPU conversion (optional)
     if method.GPU
-        if !@isdefined(CuArray)
+        if !isdefined(Main, :CUDA)
             error("GPU=true requires CUDA.jl to be loaded. Please run `using CUDA` before calling this function.")
         end
-        y_tilde = CuArray(y_tilde)
-        x_tilde = CuArray(x_tilde)
-        z_raw = CuArray(spec.zvar)
+        y_tilde = Main.CUDA.CuArray(y_tilde)
+        x_tilde = Main.CUDA.CuArray(x_tilde)
+        z_raw = Main.CUDA.CuArray(spec.zvar)
     else
         z_raw = spec.zvar
     end
@@ -2363,7 +2363,7 @@ function _assemble_panel_spec(spec::PanelModelSpec{T}, method::PanelMethodSpec) 
         Tm1 = spec.T_max - 1
     else
         Tm1_cpu = T.(spec.T_periods .- 1)
-        Tm1 = method.GPU ? CuArray(Tm1_cpu) : Tm1_cpu
+        Tm1 = method.GPU ? Main.CUDA.CuArray(Tm1_cpu) : Tm1_cpu
     end
 
     return _PanelInternalSpec{T}(

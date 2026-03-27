@@ -362,9 +362,9 @@ li { margin: 0.3rem 0; }
 li > ul, li > ol { margin: 0.2rem 0; }
 
 /* --- Code --- */
-code {
-  font-family: "JuliaMono", "SFMono-Regular", Consolas, "Liberation Mono",
-               Menlo, "DejaVu Sans Mono", monospace;
+code, pre {
+  font-family: Consolas, "DejaVu Sans Mono", "Liberation Mono",
+               "Courier New", monospace;
   font-size: 0.875em;
   font-variant-ligatures: no-contextual;
 }

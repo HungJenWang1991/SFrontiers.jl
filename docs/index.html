@@ -252,44 +252,44 @@ estimation.</p>
 <hr />
 <h2 id="table-of-contents">Table of Contents</h2>
 <ol start="0" type="1">
-<li><a href="#0-theoretical-presentation">Theoretical
+<li><a href="#theoretical-presentation">Theoretical
 Presentation</a></li>
-<li><a href="#1-introduction">Introduction</a></li>
-<li><a href="#2-software-and-hardware-requirements">Software and
-Hardware Requirements</a></li>
-<li><a href="#3-installation-and-dependencies">Installation and
+<li><a href="#introduction">Introduction</a></li>
+<li><a href="#software-and-hardware-requirements">Software and Hardware
+Requirements</a></li>
+<li><a href="#installation-and-dependencies">Installation and
 Dependencies</a></li>
-<li><a href="#4-quick-start-example">Quick Start Example</a></li>
-<li><a href="#5-function-reference">Function Reference</a>
+<li><a href="#quick-start-example">Quick Start Example</a></li>
+<li><a href="#function-reference">Function Reference</a>
 <ul>
-<li>5.1 <a href="#51-sfmodel_spec">sfmodel_spec()</a></li>
-<li>5.2 <a href="#52-sfmodel_method">sfmodel_method()</a></li>
-<li>5.3 <a href="#53-sfmodel_init">sfmodel_init()</a></li>
-<li>5.4 <a href="#54-sfmodel_opt">sfmodel_opt()</a></li>
-<li>5.5 <a href="#55-sfmodel_fit">sfmodel_fit()</a></li>
+<li>5.1 <a href="#sfmodel_spec">sfmodel_spec()</a></li>
+<li>5.2 <a href="#sfmodel_method">sfmodel_method()</a></li>
+<li>5.3 <a href="#sfmodel_init">sfmodel_init()</a></li>
+<li>5.4 <a href="#sfmodel_opt">sfmodel_opt()</a></li>
+<li>5.5 <a href="#sfmodel_fit">sfmodel_fit()</a></li>
 <li>5.6 <a
-href="#56-sfmodel_mixtable-and-sfmodel_chisquaretable">sfmodel_MixTable()
+href="#sfmodel_mixtable-and-sfmodel_chisquaretable">sfmodel_MixTable()
 and sfmodel_ChiSquareTable()</a></li>
 </ul></li>
-<li><a href="#6-supported-models">Supported Models</a></li>
-<li><a href="#7-distributions-reference">Distributions Reference</a>
+<li><a href="#supported-models">Supported Models</a></li>
+<li><a href="#distributions-reference">Distributions Reference</a>
 <ul>
-<li>7.1 <a href="#71-distribution-selection-guidance">Distribution
+<li>7.1 <a href="#distribution-selection-guidance">Distribution
 Selection Guidance</a></li>
 </ul></li>
-<li><a href="#8-working-with-results">Working with Results</a>
+<li><a href="#working-with-results">Working with Results</a>
 <ul>
-<li>8.1 <a href="#81-interpreting-estimation-results">Interpreting
+<li>8.1 <a href="#interpreting-estimation-results">Interpreting
 Estimation Results</a></li>
 </ul></li>
-<li><a href="#9-advanced-topics">Advanced Topics</a>
+<li><a href="#advanced-topics">Advanced Topics</a>
 <ul>
-<li>9.1 <a href="#91-copula-interpretation-guide">Copula Interpretation
+<li>9.1 <a href="#copula-interpretation-guide">Copula Interpretation
 Guide</a></li>
-<li>9.2 <a href="#92-cost-frontier-interpretation">Cost Frontier
+<li>9.2 <a href="#cost-frontier-interpretation">Cost Frontier
 Interpretation</a></li>
 </ul></li>
-<li><a href="#10-panel-data-models">Panel Data Models</a></li>
+<li><a href="#panel-data-models">Panel Data Models</a></li>
 </ol>
 <hr />
 <h2 id="theoretical-presentation">0. Theoretical Presentation</h2>
@@ -372,7 +372,7 @@ derived from the inefficiency distribution’s parameters for observation
 <span class="math inline">\(i\)</span>, and <span
 class="math inline">\(g&#39;\)</span> is the Jacobian of the
 transformation. The MCI approach supports several transformation rules
-(see <a href="#52-sfmodel_method">Section 5.2</a>).</p>
+(see <a href="#sfmodel_method">Section 5.2</a>).</p>
 <p>As shown by Wang (2025), MSLE is a special case of MCI. When the
 quantile function is used as the transformation rule, the Jacobian
 reduces to <span class="math inline">\(\frac{1}{f_u(g(t,s_i))}\)</span>,
@@ -417,8 +417,7 @@ fixed-effect model. Supports MCI, MSLE, and MLE
 <li><code>datatype=:panel_TRE</code> — True random-effect model. MLE
 only, HalfNormal or TruncatedNormal.</li>
 </ul>
-<p>See <a href="#10-panel-data-models">Section 10</a> for
-details.</p></li>
+<p>See <a href="#panel-data-models">Section 10</a> for details.</p></li>
 <li><p><strong>A large set of noise (<span
 class="math inline">\(v\)</span>) and inefficiency (<span
 class="math inline">\(u\)</span>) combinations:</strong> For
@@ -441,7 +440,7 @@ distribution. The simulation-based panel model
 class="math inline">\(u\)</span> distributions via MCI/MSLE. The
 MLE-only panel models (<code>datatype=:panel_TFE_CSW</code>,
 <code>:panel_TRE</code>) support a subset (see <a
-href="#10-panel-data-models">Section 10</a>).</p></li>
+href="#panel-data-models">Section 10</a>).</p></li>
 <li><p><strong>Copula dependence (cross-sectional only):</strong>
 Gaussian, Gumbel, Clayton, and 90°-rotated Clayton copula support for
 modeling dependence between noise <span class="math inline">\(v\)</span>
@@ -699,7 +698,7 @@ auto-generated)</li>
 <code>:panel_TFE</code> (Wang and Ho 2010 true fixed-effect),
 <code>:panel_TFE_CSW</code> (Chen, Schmidt, and Wang 2014, MLE only), or
 <code>:panel_TRE</code> (true random-effect, MLE only). See <a
-href="#10-panel-data-models">Section 10</a>.</td>
+href="#panel-data-models">Section 10</a>.</td>
 </tr>
 <tr class="even">
 <td><code>type</code></td>
@@ -748,7 +747,7 @@ constant column</strong>. Optional for both.</td>
 <td>Distribution of the noise term <span
 class="math inline">\(v\)</span>. Cross-sectional: <code>:Normal</code>,
 <code>:StudentT</code>, <code>:Laplace</code>. Panel:
-<code>:Normal</code> only. See <a href="#6-supported-models">Section
+<code>:Normal</code> only. See <a href="#supported-models">Section
 6</a>.</td>
 </tr>
 <tr class="odd">
@@ -759,9 +758,9 @@ class="math inline">\(u\)</span>. Supported options:
 <code>:HalfNormal</code>, <code>:TruncatedNormal</code>,
 <code>:Exponential</code>, <code>:Weibull</code>,
 <code>:Lognormal</code>, <code>:Lomax</code>, <code>:Rayleigh</code>,
-and <code>:Gamma</code>. See <a href="#6-supported-models">Section
-6</a>. Note: <code>:Gamma</code> is MCI only; <code>method=:MLE</code>
-supports only <code>:HalfNormal</code>, <code>:TruncatedNormal</code>,
+and <code>:Gamma</code>. See <a href="#supported-models">Section 6</a>.
+Note: <code>:Gamma</code> is MCI only; <code>method=:MLE</code> supports
+only <code>:HalfNormal</code>, <code>:TruncatedNormal</code>,
 <code>:Exponential</code>.</td>
 </tr>
 <tr class="even">
@@ -781,7 +780,7 @@ specification that are allowed to be heteroscedastic (e.g.,
 <code>[:mu, :sigma_sq]</code>), <strong>or</strong> the symbol
 <code>:scaling</code> to activate the scaling property model. Not
 available with panel datatypes. See <a
-href="#7-distributions-reference">Section 7</a> and <a
+href="#distributions-reference">Section 7</a> and <a
 href="#scaling-property-model-cross-sectional">Section 9.5</a>.</td>
 </tr>
 <tr class="even">
@@ -1019,7 +1018,7 @@ class="sourceCode julia"><code class="sourceCode julia"><span id="cb11-1"><a hre
 model, heterogeneity enters through the scaling function <span
 class="math inline">\(h(z_{it}) = \exp(z_{it}&#39;\delta)\)</span>, and
 the <code>frontier</code> and <code>zvar</code> matrices must NOT
-include a constant column. See <a href="#10-panel-data-models">Section
+include a constant column. See <a href="#panel-data-models">Section
 10</a> for details.</p>
 <p>For cross-sectional models, the scaling property model is activated
 by <code>hetero = :scaling</code>. See <a
@@ -2877,8 +2876,8 @@ estimation (MCI or MSLE).</li>
 <li><strong>Compare models.</strong> Compare log-likelihood values
 across specifications. Higher log-likelihood (less negative) indicates
 better fit. For nested models, use a likelihood ratio test (see <a
-href="#56-sfmodel_mixtable-and-sfmodel_chisquaretable">Section 5.6</a>
-for critical values).</li>
+href="#sfmodel_mixtable-and-sfmodel_chisquaretable">Section 5.6</a> for
+critical values).</li>
 </ol>
 <h4 id="noise-distribution">Noise Distribution</h4>
 <table>
@@ -3049,7 +3048,7 @@ non-positive Hessian diagonal)</td>
 <tr class="even">
 <td>Wrong-sign <code>OLS_resid_skew</code></td>
 <td>Data may not support the presence of inefficiency in the assumed
-direction (see <a href="#92-cost-frontier-interpretation">Cost Frontier
+direction (see <a href="#cost-frontier-interpretation">Cost Frontier
 Interpretation</a>)</td>
 </tr>
 <tr class="odd">
@@ -3188,7 +3187,7 @@ class="sourceCode julia"><code class="sourceCode julia"><span id="cb37-1"><a hre
 <p>Requirements:</p>
 <ul>
 <li>CUDA.jl must be loaded <strong>before</strong> SFrontiers.jl (see <a
-href="#3-installation-and-dependencies">Section 3</a>)</li>
+href="#installation-and-dependencies">Section 3</a>)</li>
 <li>The <code>chunks</code> parameter controls memory usage by
 processing data in chunks</li>
 </ul>
@@ -4301,7 +4300,7 @@ within-group demeaning eliminates any constant terms. Therefore:</p>
 typically required.</li>
 <li>The same applies to <code>panel_TFE_CSW</code>. For
 <code>panel_TRE</code>, a constant term <strong>is</strong> allowed in
-<code>frontier</code> (see <a href="#101-theoretical-background">Section
+<code>frontier</code> (see <a href="#theoretical-background">Section
 10.1</a>).</li>
 </ul>
 <h3 id="panel-dsl-macros">10.7 Panel DSL Macros</h3>

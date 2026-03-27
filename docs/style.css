@@ -1,0 +1,114 @@
+/* SFrontiers.jl User Manual — GitHub Pages stylesheet */
+
+body {
+  max-width: 920px;
+  margin: 2rem auto;
+  padding: 0 1.25rem;
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto,
+               "Helvetica Neue", Arial, sans-serif;
+  line-height: 1.65;
+  color: #24292e;
+  background: #fff;
+}
+
+h1, h2, h3, h4 {
+  color: #1a1a2e;
+  margin-top: 1.8rem;
+}
+h1 { border-bottom: 2px solid #4a90d9; padding-bottom: 0.4rem; }
+h2 { border-bottom: 1px solid #ddd; padding-bottom: 0.3rem; }
+
+a { color: #4a90d9; text-decoration: none; }
+a:hover { text-decoration: underline; }
+
+/* Table of contents */
+nav#TOC {
+  background: #f6f8fa;
+  border: 1px solid #e1e4e8;
+  border-radius: 6px;
+  padding: 1rem 1.5rem;
+  margin-bottom: 2rem;
+}
+nav#TOC > ul { padding-left: 0; }
+nav#TOC ul { list-style: none; padding-left: 1.2rem; }
+nav#TOC li { margin: 0.2rem 0; }
+nav#TOC a { color: #0366d6; }
+
+/* Code blocks */
+pre {
+  background: #f6f8fa;
+  border: 1px solid #e1e4e8;
+  border-radius: 6px;
+  padding: 1rem;
+  overflow-x: auto;
+  font-size: 0.9em;
+  line-height: 1.45;
+}
+code {
+  font-family: "SFMono-Regular", Consolas, "Liberation Mono", Menlo, monospace;
+  font-size: 0.9em;
+}
+p > code, li > code, td > code {
+  background: #f0f0f0;
+  padding: 0.15em 0.35em;
+  border-radius: 3px;
+}
+
+/* Tables */
+table {
+  border-collapse: collapse;
+  width: 100%;
+  margin: 1rem 0;
+  font-size: 0.95em;
+}
+th, td {
+  border: 1px solid #d0d7de;
+  padding: 0.5rem 0.75rem;
+  text-align: left;
+}
+th {
+  background: #f0f3f6;
+  font-weight: 600;
+}
+tr:nth-child(even) { background: #f9fafb; }
+
+/* Blockquotes */
+blockquote {
+  border-left: 4px solid #4a90d9;
+  margin: 1rem 0;
+  padding: 0.5rem 1rem;
+  background: #f0f7ff;
+  color: #24292e;
+}
+blockquote p { margin: 0.4rem 0; }
+
+/* Horizontal rules */
+hr {
+  border: none;
+  border-top: 1px solid #e1e4e8;
+  margin: 2rem 0;
+}
+
+/* Lists */
+ul, ol { padding-left: 1.8rem; }
+li { margin: 0.25rem 0; }
+
+/* Math display blocks */
+.math.display {
+  overflow-x: auto;
+  padding: 0.5rem 0;
+}
+
+/* Responsive */
+@media (max-width: 600px) {
+  body { padding: 0 0.75rem; margin: 1rem auto; }
+  pre { font-size: 0.82em; padding: 0.75rem; }
+  table { font-size: 0.85em; }
+}
+
+/* Print */
+@media print {
+  body { max-width: 100%; color: #000; }
+  nav#TOC { break-after: page; }
+  pre { border: 1px solid #ccc; }
+}

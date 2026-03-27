@@ -144,15 +144,15 @@ body {
 }
 
 .sidebar-logo img {
-  max-height: 6rem;
+  max-height: 3.2rem;
   width: auto;
   display: block;
   margin: 0 auto;
 }
 
 .sidebar-tagline {
-  font-size: 0.85rem;
-  font-weight: 700;
+  font-size: 0.82rem;
+  font-weight: 900;
   color: var(--text);
   line-height: 1.3;
 }

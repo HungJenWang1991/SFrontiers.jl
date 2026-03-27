@@ -4360,6 +4360,34 @@ of Econometrics</em>, 181(2), 65-76.</li>
 
 <script>
 (function() {
+  // --- Flatten TOC: promote nested sections to top level ---
+  // Pandoc nests everything under the single H1. We want the H2 sections
+  // (0. Theoretical, 1. Introduction, ...) to be top-level sidebar items.
+  (function flattenTOC() {
+    var nav = document.querySelector('.sidebar-nav');
+    var rootUl = nav.querySelector(':scope > ul');
+    if (!rootUl) return;
+
+    // The root <ul> has one <li> (the H1 title) whose child <ul> holds
+    // the real sections. Promote that child <ul> to be the root.
+    var topLi = rootUl.querySelector(':scope > li');
+    if (!topLi) return;
+    var innerUl = topLi.querySelector(':scope > ul');
+    if (!innerUl) return;
+
+    // Remove noise entries that duplicate info already in the header/body
+    var removeTexts = ['user manual for julia implementation', 'table of contents'];
+    innerUl.querySelectorAll(':scope > li').forEach(function(li) {
+      var a = li.querySelector(':scope > a');
+      if (a && removeTexts.indexOf(a.textContent.trim().toLowerCase()) !== -1) {
+        li.remove();
+      }
+    });
+
+    // Replace the root <ul> with the inner one
+    nav.replaceChild(innerUl, rootUl);
+  })();
+
   // --- Sidebar toggle (mobile) ---
   var toggle   = document.getElementById('sidebarToggle');
   var sidebar  = document.getElementById('sidebar');
@@ -4398,7 +4426,21 @@ of Econometrics</em>, 181(2), 65-76.</li>
       if (headings[i].el.offsetTop <= scrollPos) current = headings[i];
     }
     tocLinks.forEach(function(l) { l.classList.remove('active'); });
-    if (current) current.link.classList.add('active');
+    if (current) {
+      current.link.classList.add('active');
+      // Auto-expand parent section if collapsed
+      var parentUl = current.link.closest('ul');
+      while (parentUl && parentUl !== sidebar) {
+        if (parentUl.style.display === 'none') {
+          parentUl.style.display = 'block';
+          var t = parentUl.parentElement.querySelector(':scope > a .toc-toggle');
+          if (t) t.textContent = '\u25BC';
+        }
+        parentUl = parentUl.parentElement.closest('ul');
+      }
+      // Scroll the active link into view in the sidebar
+      current.link.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
+    }
   }
   window.addEventListener('scroll', updateActive, { passive: true });
   updateActive();
@@ -4414,13 +4456,30 @@ of Econometrics</em>, 181(2), 65-76.</li>
 
   // --- TOC search/filter ---
   var searchInput = document.getElementById('tocSearch');
-  var tocItems = sidebar.querySelectorAll('.sidebar-nav li');
   searchInput.addEventListener('input', function() {
     var q = this.value.toLowerCase().trim();
-    tocItems.forEach(function(li) {
+    var allItems = sidebar.querySelectorAll('.sidebar-nav li');
+    allItems.forEach(function(li) {
       var text = li.textContent.toLowerCase();
       li.style.display = (!q || text.indexOf(q) !== -1) ? '' : 'none';
+      // If a match, ensure parent <li>s are visible too
+      if (!q || text.indexOf(q) !== -1) {
+        var parent = li.parentElement.closest('li');
+        while (parent) {
+          parent.style.display = '';
+          parent = parent.parentElement.closest('li');
+        }
+      }
     });
+    // If filtering, expand all sub-lists so matches are visible
+    if (q) {
+      sidebar.querySelectorAll('.sidebar-nav ul').forEach(function(ul) {
+        ul.style.display = 'block';
+      });
+      sidebar.querySelectorAll('.toc-toggle').forEach(function(t) {
+        t.textContent = '\u25BC';
+      });
+    }
   });
 
   // --- Smooth scroll for anchor links ---
@@ -4436,25 +4495,27 @@ of Econometrics</em>, 181(2), 65-76.</li>
   });
 
   // --- Collapsible sidebar sections ---
-  sidebar.querySelectorAll('.sidebar-nav > ul > li > ul').forEach(function(subUl) {
-    var parentLi = subUl.parentElement;
-    var link = parentLi.querySelector(':scope > a');
+  sidebar.querySelectorAll('.sidebar-nav li').forEach(function(li) {
+    var subUl = li.querySelector(':scope > ul');
+    if (!subUl) return;
+
+    var link = li.querySelector(':scope > a');
     if (!link) return;
 
-    var toggle = document.createElement('span');
-    toggle.className = 'toc-toggle';
-    toggle.textContent = '\u25B6';
-    parentLi.classList.add('has-children');
-    link.prepend(toggle);
+    var tog = document.createElement('span');
+    tog.className = 'toc-toggle';
+    tog.textContent = '\u25B6';
+    li.classList.add('has-children');
+    link.prepend(tog);
 
     subUl.style.display = 'none';
 
-    toggle.addEventListener('click', function(e) {
+    tog.addEventListener('click', function(e) {
       e.preventDefault();
       e.stopPropagation();
       var open = subUl.style.display !== 'none';
       subUl.style.display = open ? 'none' : 'block';
-      toggle.textContent = open ? '\u25B6' : '\u25BC';
+      tog.textContent = open ? '\u25B6' : '\u25BC';
     });
   });
 
@@ -4465,7 +4526,7 @@ of Econometrics</em>, 181(2), 65-76.</li>
       var parent = activeLink.closest('ul');
       while (parent && parent !== sidebar) {
         parent.style.display = 'block';
-        var t = parent.parentElement.querySelector('.toc-toggle');
+        var t = parent.parentElement.querySelector(':scope > a .toc-toggle');
         if (t) t.textContent = '\u25BC';
         parent = parent.parentElement.closest('ul');
       }

@@ -63,21 +63,11 @@
     <li><a href="#what-is-it" id="toc-what-is-it">What is it</a></li>
     <li><a href="#table-of-contents" id="toc-table-of-contents">Table of
     Contents</a></li>
-    <li><a href="#theoretical-presentation"
-    id="toc-theoretical-presentation">0. Theoretical Presentation</a>
-    <ul>
-    <li><a href="#msle-maximum-simulated-likelihood-estimation"
-    id="toc-msle-maximum-simulated-likelihood-estimation">MSLE (Maximum
-    Simulated Likelihood Estimation)</a></li>
-    <li><a href="#mci-monte-carlo-integration"
-    id="toc-mci-monte-carlo-integration">MCI (Monte Carlo
-    Integration)</a></li>
-    </ul></li>
     <li><a href="#introduction" id="toc-introduction">1.
     Introduction</a>
     <ul>
     <li><a href="#key-features-include"
-    id="toc-key-features-include">Key features include:</a></li>
+    id="toc-key-features-include">Key features of the package:</a></li>
     <li><a href="#estimation-proceeds-in-five-steps"
     id="toc-estimation-proceeds-in-five-steps">Estimation proceeds in
     five steps:</a></li>
@@ -86,8 +76,8 @@
     id="toc-software-and-hardware-requirements">2. Software and Hardware
     Requirements</a>
     <ul>
-    <li><a href="#software" id="toc-software">2.1 Software</a></li>
-    <li><a href="#hardware" id="toc-hardware">2.2 Hardware</a></li>
+    <li><a href="#hardware" id="toc-hardware">2.1 Hardware</a></li>
+    <li><a href="#software" id="toc-software">2.2 Software</a></li>
     </ul></li>
     <li><a href="#installation-and-dependencies"
     id="toc-installation-and-dependencies">3. Installation and
@@ -258,9 +248,7 @@ differentiation and GPU acceleration for accurate and efficient
 estimation.</p>
 <hr />
 <h2 id="table-of-contents">Table of Contents</h2>
-<ol start="0" type="1">
-<li><a href="#theoretical-presentation">Theoretical
-Presentation</a></li>
+<ol type="1">
 <li><a href="#introduction">Introduction</a></li>
 <li><a href="#software-and-hardware-requirements">Software and Hardware
 Requirements</a></li>
@@ -301,104 +289,25 @@ Interpretation</a></li>
 </ul></li>
 <li><a href="#panel-data-models">Panel Data Models</a></li>
 </ol>
-<hr />
-<h2 id="theoretical-presentation">0. Theoretical Presentation</h2>
-<p>The stochastic frontier (SF) model was first proposed by Aigner et
-al. (1977) in which the inefficiency is assumed to have a half-normal
-distribution. The MLE was suggested as the estimation method, which has
-since then been the dominating method in the parametric SF
-literature.</p>
-<p>Greene (2003) is the first well-known study that used the
-simulation-based method to estimate stochastic frontier models. He
-considered models with complex joint densities that are difficult to
-derive analytically, and therefore he resorted to simulation-based
-approaches. Since then, simulation-based MLE has been adopted widely in
-the econometric literature, particularly for estimating discrete choice
-models and panel data models.</p>
-<p>Consider the standard stochastic frontier specification</p>
-<p><span class="math display">\[
-\begin{align}
-y_i &amp;= x_i&#39;\beta + \epsilon_i, \\
-\epsilon_i &amp;= v_i - u_i,
-\end{align}
-\]</span></p>
-<p>where <span class="math inline">\(v_i\)</span> is the noise term and
-<span class="math inline">\(u_i \ge 0\)</span> is the inefficiency term.
-The density of the composed error <span
-class="math inline">\(\epsilon_i\)</span> is</p>
-<p><span class="math display">\[
-\begin{align}
-   f(\varepsilon_i \mid \theta)
-     &amp; = \int_0^\infty f_{v}(\varepsilon_i + u_i \mid \theta)\,
-f_u(u_i \mid \theta)\, d u_i \notag \\
-     &amp; = \mathbb{E}_{f_u(u \mid \theta)} \left[ f_{v}(\varepsilon_i
-+ u_i \mid \theta)  \right].
-\end{align}
-\]</span></p>
-<p>The log-likelihood of the model is</p>
-<p><span class="math display">\[
-\begin{align}
-   \ln L &amp; = \sum_{i=1}^N \ln \mathbb{E}_{f_u(u \mid \theta)} \left[
-f_{v}(\varepsilon_i + u_i \mid \theta)  \right].
-\end{align}
-\]</span></p>
-<p>In estimation, the expected value is approximated by its empirical
-counterpart using quasi-random draws <span
-class="math inline">\(u_i^{(s)}\)</span>, <span class="math inline">\(s
-= 1, \ldots, S\)</span>:</p>
-<p><span class="math display">\[
-\mathbb{E}_{f_u(u \mid \theta)} \left[ f_{v}(\varepsilon_i + u_i \mid
-\theta)  \right] \approx
-\frac{1}{S}\sum_{s=1}^S  f_{v}(\varepsilon_i + u_i^{(s)} \mid \theta).
-\]</span></p>
-<p>This module provides two approaches for generating the draws <span
-class="math inline">\(u_i^{(s)}\)</span>:</p>
-<h3 id="msle-maximum-simulated-likelihood-estimation">MSLE (Maximum
-Simulated Likelihood Estimation)</h3>
-<p>The MSLE approach uses the <strong>inverse CDF (quantile
-function)</strong> of <span class="math inline">\(f_u\)</span> to
-generate draws. Given a set of Halton draws <span
-class="math inline">\(t^{(s)} \in (0,1)\)</span>, the inefficiency draws
-are obtained as</p>
-<p><span class="math display">\[
-u_i^{(s)} = F_u^{-1}(t^{(s)} \mid \theta),
-\]</span></p>
-<p>where <span class="math inline">\(F_u^{-1}\)</span> is the quantile
-function of the inefficiency distribution.</p>
-<h3 id="mci-monte-carlo-integration">MCI (Monte Carlo Integration)</h3>
-<p>The MCI approach uses a <strong>change-of-variable
-transformation</strong> to map uniform draws to the support of <span
-class="math inline">\(u\)</span>. Given a transformation function <span
-class="math inline">\(g\)</span> and Halton draws <span
-class="math inline">\(t^{(s)} \in (0,1)\)</span>, the integral is
-rewritten as</p>
-<p><span class="math display">\[
-\int_0^\infty f_{v}(\varepsilon_i + u)\, f_u(u)\, du
-= \int_0^1 f_{v}(\varepsilon_i + g(t, s_i))\, f_u(g(t, s_i))\,
-|g&#39;(t, s_i)|\, dt,
-\]</span></p>
-<p>where <span class="math inline">\(s_i\)</span> is a scale parameter
-derived from the inefficiency distribution’s parameters for observation
-<span class="math inline">\(i\)</span>, and <span
-class="math inline">\(g&#39;\)</span> is the Jacobian of the
-transformation. The MCI approach supports several transformation rules
-(see <a href="#sfmodel_method">Section 5.2</a>).</p>
-<p>As shown by Wang (2025), MSLE is a special case of MCI. When the
-quantile function is used as the transformation rule, the Jacobian
-reduces to <span class="math inline">\(\frac{1}{f_u(g(t,s_i))}\)</span>,
-which cancels the density term and yields the familiar MSLE
-equation.</p>
-<hr />
 <h2 id="introduction">1. Introduction</h2>
 <p>This package provides a unified framework for estimating stochastic
 frontier (SF) models via simulation-based likelihood evaluation and, for
 a limited subset of models, analytic maximum likelihood estimation
-(MLE). The simulation-based methods – Maximum Simulated Likelihood
-Estimation (MSLE) and Monte Carlo Integration (MCI) – support a broad
-class of distributional and dependence specifications. For the classical
-Normal–HalfNormal, Normal–TruncatedNormal, and Normal–Exponential
-models, closed-form analytic MLE is also available.</p>
-<h3 id="key-features-include">Key features include:</h3>
+(MLE). The simulation-based methods, including the Maximum Simulated
+Likelihood Estimation (MSLE) and Monte Carlo Integration (MCI), support
+a broad class of distributional and dependence specifications. For the
+classical Normal–half-normal, Normal–truncated-normal, and
+Normal–Exponential models, closed-form analytic MLE is also
+available.</p>
+<p>To address the traditional drawbacks of simulation-based estimation,
+the package uses automatic differentiation for numerical accuracy and
+GPU computing for speed. Monte Carlo evidence in Wang and Cheng (2026)
+shows that the resulting estimators achieve bias and RMSE comparable to
+those of analytic maximum likelihood estimators where such benchmarks
+exist.</p>
+<p>For the theoretical background of the methods, see Wang and
+Cheng (2026).</p>
+<h3 id="key-features-include">Key features of the package:</h3>
 <ul>
 <li><p><strong>Three estimation methods:</strong> Maximum Simulated
 Likelihood Estimation (MSLE), Monte Carlo Integration (MCI), and
@@ -407,60 +316,64 @@ Analytic Maximum Likelihood Estimation (MLE).</p>
 <li><strong>MSLE</strong> and <strong>MCI</strong> are simulation-based,
 using quasi Monte Carlo (QMC) draws with Halton sequences. As shown in
 Wang (2025), MSLE is a special case of MCI. The two names are retained
-here following conventions in the literature. They support all 8
-inefficiency distributions, up to 3 noise distributions, and copula
-dependence.</li>
+here following conventions in the literature. They support 3 noise
+("<span class="math inline">\(v\)</span>") distributions and 8
+inefficiency ("<span class="math inline">\(u\)</span>") distributions,
+and copula dependence between any pair of (<span
+class="math inline">\(v, u\)</span>) combination.</li>
 <li><strong>MLE</strong> uses closed-form log-likelihoods — no
 simulation draws are needed, making it fast and exact. It is available
-for a limited subset of models: Normal noise with HalfNormal,
-TruncatedNormal, or Exponential inefficiency (no copula).</li>
+for a limited subset of models: Normal noise with half-normal,
+truncated-normal, or Exponential inefficiency. No copula is supported in
+the MLE setting.</li>
 </ul></li>
-<li><p><strong>Cross-sectional and panel data:</strong> In addition to
-cross-sectional models, the module supports several panel stochastic
-frontier models:</p>
+<li><p><strong>Distributional flexibility for cross-sectional
+models:</strong> For cross-sectional models
+(<code>datatype=:cross_sectional</code> in
+<code>sfmodel_spec()</code>), any combinations between the following
+sets are supported:</p>
+<ul>
+<li><span class="math inline">\(v\)</span>: Normal, Student T, and
+Laplace distributions.</li>
+<li><span class="math inline">\(u\)</span>: half-normal,
+truncated-normal, Exponential, Weibull, Lognormal, Lomax, Rayleigh, and
+Gamma distributions.</li>
+</ul>
+<p>MCI supports all 8 inefficiency distributions, and MSLE supports all
+except Gamma (MSLE requires the quantile function, but the Gamma
+distribution lacks a closed-form inverse CDF; MCI avoids this via a
+change-of-variables approach). MLE is limited to half-normal,
+truncated-normal, and Exponential with Normal noise.</p></li>
+<li><p><strong>Distributional flexibility for panel-data
+Models:</strong> For panel data models, the noise (<span
+class="math inline">\(v\)</span>) distribution is always fixed at the
+normal distribution. The package currently supports the following types
+of panel stochastic frontier models:</p>
 <ul>
 <li><code>datatype=:panel_TFE</code> — Wang and Ho (2010) true
 fixed-effect model. Supports MCI, MSLE, and MLE
-(HalfNormal/TruncatedNormal only for MLE).</li>
+(half-normal/truncated-normal only for MLE). The simulation-based panel
+model accommodates all 8 <span class="math inline">\(u\)</span>
+distributions via MCI/MSLE.</li>
 <li><code>datatype=:panel_TFE_CSW</code> — Chen, Schmidt, and Wang
-(2014) fixed-effect model. MLE only, HalfNormal only.</li>
+(2014) fixed-effect model. MLE only, half-normal only.</li>
 <li><code>datatype=:panel_TRE</code> — True random-effect model. MLE
-only, HalfNormal or TruncatedNormal.</li>
+only, half-normal or truncated-normal.</li>
 </ul>
 <p>See <a href="#panel-data-models">Section 10</a> for details.</p></li>
-<li><p><strong>A large set of noise (<span
-class="math inline">\(v\)</span>) and inefficiency (<span
-class="math inline">\(u\)</span>) combinations:</strong> For
-cross-sectional models (<code>datatype=:cross_sectional</code>), any
-combinations between the following sets are supported:</p>
-<ul>
-<li><span class="math inline">\(v\)</span>: Normal, Student T, and
-Laplace (cross-sectional); Normal only (panel)</li>
-<li><span class="math inline">\(u\)</span>: Half Normal, Truncated
-Normal, Exponential, Weibull, Lognormal, Lomax, Rayleigh, and Gamma
-distributions.</li>
-</ul>
-<p>MCI supports all 8 inefficiency distributions (including Gamma, which
-is MCI-only). MSLE supports all except Gamma. MLE is limited to
-HalfNormal, TruncatedNormal, and Exponential with Normal noise.</p>
-<p>For panel data models, the noise (<span
-class="math inline">\(v\)</span>) distribution is fixed at the Normal
-distribution. The simulation-based panel model
-(<code>datatype=:panel_TFE</code>) accommodates all 8 <span
-class="math inline">\(u\)</span> distributions via MCI/MSLE. The
-MLE-only panel models (<code>datatype=:panel_TFE_CSW</code>,
-<code>:panel_TRE</code>) support a subset (see <a
-href="#panel-data-models">Section 10</a>).</p></li>
 <li><p><strong>Copula dependence (cross-sectional only):</strong>
 Gaussian, Gumbel, Clayton, and 90°-rotated Clayton copula support for
 modeling dependence between noise <span class="math inline">\(v\)</span>
-and inefficiency <span class="math inline">\(u\)</span>, with automatic
-computation of the dependence parameter and Kendall’s <span
-class="math inline">\(\tau\)</span>.</p>
+and inefficiency <span class="math inline">\(u\)</span> for
+cross-sectional models, with automatic computation of the dependence
+parameter and Kendall’s <span
+class="math inline">\(\tau\)</span>. Copulas are not available for panel
+data models.</p>
 <ul>
 <li>Exception: When <span class="math inline">\(v\)</span> is Student T,
-the copula is not supported.</li>
-<li>Note: Copula models are not available for panel data.</li>
+the copula is not supported (the copula density requires evaluating the
+Student-t CDF, to which its standard implementation is not compatible
+with the automatic differentiation used in the package).</li>
 </ul></li>
 <li><p><strong>Heteroscedastic inefficiency specifications:</strong> For
 cross-sectional models, the parameters of the inefficiency distribution
@@ -510,39 +423,39 @@ steps:</h3>
 <hr />
 <h2 id="software-and-hardware-requirements">2. Software and Hardware
 Requirements</h2>
-<h3 id="software">2.1 Software</h3>
-<ul>
-<li><strong>Julia,</strong> which is a free and open-source programming
-language. A recent stable release is recommended. Julia 1.10 or later is
-required for GPU execution via CUDA.jl. The <code>Optim</code> package
-(used for maximum likelihood estimation) requires version 2.0 or above.
-(<a href="https://julialang.org/">julialang.org</a>)</li>
-<li><strong>NVIDIA driver and CUDA.jl (optional).</strong> GPU execution
-requires a compatible NVIDIA driver to be installed on the system. The
-Julia package CUDA.jl provides the programming interface and can be
-installed on any machine, but it relies on the NVIDIA driver at run
-time. The package also supports CPU-only execution, which does not
-require the driver or CUDA.jl. (<a
-href="https://cuda.juliagpu.org/stable/installation/overview/">cuda.juliagpu.org</a>)</li>
-</ul>
-<h3 id="hardware">2.2 Hardware</h3>
+<h3 id="hardware">2.1 Hardware</h3>
 <ul>
 <li><strong>CPU execution.</strong> Any modern personal computer
 supported by Julia is sufficient for CPU-only estimation. Runtime will
 scale with the number of observations, the number of parameters, and the
 number of QMC draws.</li>
 <li><strong>GPU execution (optional).</strong> Requires NVIDIA GPU. The
-GPU memory requirements increase with the number of draws and the degree
-of batching. In practice, larger VRAM allows larger draw blocks and
-reduces the need for chunking. In estimation, the number of
-batches/chunks is set by the <code>chunks</code> option in
-<code>sfmodel_method()</code>.</li>
+GPU memory requirements increase with the number of draws and changes
+with the degree of batching. In practice, larger datasets and larger
+numbers of simulation draws require larger VRAM. Nevertheless, if VRAM
+is limited, we can divide data into several chunks (by the
+<code>chunks</code> option in <code>sfmodel_method()</code>) and process
+each chunk sequentially.</li>
+</ul>
+<h3 id="software">2.2 Software</h3>
+<ul>
+<li><strong>Julia,</strong> which is a free and open-source programming
+language. A recent stable release is recommended. Julia 1.10 or later is
+required for GPU execution via CUDA.jl. The <code>Optim</code> package
+(used for maximum likelihood estimation) requires version 2.0 or above.
+(<a href="https://julialang.org/">julialang.org</a>)</li>
+<li><strong>NVIDIA driver and CUDA.jl (optional).</strong> In addition
+to a physical GPU unit, GPU execution also requires a compatible NVIDIA
+driver to be installed on the machine, and CUDA.jl installed in Julia.
+The package also supports CPU-only execution, which does not require the
+driver or CUDA.jl. (<a
+href="https://cuda.juliagpu.org/stable/installation/overview/">cuda.juliagpu.org</a>)</li>
 </ul>
 <hr />
 <h2 id="installation-and-dependencies">3. Installation and
 Dependencies</h2>
 <p>SFrontiers.jl is a registered Julia package. Install it from the
-Julia package manager:</p>
+Julia REPL using the built-in package manager <code>Pkg</code>:</p>
 <pre class="julia"><code>using Pkg
 Pkg.add(&quot;SFrontiers&quot;)</code></pre>
 <p>To load the package:</p>
@@ -570,6 +483,8 @@ available and you will need to restart Julia and load them in the
 correct order.</p>
 <hr />
 <h2 id="quick-start-example">4. Quick Start Example</h2>
+<p>Here we show a complete five-step estimation example. Some steps are
+optional and can be skipped; more examples latter.</p>
 <pre class="julia"><code>using CSV, DataFrames
 using CUDA
 using SFrontiers
@@ -594,9 +509,9 @@ myspec = sfmodel_spec(
 # Step 2: Choose the estimation method
 mymeth = sfmodel_method(
     method = :MSLE,           # :MLE, :MSLE, or :MCI
-    n_draws = 2^12 - 1,       # number of Halton draws
+    n_draws = 2^12 - 1,       # number of Halton draws per obs
     GPU = true,               # use GPU; default is `false` thus CPU
-    chunks = 10               # for GPU memory management; the default
+    chunks = 10               # for GPU memory management; default 10
 )
 
 # Step 3: Set initial values
@@ -632,7 +547,7 @@ println(&quot;BC efficiency index: &quot;, result.bc)
 println(&quot;Marginal Effects of Z: &quot;, result.marginal)</code></pre>
 <blockquote>
 <p><strong>MLE alternative:</strong> For models with Normal noise and
-HalfNormal, TruncatedNormal, or Exponential inefficiency, analytic MLE
+half-normal, truncated-normal, or Exponential inefficiency, analytic MLE
 is available and requires no simulation settings:</p>
 <pre class="julia"><code>mymeth_mle = sfmodel_method(method = :MLE)  # no draws, GPU, or chunks needed
 result_mle = sfmodel_fit(spec = myspec, method = mymeth_mle, init = myinit, optim_options = myopt)</code></pre>
@@ -1340,7 +1255,7 @@ spec = sfmodel_spec(
 <h4 id="example-panel-data-specification">Example: Panel Data
 Specification</h4>
 <pre class="julia"><code># Panel TFE — Wang and Ho (2010) true fixed-effect (balanced, keyword form)
-# Supports method=:MCI, :MSLE, and :MLE (HalfNormal/TruncatedNormal for MLE)
+# Supports method=:MCI, :MSLE, and :MLE (half-normal/truncated-normal for MLE)
 spec = sfmodel_spec(
     datatype = :panel_TFE,  # Wang and Ho 2010 panel model
     type = :production,
@@ -1363,7 +1278,7 @@ spec = sfmodel_spec(
     id = firm_ids           # unit identifier column
 )
 
-# Panel TFE_CSW — Chen, Schmidt, and Wang (2014) fixed-effect (MLE only, HalfNormal only)
+# Panel TFE_CSW — Chen, Schmidt, and Wang (2014) fixed-effect (MLE only, half-normal only)
 spec = sfmodel_spec(
     depvar = y,
     frontier = X,
@@ -1373,7 +1288,7 @@ spec = sfmodel_spec(
     id = firm_ids
 )
 
-# Panel TRE — True random-effect (MLE only, HalfNormal or TruncatedNormal)
+# Panel TRE — True random-effect (MLE only, half-normal or truncated-normal)
 spec = sfmodel_spec(
     depvar = y,
     frontier = X,
@@ -1439,7 +1354,7 @@ MLE):</strong></p>
 <ul>
 <li><code>transformation</code> — only when <code>method=:MCI</code>;
 transformation rule (default: distribution-specific)</li>
-<li><code>draws</code> — user-supplied draws as a 1 × D row matrix
+<li><code>draws</code> — user-supplied draws as a 1 × S row matrix
 (default: auto-generated Halton)</li>
 <li><code>n_draws</code> — number of Halton draws per observation
 (default: 1024)</li>
@@ -1450,7 +1365,7 @@ CPU)</li>
 <li><code>chunks</code> — number of data chunks for memory management
 (default: 10)</li>
 <li><code>distinct_Halton_length</code> — max length of distinct Halton
-sequence (default: 2¹⁵ − 1) used in the entire NxD matrix.</li>
+sequence (default: 2¹⁵ − 1) used in the entire NxS matrix.</li>
 </ul>
 <h4 id="arguments-1">Arguments</h4>
 <table>
@@ -1488,7 +1403,7 @@ warning if <code>method=:MSLE</code>.</td>
 <tr class="odd">
 <td><code>draws</code></td>
 <td>Matrix</td>
-<td>Draws for Monte Carlo integration as a<strong>1 x D row
+<td>Draws for Monte Carlo integration as a<strong>1 x S row
 matrix</strong>. Use
 <code>reshape(your_draws, 1, length(your_draws))</code> to convert a
 vector. If <code>nothing</code> (default), Halton draws are
@@ -1507,9 +1422,9 @@ class="math inline">\(\leq\)</span>
 <td><code>multiRand</code></td>
 <td>Bool</td>
 <td>Whether each observation gets different Halton
-draws.<code>true</code> (default) generates an N x D wrapped Halton
+draws.<code>true</code> (default) generates an N x S wrapped Halton
 matrix where each observation uses different consecutive draws.
-<code>false</code> uses the original 1 x D shared draws. When
+<code>false</code> uses the original 1 x S shared draws. When
 <code>true</code>, <code>n_draws</code> must be <span
 class="math inline">\(\leq\)</span>
 <code>distinct_Halton_length</code>.</td>
@@ -1544,13 +1459,13 @@ Halton Draws</a>.</td>
 for memory management. It works for both CPU and GPU computation, but is
 particularly essential for GPU computing (<code>GPU=true</code>). When
 <code>chunks=1</code>, all N observations are processed simultaneously,
-creating an N x D matrix (where D is the number of Halton draws). For
-large datasets (big N) or a large <code>n_draws</code> (big D), this
+creating an N x S matrix (where S is the number of Halton draws). For
+large datasets (big N) or a large <code>n_draws</code> (big S), this
 matrix may exceed available GPU memory, creating an estimation
 bottleneck.</p>
 <p>Setting <code>chunks</code> to a value greater than 1 (e.g.,
 <code>chunks=10</code>) splits the observations into smaller batches,
-creating matrices of size (N/chunks) x D. Each batch is processed
+creating matrices of size (N/chunks) x S. Each batch is processed
 sequentially while accumulating the log-likelihood. This reduces peak
 memory usage, allowing larger datasets and <code>n_draws</code> to fit
 in GPU memory at the expense of slightly increased computation overhead
@@ -1590,7 +1505,7 @@ distribution-specific default is used.</p>
 <td><code>:logistic_1_rule</code></td>
 <td><span class="math inline">\(u = s \cdot t/(1-t)\)</span></td>
 <td><span class="math inline">\(s/(1-t)^2\)</span></td>
-<td>HalfNormal, TruncatedNormal, Lognormal, Lomax</td>
+<td>half-normal, truncated-normal, Lognormal, Lomax</td>
 </tr>
 <tr class="odd">
 <td><code>:logistic_2_rule</code></td>
@@ -1620,13 +1535,13 @@ The scale parameter for each distribution is:</p>
 </thead>
 <tbody>
 <tr class="odd">
-<td>HalfNormal</td>
+<td>half-normal</td>
 <td><span class="math inline">\(\sigma\)</span></td>
 <td>Standard deviation of<span class="math inline">\(N^+(0,
 \sigma^2)\)</span></td>
 </tr>
 <tr class="even">
-<td>TruncatedNormal</td>
+<td>truncated-normal</td>
 <td><span class="math inline">\(\sigma_u\)</span></td>
 <td>Standard deviation of<span class="math inline">\(N^+(\mu,
 \sigma_u^2)\)</span></td>
@@ -1874,7 +1789,7 @@ parameter values in the correct order for optimization.</p>
 on the model specification. The ordering of equation blocks is
 irrelevant; the program maps each block to the correct position in the
 coefficient vector automatically.</p>
-<pre class="julia"><code># Normal + TruncatedNormal with hetero = [:mu]
+<pre class="julia"><code># Normal + truncated-normal with hetero = [:mu]
 myinit = sfmodel_init(
     spec = myspec,
     frontier = [0.5, 0.3, 0.2],     # frontier coefficients
@@ -1898,7 +1813,7 @@ keyword with initial values for the <span
 class="math inline">\(\boldsymbol{\delta}\)</span> coefficients (one per
 column of <code>zvar</code>). All inefficiency distribution parameters
 are scalar:</p>
-<pre class="julia"><code># Normal + HalfNormal with scaling property
+<pre class="julia"><code># Normal + half-normal with scaling property
 myinit = sfmodel_init(
     spec = myspec,
     frontier = X \ y,                   # OLS estimates
@@ -1936,12 +1851,12 @@ class="math inline">\(L\)</span> elements)</td>
 </tr>
 <tr class="odd">
 <td><code>mu</code></td>
-<td>TruncatedNormal, Lognormal: <span class="math inline">\(\mu\)</span>
+<td>truncated-normal, Lognormal: <span class="math inline">\(\mu\)</span>
 (scalar)</td>
 </tr>
 <tr class="even">
 <td><code>ln_sigma_u_sq</code></td>
-<td>HalfNormal, TruncatedNormal: <span
+<td>half-normal, truncated-normal: <span
 class="math inline">\(\ln(\sigma_u^2)\)</span> (scalar)</td>
 </tr>
 <tr class="odd">
@@ -1981,7 +1896,7 @@ class="math inline">\(\ln(\sigma^2)\)</span> (scalar)</td>
 </tr>
 </tbody>
 </table>
-<pre class="julia"><code># Panel TFE: Normal + HalfNormal
+<pre class="julia"><code># Panel TFE: Normal + half-normal
 myinit = sfmodel_init(
     spec = myspec,                # spec with datatype=:panel_TFE
     frontier = X_tilde \ y_tilde, # OLS on demeaned data (auto-computed if omitted)
@@ -2900,7 +2815,7 @@ class="math inline">\(\rho\)</span> is the dependence parameter.</p>
 <p><strong>Notes:</strong></p>
 <ul>
 <li>Copula models are not available with <code>noise=:StudentT</code>
-(the Student-t CDF is not yet implemented for copula use).</li>
+(the copula density requires evaluating the Student-t CDF, to which its standard implementation is not compatible with the automatic differentiation used in the package).</li>
 <li>The <code>theta_rho</code> initial value is on the transformed
 (unconstrained) scale. A value of <code>0.0</code> is a reasonable
 default for all copula types.</li>
@@ -2974,7 +2889,7 @@ class="math inline">\(\log(b)\)</span></td>
 </thead>
 <tbody>
 <tr class="odd">
-<td>TruncatedNormal</td>
+<td>truncated-normal</td>
 <td><span class="math inline">\(u \sim N^+(\mu,
 \sigma_u^2)\)</span></td>
 <td><code>mu</code> = <span class="math inline">\(\mu\)</span>,<br>
@@ -2985,7 +2900,7 @@ class="math inline">\(\log(\sigma_u^2)\)</span></td>
 class="math inline">\(\sigma_u^2\)</span></td>
 </tr>
 <tr class="even">
-<td>HalfNormal</td>
+<td>half-normal</td>
 <td><span class="math inline">\(u \sim N^+(0, \sigma^2)\)</span></td>
 <td><code>ln_sigma_sq</code> = <span
 class="math inline">\(\log(\sigma^2)\)</span></td>
@@ -3080,10 +2995,10 @@ correct domain:</p>
 <ul>
 <li><strong>Linear link</strong> for parameters on <span
 class="math inline">\((-\infty,\infty)\)</span>. Example
-(TruncatedNormal): <span class="math inline">\(\mu_i =
+(truncated-normal): <span class="math inline">\(\mu_i =
 Z_i&#39;\delta\)</span>.</li>
 <li><strong>Exponential link</strong> for parameters on <span
-class="math inline">\((0,\infty)\)</span>. Example (TruncatedNormal):
+class="math inline">\((0,\infty)\)</span>. Example (truncated-normal):
 <span class="math inline">\(\sigma_{u,i}^2 =
 \exp(Z_i&#39;\gamma)\)</span>, equivalently <span
 class="math inline">\(\log(\sigma_{u,i}^2) =
@@ -3100,7 +3015,7 @@ hetero = Symbol[]
 hetero = [:mu]
 # -&gt; mu contributes L parameters (one for each Z column)
 
-# Fully heteroscedastic TruncatedNormal
+# Fully heteroscedastic truncated-normal
 hetero = [:mu, :sigma_sq]
 # -&gt; mu contributes L, sigma_u^2 contributes L
 
@@ -3173,7 +3088,7 @@ following table summarizes the key properties:</p>
 </thead>
 <tbody>
 <tr class="odd">
-<td>HalfNormal</td>
+<td>half-normal</td>
 <td>1 (<span class="math inline">\(\sigma\)</span>)</td>
 <td>Yes</td>
 <td>Light</td>
@@ -3184,10 +3099,10 @@ following table summarizes the key properties:</p>
 <td>1 (<span class="math inline">\(\lambda\)</span>)</td>
 <td>Yes</td>
 <td>Light</td>
-<td>Simple alternative to HalfNormal; monotone decreasing density</td>
+<td>Simple alternative to half-normal; monotone decreasing density</td>
 </tr>
 <tr class="odd">
-<td>TruncatedNormal</td>
+<td>truncated-normal</td>
 <td>2 (<span class="math inline">\(\mu\)</span>, <span
 class="math inline">\(\sigma\)</span>)</td>
 <td>Not necessarily</td>
@@ -3239,12 +3154,12 @@ class="math inline">\(\theta\)</span>)</td>
 </table>
 <p><strong>Practical workflow:</strong></p>
 <ol type="1">
-<li><strong>Start simple.</strong> Begin with HalfNormal or Exponential.
+<li><strong>Start simple.</strong> Begin with half-normal or Exponential.
 These one-parameter distributions are easy to estimate (MLE available)
 and serve as a baseline.</li>
 <li><strong>Allow non-zero mode.</strong> If theory suggests that most
 firms have some positive level of inefficiency (rather than clustering
-near zero), try TruncatedNormal or Rayleigh.</li>
+near zero), try truncated-normal or Rayleigh.</li>
 <li><strong>Add flexibility.</strong> If one- or two-parameter
 distributions seem restrictive, try Weibull, Lognormal, or Gamma. These
 can capture a wider variety of shapes but require simulation-based
@@ -3488,7 +3403,7 @@ and use Halton quasi-random draws.</p>
 </tr>
 <tr class="odd">
 <td>Ineff distributions</td>
-<td>HalfNormal, TruncNormal, Expo</td>
+<td>half-normal, trunc-normal, Expo</td>
 <td>All 8</td>
 <td>All except Gamma</td>
 </tr>
@@ -3525,7 +3440,7 @@ and use Halton quasi-random draws.</p>
 </tbody>
 </table>
 <p><strong>When to use MLE:</strong> If your model uses Normal noise
-with HalfNormal, TruncatedNormal, or Exponential inefficiency (and no
+with half-normal, truncated-normal, or Exponential inefficiency (and no
 copula), MLE is the natural first choice — it is exact (no simulation
 error), fast, and does not require tuning the number of draws.</p>
 <p><strong>When to use MCI/MSLE:</strong> For models that MLE cannot
@@ -3687,7 +3602,9 @@ reported in the estimation output.</li>
 <blockquote>
 <p><strong>Note:</strong> Copula models are supported only for
 cross-sectional data. Student-t noise is not compatible with
-copulas.</p>
+copulas (the copula density requires evaluating the Student-t CDF, to
+which its standard implementation is not compatible with the automatic
+differentiation used in the package).</p>
 </blockquote>
 <h3 id="scaling-property-model-cross-sectional">Scaling Property Model
 (Cross-Sectional)</h3>
@@ -3745,11 +3662,11 @@ distribution:</p>
 </thead>
 <tbody>
 <tr class="odd">
-<td>HalfNormal</td>
+<td>half-normal</td>
 <td><span class="math inline">\(\sigma\sqrt{2/\pi}\)</span></td>
 </tr>
 <tr class="even">
-<td>TruncatedNormal</td>
+<td>truncated-normal</td>
 <td><span class="math inline">\(\sigma_u(\Lambda +
 \phi(\Lambda)/\Phi(\Lambda))\)</span>, <span
 class="math inline">\(\Lambda = \mu/\sigma_u\)</span></td>
@@ -3786,11 +3703,14 @@ matrix must <strong>not</strong> contain a constant column. A constant
 in <span class="math inline">\(\mathbf{z}_i\)</span> would create an
 intercept <span class="math inline">\(\delta_0\)</span> that is not
 separately identified from the scale parameter of the base distribution
-(e.g., <span class="math inline">\(\sigma\)</span> in HalfNormal or
+(e.g., <span class="math inline">\(\sigma\)</span> in half-normal or
 <span class="math inline">\(\lambda\)</span> in Exponential).</p>
 <p><strong>Supported distributions</strong>: All 8 inefficiency
 distributions are supported. The Gamma distribution requires
-<code>method = :MCI</code>. All other distributions work with both
+<code>method = :MCI</code> because MSLE relies on the quantile function
+(inverse CDF), but the Gamma distribution lacks a closed-form inverse
+CDF — computing it numerically is too expensive for MSLE's massively
+parallel evaluations. All other distributions work with both
 <code>:MSLE</code> and <code>:MCI</code>.</p>
 <h4 id="usage-example">Usage Example</h4>
 <pre class="julia"><code># Step 1: Specify a scaling property model
@@ -3994,16 +3914,16 @@ Halton Draws (multiRand)</h3>
 different consecutive segment of the Halton sequence, providing better
 quasi-Monte Carlo coverage for the model:</p>
 <ul>
-<li>Observation 1 gets draws [1, 2, …, D]</li>
-<li>Observation 2 gets draws [D+1, D+2, …, 2D]</li>
+<li>Observation 1 gets draws [1, 2, …, S]</li>
+<li>Observation 2 gets draws [S+1, S+2, …, 2S]</li>
 <li>And so on, recycling the sequence when it runs out</li>
 </ul>
 <p>The mechanism is designed so that a complete, equidistributed Halton
 sequence of length <span class="math inline">\(L\)</span> is generated
 and then assigned to <span class="math inline">\(N\)</span> observations
-in consecutive blocks of <span class="math inline">\(D\)</span> draws,
+in consecutive blocks of <span class="math inline">\(S\)</span> draws,
 and it is recycled, if necessary, to fill in the <span
-class="math inline">\(N\times D\)</span> elements.</p>
+class="math inline">\(N\times S\)</span> elements.</p>
 <p>We impose a default upper bound of <span
 class="math inline">\(L=2^{15}-1=32767\)</span> (controlled by
 <code>distinct_Halton_length</code>) to avoid generating points that lie
@@ -4015,13 +3935,13 @@ class="math inline">\(t\)</span> or <span
 class="math inline">\((1-t)\)</span>). This bound can be increased via
 the <code>distinct_Halton_length</code> option in
 <code>sfmodel_method()</code>.</p>
-<p>Ideally <span class="math inline">\(L \leq N \times D\)</span> so
+<p>Ideally <span class="math inline">\(L \leq N \times S\)</span> so
 that the full sequence is consumed and recycled if necessary. When <span
-class="math inline">\(N \times D &lt; L\)</span>, the length-<span
+class="math inline">\(N \times S &lt; L\)</span>, the length-<span
 class="math inline">\(L\)</span> sequence cannot be fully utilized. In
 this case, the program automatically selects the longest <span
 class="math inline">\(L&#39;\)</span> satisfying <span
-class="math inline">\(L&#39; \leq N \times D\)</span> and uses it as
+class="math inline">\(L&#39; \leq N \times S\)</span> and uses it as
 described.</p>
 <p><strong>Constraint</strong>: When <code>multiRand=true</code>,
 <code>n_draws</code> (the number of draws per observation) must be <span
@@ -4055,14 +3975,14 @@ meth = sfmodel_method(
 <code>multiRand=false</code>:</p>
 <pre class="julia"><code>using HaltonSequences
 
-# Generate custom Halton sequence as 1xD matrix (required format for multiRand=false)
+# Generate custom Halton sequence as 1xS matrix (required format for multiRand=false)
 halton_vec = make_halton_p(1024; T = Float64)
-halton = reshape(halton_vec, 1, length(halton_vec))  # Convert to 1xD
+halton = reshape(halton_vec, 1, length(halton_vec))  # Convert to 1xS
 
 meth = sfmodel_method(
     method = :MSLE,
-    draws = halton,     # Pre-reshaped 1xD matrix
-    multiRand = false   # Required when providing custom 1xD draws
+    draws = halton,     # Pre-reshaped 1xS matrix
+    multiRand = false   # Required when providing custom 1xS draws
 )</code></pre>
 <h3 id="handling-convergence-issues">Handling Convergence Issues</h3>
 <p>If estimation fails to converge:</p>
@@ -4101,7 +4021,7 @@ meth_alt = sfmodel_method(method = :MCI, n_draws = 1024)
 result = sfmodel_fit(spec = spec, method = meth_alt)
 
 # Or try MLE (if the model supports it: Normal noise, no copula,
-# HalfNormal/TruncatedNormal/Exponential inefficiency)
+# half-normal/truncated-normal/Exponential inefficiency)
 meth_mle = sfmodel_method(method = :MLE)
 result = sfmodel_fit(spec = spec, method = meth_mle)</code></pre></li>
 <li><p><strong>Check OLS residual skewness</strong></p>
@@ -4119,7 +4039,7 @@ estimate a simpler version:</p>
 baseline.</li>
 <li>Remove heteroscedasticity (<code>hetero = Symbol[]</code>) and use a
 homoscedastic specification.</li>
-<li>Use a simpler inefficiency distribution (e.g., HalfNormal instead of
+<li>Use a simpler inefficiency distribution (e.g., half-normal instead of
 Lognormal).</li>
 </ul>
 <p>Once the simple model converges, use its estimates as initial values
@@ -4204,19 +4124,19 @@ the same unified API by setting the <code>datatype</code> argument in
 <td><code>:panel_TFE</code></td>
 <td>Wang and Ho (2010) true fixed-effect</td>
 <td>MCI, MSLE, MLE</td>
-<td>HalfNormal, TruncatedNormal</td>
+<td>half-normal, truncated-normal</td>
 </tr>
 <tr class="even">
 <td><code>:panel_TFE_CSW</code></td>
 <td>Chen, Schmidt, and Wang (2014) fixed-effect</td>
 <td>MLE only</td>
-<td>HalfNormal only</td>
+<td>half-normal only</td>
 </tr>
 <tr class="odd">
 <td><code>:panel_TRE</code></td>
 <td>True random-effect</td>
 <td>MLE only</td>
-<td>HalfNormal, TruncatedNormal</td>
+<td>half-normal, truncated-normal</td>
 </tr>
 </tbody>
 </table>
@@ -4282,7 +4202,7 @@ that explain heterogeneity in inefficiency.</li>
 <li><strong>MLE only.</strong> The closed-form likelihood means no
 simulation is required, but it also means only the MLE method is
 available.</li>
-<li><strong>HalfNormal inefficiency only.</strong> The CSN derivation
+<li><strong>Half-normal inefficiency only.</strong> The CSN derivation
 relies on the half-normal distribution.</li>
 </ul>
 <p><strong>When to use CSW vs. Wang-Ho TFE:</strong></p>
@@ -4314,13 +4234,13 @@ regressors <span class="math inline">\(x_{it}\)</span>. If this
 assumption is violated (e.g., firm size is correlated with both input
 choices and the firm effect), the TRE estimates may be
 inconsistent.</li>
-<li><strong>MLE only.</strong> Available with HalfNormal or
-TruncatedNormal inefficiency.</li>
+<li><strong>MLE only.</strong> Available with half-normal or
+truncated-normal inefficiency.</li>
 <li><strong>Constant term allowed.</strong> Unlike TFE and CSW, you may
 include a column of ones in <code>frontier</code>.</li>
 <li><strong>Supports <code>zvar</code>.</strong> Inefficiency
 determinants can be modeled through <span class="math inline">\(\mu_i =
-z_i&#39;\delta\)</span> (for TruncatedNormal) or through the overall
+z_i&#39;\delta\)</span> (for truncated-normal) or through the overall
 variance.</li>
 </ul>
 <p><strong>When to use TRE vs. TFE:</strong></p>
@@ -4394,7 +4314,7 @@ println(&quot;Mean JLMS: &quot;, mean(result.jlms))      # firm-level, N-vector
 println(&quot;Mean BC: &quot;, mean(result.bc))            # firm-level, N-vector</code></pre>
 <h4 id="example-panel-tfe-with-mle-analytic">Example: Panel TFE with MLE
 (analytic)</h4>
-<pre class="julia"><code># Same spec as above — MLE is available when ineff is HalfNormal or TruncatedNormal
+<pre class="julia"><code># Same spec as above — MLE is available when ineff is half-normal or truncated-normal
 mymeth_mle = sfmodel_method(method = :MLE)  # no draws needed
 result_mle = sfmodel_fit(spec = myspec, method = mymeth_mle, show_table = true)</code></pre>
 <h4 id="example-panel-tfe_csw-mle-only">Example: Panel TFE_CSW (MLE
@@ -4403,7 +4323,7 @@ only)</h4>
     depvar = y,
     frontier = X,
     noise = :Normal,
-    ineff = :HalfNormal,        # CSW requires HalfNormal
+    ineff = :HalfNormal,        # CSW requires half-normal
     datatype = :panel_TFE_CSW,
     id = firm_ids               # unbalanced panel
 )
@@ -4451,7 +4371,7 @@ vs. Cross-Sectional Differences</h3>
 <tr class="odd">
 <td>Inefficiency distributions</td>
 <td>All 8</td>
-<td>TFE: all 8 (MCI/MSLE), 2 (MLE); CSW: HalfNormal; TRE: 2</td>
+<td>TFE: all 8 (MCI/MSLE), 2 (MLE); CSW: half-normal; TRE: 2</td>
 </tr>
 <tr class="even">
 <td>Methods</td>
@@ -4678,7 +4598,7 @@ listing the reason and the supported alternatives. For example:</p>
 <ul>
 <li><code>method=:MLE</code> + <code>datatype=:panel_TFE</code> +
 <code>ineff=:Exponential</code> → error explaining MLE supports only
-HalfNormal/TruncatedNormal for panel TFE, with <code>:MCI</code> and
+half-normal/truncated-normal for panel TFE, with <code>:MCI</code> and
 <code>:MSLE</code> listed as alternatives.</li>
 <li><code>method=:MCI</code> + <code>datatype=:panel_TRE</code> → error
 explaining panel TRE supports only <code>:MLE</code>.</li>
@@ -4699,13 +4619,16 @@ scripts.</p>
 <hr />
 <h2 id="citation">Citation</h2>
 <ul>
-<li>Wang, H.J. (2025) NSC Project.</li>
-<li>Wang, H.-J. and Ho, C.-W. (2010). Estimating fixed-effect panel
-stochastic frontier models by model transformation. <em>Journal of
+<li>Wang, H.-J. and Cheng, E.-T. (2026) "SFrontiers.jl: A
+Simulation-Based Likelihood Estimation Framework for Stochastic Frontier
+Models with Distributional Flexibility," <em>manuscript</em>, National
+Taiwan University.</li>
+<li>Wang, H.-J. and Ho, C.-W. (2010). "Estimating fixed-effect panel
+stochastic frontier models by model transformation," <em>Journal of
 Econometrics</em>, 157(2), 286-296.</li>
-<li>Chen, Y.-Y., Schmidt, P. and Wang, H.-J. (2014). Consistent
-estimation of the fixed effects stochastic frontier model. <em>Journal
-of Econometrics</em>, 181(2), 65-76.</li>
+<li>Chen, Y.-Y., Schmidt, P. and Wang, H.-J. (2014). "Consistent
+estimation of the fixed effects stochastic frontier model,"
+<em>Journal of Econometrics</em>, 181(2), 65-76.</li>
 </ul>
 <hr />
 

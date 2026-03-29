@@ -246,8 +246,8 @@ struct PanelModelSpec{T<:AbstractFloat}
 
     # Panel structure
     N::Int                           # number of firms
-    T_periods::Union{Int, Vector{Int}}  # time periods: scalar (balanced) or per-firm vector (unbalanced)
-    T_max::Int                       # max time periods (= T_periods for balanced)
+    T_periods::Vector{Int}           # per-firm period counts
+    T_max::Int                       # max time periods
     offsets::Vector{Int}             # firm boundaries in stacked data, length N+1
 
     # Model
@@ -309,10 +309,10 @@ struct _PanelInternalSpec{T<:AbstractFloat}
 
     # Panel structure
     N::Int                           # number of firms
-    T_periods::Union{Int, Vector{Int}}  # time periods: scalar (balanced) or per-firm vector
-    T_max::Int                       # max time periods (= T_periods for balanced)
+    T_periods::Vector{Int}           # per-firm period counts
+    T_max::Int                       # max time periods
     offsets::Vector{Int}             # firm boundaries in stacked data, length N+1
-    Tm1::Union{Int, AbstractVector}  # T_i - 1: scalar (balanced) or N-vector (unbalanced; CuArray on GPU)
+    Tm1::AbstractVector              # T_i - 1: N-vector (CuArray on GPU)
 
     # Pre-computed draws
     draws::AbstractVecOrMat{T}      # Halton draws: D-vector (shared) or N×D matrix (multiRand)
@@ -345,56 +345,6 @@ end
 # ============================================================================
 # Section 4: Panel Data Helpers
 # ============================================================================
-
-"""
-    sf_panel_demean(x::AbstractVector, T::Int) -> AbstractVector
-
-Within-group demeaning for balanced panel data.
-Input: stacked vector of length N*T (firm 1 periods 1..T, firm 2 periods 1..T, ...).
-Output: demeaned vector of same length.
-"""
-function sf_panel_demean(x::AbstractVector, T::Int)
-    n = length(x)
-    @assert n % T == 0 "Length ($n) must be divisible by T ($T)"
-    reshaped = reshape(x, T, :)         # T × N_firms
-    means = mean(reshaped, dims=1)      # 1 × N_firms
-    demeaned = reshaped .- means        # T × N_firms
-    return vec(demeaned)                 # back to N*T stacked vector
-end
-
-"""
-    sf_panel_demean(X::AbstractMatrix, T::Int) -> AbstractMatrix
-
-Within-group demeaning for each column of a matrix.
-"""
-function sf_panel_demean(X::AbstractMatrix, T::Int)
-    NT, K = size(X)
-    @assert NT % T == 0 "Number of rows ($NT) must be divisible by T ($T)"
-    N = NT ÷ T
-    # Reshape to 3D: T × N × K, demean along dim 1, reshape back
-    X3 = reshape(X, T, N, K)
-    means3 = mean(X3, dims=1)           # 1 × N × K
-    demeaned3 = X3 .- means3            # T × N × K
-    return reshape(demeaned3, NT, K)
-end
-
-"""
-    compute_h_tilde(Z, p, idx, T_periods) -> AbstractVector
-
-Compute the demeaned scaling function: h̃ = demean(exp(Z · δ)).
-Z is raw (not demeaned). h(z_it) = exp(z_it'δ) is computed first, then demeaned.
-
-Uses the GPU+ForwardDiff-safe broadcasting pattern: P(p[j]) .* (@view Z[:,j]).
-"""
-function compute_h_tilde(Z::AbstractMatrix{T}, p::AbstractVector{P},
-                          idx, T_periods::Int) where {T<:AbstractFloat, P<:Real}
-    L = length(idx.delta)
-    # h = exp(Z · δ) using broadcasting pattern
-    h = exp.(sum(P(p[idx.delta[j]]) .* (@view Z[:, j]) for j in 1:L))
-    # Demean h within firms
-    h_tilde = sf_panel_demean(h, T_periods)
-    return h_tilde
-end
 
 """
     sf_panel_demean(x::AbstractVector, offsets::Vector{Int}) -> AbstractVector
@@ -442,15 +392,6 @@ function compute_h_tilde(Z::AbstractMatrix{T}, p::AbstractVector{P},
     h = exp.(sum(P(p[idx.delta[j]]) .* (@view Z[:, j]) for j in 1:L))
     h_tilde = sf_panel_demean(h, offsets)
     return h_tilde
-end
-
-# Return both h_raw and h_tilde (needed by JLMS/BC which uses h_raw for obs-level expansion)
-function compute_h_raw_and_tilde(Z::AbstractMatrix{T}, p::AbstractVector{P},
-                                  idx, T_periods::Int) where {T<:AbstractFloat, P<:Real}
-    L = length(idx.delta)
-    h_raw = exp.(sum(P(p[idx.delta[j]]) .* (@view Z[:, j]) for j in 1:L))
-    h_tilde = sf_panel_demean(h_raw, T_periods)
-    return h_raw, h_tilde
 end
 
 function compute_h_raw_and_tilde(Z::AbstractMatrix{T}, p::AbstractVector{P},
@@ -1081,23 +1022,12 @@ function _panel_nll_msle(spec::_PanelInternalSpec{T}, p::AbstractVector{P};
     epsilon_tilde = spec.y_tilde .- sum(P(p[idx.beta[j]]) .* (@view spec.x_tilde[:, j]) for j in 1:K)
 
     # 2. Compute h̃ = demean(exp(Z · δ))  and  A, B, C per-firm sums
-    if spec.T_periods isa Int
-        # Balanced: vectorized reshape path
-        h_tilde = compute_h_tilde(spec.z_raw, p, idx, spec.T_max)
-        E_all = reshape(epsilon_tilde, spec.T_max, N)
-        H_all = reshape(h_tilde, spec.T_max, N)
-        A = vec(_sum_panel(E_all .^ 2; dims=1))
-        B = vec(_sum_panel(E_all .* H_all; dims=1))
-        C = vec(_sum_panel(H_all .^ 2; dims=1))
-    else
-        # Unbalanced: per-firm loop with offsets
-        h_tilde = compute_h_tilde(spec.z_raw, p, idx, spec.offsets)
-        A, B, C = _compute_panel_ABC(epsilon_tilde, h_tilde, spec.offsets, N)
-        # Move A, B, C to GPU if data lives there (halton is CuArray when GPU=true)
-        A = _to_device_panel(A, halton)
-        B = _to_device_panel(B, halton)
-        C = _to_device_panel(C, halton)
-    end
+    h_tilde = compute_h_tilde(spec.z_raw, p, idx, spec.offsets)
+    A, B, C = _compute_panel_ABC(epsilon_tilde, h_tilde, spec.offsets, N)
+    # Move A, B, C to GPU if data lives there (halton is CuArray when GPU=true)
+    A = _to_device_panel(A, halton)
+    B = _to_device_panel(B, halton)
+    C = _to_device_panel(C, halton)
 
     # 3. Extract noise/inefficiency parameters
     noise_vals = get_panel_noise_vals(model.noise, p, idx, c)
@@ -1179,23 +1109,12 @@ function _panel_nll_mci(spec::_PanelInternalSpec{T}, p::AbstractVector{P};
     epsilon_tilde = spec.y_tilde .- sum(P(p[idx.beta[j]]) .* (@view spec.x_tilde[:, j]) for j in 1:K)
 
     # 2. Compute h̃ = demean(exp(Z · δ))  and  A, B, C per-firm sums
-    if spec.T_periods isa Int
-        # Balanced: vectorized reshape path
-        h_tilde = compute_h_tilde(spec.z_raw, p, idx, spec.T_max)
-        E_all = reshape(epsilon_tilde, spec.T_max, N)
-        H_all = reshape(h_tilde, spec.T_max, N)
-        A = vec(_sum_panel(E_all .^ 2; dims=1))
-        B = vec(_sum_panel(E_all .* H_all; dims=1))
-        C = vec(_sum_panel(H_all .^ 2; dims=1))
-    else
-        # Unbalanced: per-firm loop with offsets
-        h_tilde = compute_h_tilde(spec.z_raw, p, idx, spec.offsets)
-        A, B, C = _compute_panel_ABC(epsilon_tilde, h_tilde, spec.offsets, N)
-        # Move A, B, C to GPU if data lives there (halton is CuArray when GPU=true)
-        A = _to_device_panel(A, halton)
-        B = _to_device_panel(B, halton)
-        C = _to_device_panel(C, halton)
-    end
+    h_tilde = compute_h_tilde(spec.z_raw, p, idx, spec.offsets)
+    A, B, C = _compute_panel_ABC(epsilon_tilde, h_tilde, spec.offsets, N)
+    # Move A, B, C to GPU if data lives there (halton is CuArray when GPU=true)
+    A = _to_device_panel(A, halton)
+    B = _to_device_panel(B, halton)
+    C = _to_device_panel(C, halton)
 
     # 3. Extract noise/inefficiency parameters
     noise_vals = get_panel_noise_vals(model.noise, p, idx, c)
@@ -1281,16 +1200,9 @@ function _expand_jlms_obs(E_u_firm::AbstractVector{P}, h_raw::AbstractVector,
     N  = spec.N
     jlms = Vector{P}(undef, NT)
 
-    if spec.T_periods isa Int
-        Tp = spec.T_max
-        E_u_2d   = repeat(reshape(E_u_firm, 1, N), Tp, 1)       # T × N
-        h_raw_2d = reshape(h_raw, Tp, N)                         # T × N
-        jlms .= vec(h_raw_2d .* E_u_2d)
-    else
-        for i in 1:N
-            s, e = spec.offsets[i] + 1, spec.offsets[i + 1]
-            jlms[s:e] .= h_raw[s:e] .* E_u_firm[i]
-        end
+    for i in 1:N
+        s, e = spec.offsets[i] + 1, spec.offsets[i + 1]
+        jlms[s:e] .= h_raw[s:e] .* E_u_firm[i]
     end
     return jlms
 end
@@ -1304,43 +1216,21 @@ function _compute_bc_obs(log_w::AbstractMatrix{P}, log_denom::AbstractVector{P},
     D  = ndims(u_draws) == 1 ? length(u_draws) : size(u_draws, 2)
     bc = Vector{P}(undef, NT)
 
-    if spec.T_periods isa Int
-        Tp = spec.T_max
-        h_raw_2d = reshape(h_raw, Tp, N)                         # T × N
-        h_3d     = reshape(h_raw_2d, Tp, N, 1)
+    for i in 1:N
+        s, e = spec.offsets[i] + 1, spec.offsets[i + 1]
+        Ti = e - s + 1
+        h_firm = reshape(h_raw[s:e], Ti, 1)                  # Ti × 1
 
         if ndims(u_draws) == 1
-            u_3d = reshape(u_draws, 1, 1, D)                     # 1 × 1 × D (shared)
+            u_firm = reshape(u_draws, 1, D)                   # 1 × D (shared)
         else
-            # multiRand: u_draws is N × D → 1 × N × D (firm-specific draws)
-            u_3d = reshape(u_draws, 1, N, D)
+            u_firm = reshape(u_draws[i, :], 1, D)            # 1 × D (firm i's draws)
         end
-        log_w_3d = reshape(log_w, 1, N, D)
 
-        log_bc_w = .-h_3d .* u_3d .+ log_w_3d                    # T × N × D
-
-        log_bc_num_flat = logsumexp_rows_panel(reshape(log_bc_w, Tp * N, D))
-        log_bc_num = reshape(log_bc_num_flat, Tp, N)              # T × N
-
-        bc_TN = exp.(log_bc_num .- reshape(log_denom, 1, N))     # T × N
-        bc .= vec(bc_TN)
-    else
-        for i in 1:N
-            s, e = spec.offsets[i] + 1, spec.offsets[i + 1]
-            Ti = e - s + 1
-            h_firm = reshape(h_raw[s:e], Ti, 1)                  # Ti × 1
-
-            if ndims(u_draws) == 1
-                u_firm = reshape(u_draws, 1, D)                   # 1 × D (shared)
-            else
-                u_firm = reshape(u_draws[i, :], 1, D)            # 1 × D (firm i's draws)
-            end
-
-            log_w_firm = reshape(log_w[i, :], 1, D)              # 1 × D
-            log_bc_w_firm = .-h_firm .* u_firm .+ log_w_firm     # Ti × D
-            log_bc_num = logsumexp_rows_panel(log_bc_w_firm)      # Ti
-            bc[s:e] .= exp.(log_bc_num .- log_denom[i])
-        end
+        log_w_firm = reshape(log_w[i, :], 1, D)              # 1 × D
+        log_bc_w_firm = .-h_firm .* u_firm .+ log_w_firm     # Ti × D
+        log_bc_num = logsumexp_rows_panel(log_bc_w_firm)      # Ti
+        bc[s:e] .= exp.(log_bc_num .- log_denom[i])
     end
     return bc
 end
@@ -1379,19 +1269,10 @@ function panel_jlms_bc(spec::_PanelInternalSpec{T}, p::AbstractVector{P};
     epsilon_tilde = y_tilde .- sum(P(p[idx.beta[j]]) .* (@view x_tilde[:, j]) for j in 1:K)
 
     # 2. h_raw and h_tilde (need both: h_tilde for quadratic form, h_raw for obs expansion)
-    h_raw, h_tilde = compute_h_raw_and_tilde(z_raw, p, idx,
-                         spec.T_periods isa Int ? spec.T_max : spec.offsets)
+    h_raw, h_tilde = compute_h_raw_and_tilde(z_raw, p, idx, spec.offsets)
 
     # 3. Per-firm quadratic sums A, B, C
-    if spec.T_periods isa Int
-        E_all = reshape(epsilon_tilde, spec.T_max, N)
-        H_all = reshape(h_tilde, spec.T_max, N)
-        A = vec(sum(E_all .^ 2; dims=1))
-        B = vec(sum(E_all .* H_all; dims=1))
-        C = vec(sum(H_all .^ 2; dims=1))
-    else
-        A, B, C = _compute_panel_ABC(epsilon_tilde, h_tilde, spec.offsets, N)
-    end
+    A, B, C = _compute_panel_ABC(epsilon_tilde, h_tilde, spec.offsets, N)
 
     # 4. Noise/inefficiency parameters and u draws (dispatched by distribution)
     noise_vals = get_panel_noise_vals(model.noise, p, idx, c)
@@ -1414,7 +1295,7 @@ function panel_jlms_bc(spec::_PanelInternalSpec{T}, p::AbstractVector{P};
     # 5. Log-weights (N × D) and denominator
     inv_sigma_v_sq = noise_vals.inv_sigma_v_sq
     log_sigma_v_sq = noise_vals.log_sigma_v_sq
-    Tm1_cpu        = spec.Tm1 isa AbstractArray ? _to_cpu(spec.Tm1) : spec.Tm1
+    Tm1_cpu        = _to_cpu(spec.Tm1)
     log_const      = P(-0.5) .* Tm1_cpu .* (log(P(2π)) .+ log_sigma_v_sq)
     frontier_sign  = P(spec.sign)
 
@@ -1765,7 +1646,7 @@ function panel_print_table(spec::_PanelInternalSpec{T}, coef::AbstractVector,
                             table_format::Symbol=:text) where {T}
 
     nofpara = length(coef)
-    N_total = spec.T_periods isa Int ? spec.N * spec.T_periods : sum(spec.T_periods)
+    N_total = sum(spec.T_periods)
 
     # Compute statistics (asymptotic Normal, standard for MLE)
     stddev = sqrt.(abs.(diag(var_cov_matrix)))
@@ -1792,10 +1673,10 @@ function panel_print_table(spec::_PanelInternalSpec{T}, coef::AbstractVector,
     print("Method: "); printstyled(spec.method; color=:yellow); println()
     print("Model type: "); printstyled("noise=$(spec.noise), ineff=$(spec.ineff)"; color=:yellow); println()
     print("Number of firms (N): "); printstyled(spec.N; color=:yellow); println()
-    if spec.T_periods isa Int
-        print("Time periods (T): "); printstyled(spec.T_periods; color=:yellow); println()
+    T_min, T_max_val = extrema(spec.T_periods)
+    if T_min == T_max_val
+        print("Time periods (T): "); printstyled(T_min; color=:yellow); println()
     else
-        T_min, T_max_val = extrema(spec.T_periods)
         print("Time periods (T): "); printstyled("$T_min-$T_max_val (unbalanced)"; color=:yellow); println()
     end
     print("Number of observations: "); printstyled(N_total; color=:yellow); println()
@@ -2056,28 +1937,6 @@ function sfmodel_panel_spec(data_spec::UseDataSpec, depvar_spec::DepvarSpec,
 end
 
 """
-    sfmodel_panel_spec(@useData(df), @depvar(y), @frontier(x1,x2), @zvar(z1,z2); T_periods, ...)
-
-DSL form — balanced panel with @zvar (no @id, requires T_periods keyword).
-"""
-function sfmodel_panel_spec(data_spec::UseDataSpec, depvar_spec::DepvarSpec,
-                              frontier_spec::FrontierSpec, zvar_spec::ZvarSpec;
-                              T_periods::Int,
-                              noise::Symbol=:Normal,
-                              ineff::Symbol=:HalfNormal,
-                              type::Symbol=:prod)
-    df = data_spec.df
-    depvar, frontier, frontier_names = _panel_dsl_extract(df, depvar_spec, frontier_spec)
-    zvar, zvar_names = _panel_dsl_extract_zvar(df, zvar_spec)
-    model_temp = _build_panel_model(noise, ineff)
-    varnames = vcat(frontier_names, zvar_names, _panel_ineff_varnames(model_temp.ineff))
-
-    return sfmodel_panel_spec(; depvar=depvar, frontier=frontier, zvar=zvar,
-                                 T_periods=T_periods, noise=noise, ineff=ineff,
-                                 type=type, varnames=varnames)
-end
-
-"""
     sfmodel_panel_spec(@useData(df), @depvar(y), @frontier(x1,x2), @id(id); ...)
 
 DSL form — unbalanced panel without @zvar (constant scaling h(z)=exp(δ₀)).
@@ -2100,53 +1959,28 @@ function sfmodel_panel_spec(data_spec::UseDataSpec, depvar_spec::DepvarSpec,
                                  varnames=varnames)
 end
 
-"""
-    sfmodel_panel_spec(@useData(df), @depvar(y), @frontier(x1,x2); T_periods, ...)
-
-DSL form — balanced panel without @zvar (constant scaling h(z)=exp(δ₀)).
-"""
-function sfmodel_panel_spec(data_spec::UseDataSpec, depvar_spec::DepvarSpec,
-                              frontier_spec::FrontierSpec;
-                              T_periods::Int,
-                              noise::Symbol=:Normal,
-                              ineff::Symbol=:HalfNormal,
-                              type::Symbol=:prod)
-    df = data_spec.df
-    depvar, frontier, frontier_names = _panel_dsl_extract(df, depvar_spec, frontier_spec)
-    NT = length(depvar)
-    zvar = ones(Float64, NT, 1)
-    model_temp = _build_panel_model(noise, ineff)
-    varnames = vcat(frontier_names, ["_cons"], _panel_ineff_varnames(model_temp.ineff))
-
-    return sfmodel_panel_spec(; depvar=depvar, frontier=frontier, zvar=zvar,
-                                 T_periods=T_periods, noise=noise, ineff=ineff,
-                                 type=type, varnames=varnames)
-end
-
-
 # ============================================================================
 # Section 15: sfmodel_panel_spec()
 # ============================================================================
 
 """
-    sfmodel_panel_spec(; depvar, frontier, zvar, T_periods=nothing, id=nothing, ...)
+    sfmodel_panel_spec(; depvar, frontier, zvar, id, ...)
 
-Construct panel model specification. Supports both balanced and unbalanced panels.
+Construct panel model specification. Panel structure is specified via the `id` column.
 
-# Panel structure — specify exactly one of:
-- `T_periods::Int`: Balanced panel — all units have the same number of periods.
-  Data must be stacked: unit 1 all T periods, unit 2 all T periods, ...
-- `id`: Unbalanced panel — a column identifying the panel unit for each observation.
+# Panel structure
+- `id`: A column identifying the panel unit for each observation.
   Can be any type (integers, strings, symbols, etc.). Data must be grouped by id
   (all rows for the same unit are contiguous). The number of periods per unit is
   inferred from contiguous group lengths.
+  For balanced panels: `id = repeat(1:N, inner=T)`.
 
 # Arguments
 - `depvar`: Response vector, length NT_total
 - `frontier`: Design matrix, NT_total × K (do NOT include a constant/intercept — it is unidentifiable after within-demeaning)
 - `zvar`: Scaling function variables, NT_total × L
-- `T_periods::Union{Int,Nothing}=nothing`: Periods per unit (balanced panel)
-- `id=nothing`: Unit identifier column (unbalanced panel)
+- `T_periods=nothing`: Deprecated; raises an error if provided. Use `id` instead.
+- `id`: Unit identifier column (required)
 - `noise::Symbol=:Normal`: Noise distribution
 - `ineff::Symbol=:HalfNormal`: Inefficiency distribution (:HalfNormal, :TruncatedNormal, :Exponential, :Weibull, :Lognormal, :Lomax, :Rayleigh, :Gamma)
 - `type::Symbol=:prod`: Frontier type (`:prod`, `:production`, or `:cost`)
@@ -2159,10 +1993,10 @@ Construct panel model specification. Supports both balanced and unbalanced panel
 
 # Examples
 ```julia
-# Balanced panel:
+# Balanced panel (use id = repeat(1:N, inner=T)):
 spec = sfmodel_panel_spec(
     depvar = y, frontier = X, zvar = Z,
-    T_periods = 10
+    id = repeat(1:N, inner=T)
 )
 
 # Unbalanced panel:
@@ -2195,29 +2029,20 @@ function sfmodel_panel_spec(; depvar, frontier, zvar,
     NT = length(depvar_norm)
 
     # --- Determine panel structure ---
-    if !isnothing(id) && !isnothing(T_periods)
-        error("Specify exactly one of `T_periods` (balanced) or `id` (unbalanced), not both.")
-    elseif isnothing(id) && isnothing(T_periods)
-        error("Must specify either `T_periods::Int` (balanced panel) or `id` column (unbalanced panel).")
+    if !isnothing(T_periods)
+        error("T_periods is no longer supported. Use id instead. For balanced panels: id = repeat(1:N, inner=T).")
+    end
+    if isnothing(id)
+        error("Must specify id column for panel structure.")
     end
 
-    if !isnothing(T_periods)
-        # --- Balanced panel ---
-        @assert NT % T_periods == 0 "Length of depvar ($NT) must be divisible by T_periods ($T_periods)."
-        @assert T_periods >= 2 "Wang-Ho within-transformation requires T_periods >= 2, got $T_periods."
-        N = NT ÷ T_periods
-        T_max = T_periods
-        offsets = collect(0:T_periods:NT)
-    else
-        # --- Unbalanced panel (id column provided) ---
-        id_vec = id isa AbstractVector ? id : error("`id` must be a vector, got $(typeof(id)).")
-        length(id_vec) == NT || error("id column has $(length(id_vec)) elements, expected $NT (same as depvar).")
-        N, T_vec, offsets = _compute_panel_structure(id_vec)
-        @assert all(t -> t >= 2, T_vec) "Wang-Ho within-transformation requires T_i >= 2 for all units. " *
-            "Got minimum T_i = $(minimum(T_vec))."
-        T_periods = T_vec
-        T_max = maximum(T_vec)
-    end
+    id_vec = id isa AbstractVector ? id : error("`id` must be a vector, got $(typeof(id)).")
+    length(id_vec) == NT || error("id column has $(length(id_vec)) elements, expected $NT (same as depvar).")
+    N, T_vec, offsets = _compute_panel_structure(id_vec)
+    @assert all(t -> t >= 2, T_vec) "Wang-Ho within-transformation requires T_i >= 2 for all units. " *
+        "Got minimum T_i = $(minimum(T_vec))."
+    T_periods = T_vec
+    T_max = maximum(T_vec)
 
     K = size(frontier_norm, 2)
     L = size(zvar_norm, 2)
@@ -2323,13 +2148,8 @@ function _assemble_panel_spec(spec::PanelModelSpec{T}, method::PanelMethodSpec) 
     end
 
     # 1. Demean y and X (within-transformation)
-    if spec.T_periods isa Int
-        y_tilde = sf_panel_demean(spec.depvar, spec.T_periods)
-        x_tilde = sf_panel_demean(spec.frontier, spec.T_periods)
-    else
-        y_tilde = sf_panel_demean(spec.depvar, spec.offsets)
-        x_tilde = sf_panel_demean(spec.frontier, spec.offsets)
-    end
+    y_tilde = sf_panel_demean(spec.depvar, spec.offsets)
+    x_tilde = sf_panel_demean(spec.frontier, spec.offsets)
     # Z is NOT demeaned — h(z)=exp(z'δ) is computed then demeaned inside the NLL
 
     # 2. GPU conversion (optional)
@@ -2358,13 +2178,9 @@ function _assemble_panel_spec(spec::PanelModelSpec{T}, method::PanelMethodSpec) 
     # 4. Constants
     constants = make_panel_constants(spec.model, T, spec.T_max)
 
-    # 5. Compute Tm1 (T_i - 1): scalar for balanced, N-vector for unbalanced
-    if spec.T_periods isa Int
-        Tm1 = spec.T_max - 1
-    else
-        Tm1_cpu = T.(spec.T_periods .- 1)
-        Tm1 = method.GPU ? Main.CUDA.CuArray(Tm1_cpu) : Tm1_cpu
-    end
+    # 5. Compute Tm1 (T_i - 1): N-vector
+    Tm1_cpu = T.(spec.T_periods .- 1)
+    Tm1 = method.GPU ? Main.CUDA.CuArray(Tm1_cpu) : Tm1_cpu
 
     return _PanelInternalSpec{T}(
         y_tilde, x_tilde, z_raw,
@@ -2435,13 +2251,8 @@ function sfmodel_panel_init(; spec::PanelModelSpec,
     end
 
     # Component mode: start with OLS + defaults
-    if spec.T_periods isa Int
-        y_t = sf_panel_demean(spec.depvar, spec.T_periods)
-        x_t = sf_panel_demean(spec.frontier, spec.T_periods)
-    else
-        y_t = sf_panel_demean(spec.depvar, spec.offsets)
-        x_t = sf_panel_demean(spec.frontier, spec.offsets)
-    end
+    y_t = sf_panel_demean(spec.depvar, spec.offsets)
+    x_t = sf_panel_demean(spec.frontier, spec.offsets)
     beta_ols = x_t \ y_t
     init_vec = vcat(beta_ols, fill(0.1, n_total - K))
 
@@ -2631,8 +2442,9 @@ function sfmodel_panel_fit(;
         printstyled("*********************************\n"; color=:cyan)
 
         printstyled("  $(spec.noise), $(spec.ineff)\n"; color=:yellow)
-        T_info = spec.T_periods isa Int ? "T=$(spec.T_periods)" :
-                 "T=$(minimum(spec.T_periods))-$(maximum(spec.T_periods)) (unbalanced)"
+        T_min_d, T_max_d = extrema(spec.T_periods)
+        T_info = T_min_d == T_max_d ? "T=$(T_min_d)" :
+                 "T=$(T_min_d)-$(T_max_d) (unbalanced)"
         _ndraws = ndims(ispec.draws) == 1 ? length(ispec.draws) : size(ispec.draws, 2)
         printstyled("  N_firms=$(spec.N), $(T_info), K=$(spec.K), L=$(spec.L), n_draws=$(_ndraws)\n"; color=:yellow)
         printstyled("  Type: $(spec.sign == 1 ? "production" : "cost")\n"; color=:yellow)
@@ -2642,16 +2454,11 @@ function sfmodel_panel_fit(;
     # 3. Prepare initial values
     K = ispec.K
     N = spec.N
-    NT = spec.T_periods isa Int ? N * spec.T_periods : sum(spec.T_periods)
+    NT = sum(spec.T_periods)
 
     # OLS on demeaned data
-    if spec.T_periods isa Int
-        y_t_cpu = sf_panel_demean(spec.depvar, spec.T_periods)
-        x_t_cpu = sf_panel_demean(spec.frontier, spec.T_periods)
-    else
-        y_t_cpu = sf_panel_demean(spec.depvar, spec.offsets)
-        x_t_cpu = sf_panel_demean(spec.frontier, spec.offsets)
-    end
+    y_t_cpu = sf_panel_demean(spec.depvar, spec.offsets)
+    x_t_cpu = sf_panel_demean(spec.frontier, spec.offsets)
     beta_ols = x_t_cpu \ y_t_cpu
 
     if init === nothing
@@ -2969,7 +2776,7 @@ spec = sfmodel_panel_spec(
     depvar   = y,
     frontier = X,
     zvar     = Z,
-    T_periods = T,
+    id       = repeat(1:N, inner=T),
     type     = :prod,
     varnames = ["capital", "labor", "z1", "ln_σᵤ²", "ln_σᵥ²"]
 )
@@ -3078,7 +2885,7 @@ result_ub = sfmodel_panel_fit(spec=spec_ub, method=method_ub)
 
 # Balanced panel, MSLE, default optimizer, default draws:
 result = sfmodel_panel_fit(
-    spec = sfmodel_panel_spec(depvar=y, frontier=X, zvar=Z, T_periods=10)
+    spec = sfmodel_panel_spec(depvar=y, frontier=X, zvar=Z, id=firm_ids)
 )
 
 
@@ -3113,14 +2920,14 @@ method = sfmodel_panel_method(method=:MSLE, n_draws=2^12-1)
 result = sfmodel_panel_fit(spec=spec, method=method)
 
 
-## Example 7: DSL — Balanced panel (no @id, use T_periods keyword)
+## Example 7: DSL — Balanced panel (with @id)
 
 spec_bal = sfmodel_panel_spec(
     @useData(df),
     @depvar(yit),
     @frontier(xit),
-    @zvar(zit);
-    T_periods = 10,
+    @zvar(zit),
+    @id(id);
     type = :prod
 )
 

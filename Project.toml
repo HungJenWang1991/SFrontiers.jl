@@ -1,7 +1,7 @@
 name = "SFrontiers"
 uuid = "450466ac-e45e-40ce-9385-fade81a2016c"
 authors = ["Hung-Jen Wang"]
-version = "1.0.1"
+version = "1.1.0"
 license = "GPL-3.0-or-later"
 
 [deps]

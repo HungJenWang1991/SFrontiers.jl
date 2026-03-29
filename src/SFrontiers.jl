@@ -169,9 +169,9 @@ MLE only, requires `ineff=:HalfNormal`.
 When `datatype=:panel_TRE`: True random-effect model. MLE only, requires
 `ineff=:HalfNormal` or `:TruncatedNormal`.
 
-Panel models require either `T_periods` (balanced) or `id` (unbalanced). Panel models
-do not support `copula` or `hetero`; do NOT include constant columns in `frontier`
-or `zvar` (within-demeaning eliminates them).
+Panel models require `id` to specify panel structure. For balanced panels, use
+`id = repeat(1:N, inner=T)`. Panel models do not support `copula` or `hetero`;
+do NOT include constant columns in `frontier` or `zvar` (within-demeaning eliminates them).
 
 Returns a `UnifiedSpec{T}` that can be used with `sfmodel_fit()`.
 
@@ -206,12 +206,25 @@ function sfmodel_spec(; depvar, frontier, zvar=nothing,
                 eq_indices::Union{Nothing, Vector{Int}}=nothing,
                 type::Symbol=:prod)
 
-    # --- Helper: validate no copula/hetero for panel models ---
-    _validate_panel_no_copula_hetero = () -> begin
+    # --- Helpers: validate copula/hetero for panel models ---
+    _validate_panel_no_copula = () -> begin
         copula != :None && error("Panel models do not support `copula`. Remove the `copula` argument.")
+    end
+    _validate_panel_hetero_scaling_only = () -> begin
+        # panel_TFE: hetero=:scaling is the only permissible option (and the default)
+        if hetero === :scaling
+            # OK — explicit :scaling accepted
+        elseif hetero isa Symbol
+            error("Panel TFE models only support `hetero=:scaling` (the default). Got `hetero=:$hetero`.")
+        elseif !isempty(hetero)
+            error("Panel TFE models only support `hetero=:scaling` (the default). " *
+                "Individual heteroscedastic parameters (e.g., [:mu, :sigma_sq]) are not available for panel models.")
+        end
+    end
+    _validate_panel_no_hetero = () -> begin
+        # panel_TFE_CSW and panel_TRE: no hetero at all
         _has_hetero = hetero isa Symbol ? true : !isempty(hetero)
-        _has_hetero && error("Panel models do not support `hetero`. " *
-            "In the panel model, heterogeneity enters through the scaling function h(z)=exp(z'δ).")
+        _has_hetero && error("This panel model does not support `hetero`. Remove the `hetero` argument.")
     end
 
     # --- Helper: build MLE spec for cross-sectional models (returns nothing if not applicable) ---
@@ -233,12 +246,14 @@ function sfmodel_spec(; depvar, frontier, zvar=nothing,
     if datatype == :panel_TFE
         # Wang and Ho (2010) true fixed-effect model
         # Supported by Panel_Backend (MCI/MSLE) and MLE_Backend (HalfNormal/TruncatedNormal)
-        _validate_panel_no_copula_hetero()
+        _validate_panel_no_copula()
+        _validate_panel_hetero_scaling_only()
+        !isnothing(T_periods) && error("T_periods is no longer supported. Use id instead. For balanced panels: id = repeat(1:N, inner=T).")
 
         # Always build Panel spec (for MCI/MSLE — supports all 8 distributions)
         panel_spec = Panel_Backend.sfmodel_panel_spec(;
             depvar=depvar, frontier=frontier, zvar=zvar,
-            T_periods=T_periods, id=id,
+            id=id,
             noise=noise, ineff=ineff, type=type,
             varnames=varnames, eqnames=eqnames, eq_indices=eq_indices)
 
@@ -257,7 +272,9 @@ function sfmodel_spec(; depvar, frontier, zvar=nothing,
 
     elseif datatype == :panel_TFE_CSW
         # Chen, Schmidt, and Wang (2014) true fixed-effect model — MLE only
-        _validate_panel_no_copula_hetero()
+        _validate_panel_no_copula()
+        _validate_panel_no_hetero()
+        !isnothing(T_periods) && error("T_periods is no longer supported. Use id instead. For balanced panels: id = repeat(1:N, inner=T).")
         noise == :Normal || error("Panel TFE_CSW models require `noise=:Normal`.")
         ineff == :HalfNormal || error("Panel TFE_CSW models require `ineff=:HalfNormal`.")
 
@@ -271,7 +288,9 @@ function sfmodel_spec(; depvar, frontier, zvar=nothing,
 
     elseif datatype == :panel_TRE
         # True random-effect model — MLE only
-        _validate_panel_no_copula_hetero()
+        _validate_panel_no_copula()
+        _validate_panel_no_hetero()
+        !isnothing(T_periods) && error("T_periods is no longer supported. Use id instead. For balanced panels: id = repeat(1:N, inner=T).")
         noise == :Normal || error("Panel TRE models require `noise=:Normal`.")
         ineff in (:HalfNormal, :TruncatedNormal) || error(
             "Panel TRE models require `ineff=:HalfNormal` or `:TruncatedNormal`. " *
@@ -360,11 +379,7 @@ Macros can appear in **any order**.
 spec = sfmodel_spec(@depvar(yvar), @useData(df), @frontier(cons, x1, x2), @zvar(cons, z1);
     noise=:Normal, ineff=:TruncatedNormal, hetero=[:mu])
 
-# Panel TFE (balanced)
-spec = sfmodel_spec(@useData(df), @frontier(x1, x2), @depvar(y), @zvar(z1);
-    noise=:Normal, ineff=:HalfNormal, datatype=:panel_TFE, T_periods=10)
-
-# Panel TFE (unbalanced, with @id)
+# Panel TFE (with @id)
 spec = sfmodel_spec(@id(firm), @useData(df), @depvar(y), @frontier(x1, x2), @zvar(z1);
     noise=:Normal, ineff=:HalfNormal, datatype=:panel_TFE)
 
@@ -414,15 +429,29 @@ function sfmodel_spec(args::DSLArg...;
     isnothing(dv)   && error("@depvar is required in DSL-style specification.")
     isnothing(fr)   && error("@frontier is required in DSL-style specification.")
 
-    # --- Helper: validate no copula/hetero for panel models ---
-    _validate_panel_dsl = () -> begin
+    # --- Helpers: validate copula/hetero for panel models (DSL) ---
+    _validate_panel_no_copula_dsl = () -> begin
         copula != :None && error("Panel models do not support `copula`.")
-        _has_hetero_dsl = hetero isa Symbol ? true : !isempty(hetero)
-        _has_hetero_dsl && error("Panel models do not support `hetero`.")
+    end
+    _validate_panel_hetero_scaling_only_dsl = () -> begin
+        if hetero === :scaling
+            # OK — explicit :scaling accepted for panel_TFE
+        elseif hetero isa Symbol
+            error("Panel TFE models only support `hetero=:scaling` (the default). Got `hetero=:$hetero`.")
+        elseif !isempty(hetero)
+            error("Panel TFE models only support `hetero=:scaling` (the default). " *
+                "Individual heteroscedastic parameters (e.g., [:mu, :sigma_sq]) are not available for panel models.")
+        end
+    end
+    _validate_panel_no_hetero_dsl = () -> begin
+        _has_hetero = hetero isa Symbol ? true : !isempty(hetero)
+        _has_hetero && error("This panel model does not support `hetero`. Remove the `hetero` argument.")
     end
 
     # --- Helper: build Panel spec from DSL args ---
     _build_panel_spec_dsl = () -> begin
+        !isnothing(T_periods) && error("T_periods is no longer supported. Use @id instead. For balanced panels, add an id column to your DataFrame.")
+
         data_p = Panel_Backend.UseDataSpec(data.df)
         dv_p   = Panel_Backend.DepvarSpec(dv.name)
         fr_p   = Panel_Backend.FrontierSpec(fr.names)
@@ -440,18 +469,7 @@ function sfmodel_spec(args::DSLArg...;
                     noise=noise, ineff=ineff, type=type)
             end
         else
-            isnothing(T_periods) && error("Balanced panel DSL requires `T_periods` keyword. " *
-                "For unbalanced panels, use `@id(idvar)` instead.")
-            if !isnothing(zv)
-                Panel_Backend.sfmodel_panel_spec(
-                    data_p, dv_p, fr_p,
-                    Panel_Backend.ZvarSpec(zv.names);
-                    T_periods=T_periods, noise=noise, ineff=ineff, type=type)
-            else
-                Panel_Backend.sfmodel_panel_spec(
-                    data_p, dv_p, fr_p;
-                    T_periods=T_periods, noise=noise, ineff=ineff, type=type)
-            end
+            error("Panel models require @id(...). For balanced panels, add an id column to your DataFrame.")
         end
     end
 
@@ -479,7 +497,8 @@ function sfmodel_spec(args::DSLArg...;
 
     # --- Dispatch based on datatype ---
     if datatype == :panel_TFE
-        _validate_panel_dsl()
+        _validate_panel_no_copula_dsl()
+        _validate_panel_hetero_scaling_only_dsl()
 
         # Build Panel spec (for MCI/MSLE)
         panel_spec = _build_panel_spec_dsl()
@@ -499,7 +518,8 @@ function sfmodel_spec(args::DSLArg...;
                                  noise, ineff, :None, Symbol[])
 
     elseif datatype == :panel_TFE_CSW
-        _validate_panel_dsl()
+        _validate_panel_no_copula_dsl()
+        _validate_panel_no_hetero_dsl()
         noise == :Normal || error("Panel TFE_CSW models require `noise=:Normal`.")
         ineff == :HalfNormal || error("Panel TFE_CSW models require `ineff=:HalfNormal`.")
 
@@ -513,7 +533,8 @@ function sfmodel_spec(args::DSLArg...;
                                  noise, ineff, :None, Symbol[])
 
     elseif datatype == :panel_TRE
-        _validate_panel_dsl()
+        _validate_panel_no_copula_dsl()
+        _validate_panel_no_hetero_dsl()
         noise == :Normal || error("Panel TRE models require `noise=:Normal`.")
         ineff in (:HalfNormal, :TruncatedNormal) || error(
             "Panel TRE models require `ineff=:HalfNormal` or `:TruncatedNormal`. " *
@@ -695,13 +716,23 @@ end
 # Section 6: sfmodel_init — Unified initial values
 # ============================================================================
 
+# Helper to resolve a method argument to a Symbol (:MCI, :MSLE, :MLE, or nothing)
+_resolve_method(::Nothing) = nothing
+_resolve_method(m::Symbol)  = m
+_resolve_method(::MCI_Backend.SFMethodSpec)        = :MCI
+_resolve_method(::MSLE_Backend.SFMethodSpec_MSLE)  = :MSLE
+_resolve_method(::MLEMethodSpec)                   = :MLE
+_resolve_method(::Panel_Backend.PanelMethodSpec)    = :Panel
+
 """
-    sfmodel_init(; spec::UnifiedSpec, kwargs...)
+    sfmodel_init(; spec::UnifiedSpec, method=nothing, kwargs...)
 
 Compute or assemble initial values for the estimation.
 
-The initial-value vector depends only on the model specification (distribution choice),
-not on the estimation method, so no `method` argument is needed.
+For cross-sectional models, `method` controls which backend is used for initial values.
+It accepts a `Symbol` (`:MCI`, `:MSLE`, `:MLE`) or a method object returned by
+`sfmodel_method()`. If omitted, the backend is chosen automatically based on spec
+availability (MCI > MSLE > MLE).
 
 **Cross-sectional keyword arguments (MCI/MSLE):** `init`, `frontier`, `mu`,
 `ln_sigma_sq`, `ln_sigma_v_sq`, `ln_nu_minus_2`, `ln_b`, `ln_lambda`, `ln_k`,
@@ -717,16 +748,18 @@ not on the estimation method, so no `method` argument is needed.
 **Panel TFE_CSW/TRE keyword arguments (MLE):** `init`, `frontier`, `mu`,
 `ln_sigma_u_sq`, `ln_sigma_v_sq`, `hscale`, `sigma_a_sq`, `message`.
 
-Dispatches automatically based on `spec.datatype`.
+Dispatches based on `method` (if provided) or `spec.datatype`.
 
 # Arguments
 - `spec::UnifiedSpec`: Unified model specification from `sfmodel_spec()`.
+- `method=nothing`: Estimation method — a `Symbol` (`:MCI`, `:MSLE`, `:MLE`) or method
+  object from `sfmodel_method()`. Used for cross-sectional dispatch.
 - Remaining keyword arguments are forwarded to the appropriate backend.
 
 # Returns
 Initial values (format depends on backend: Vector or Dict).
 """
-function sfmodel_init(; spec::UnifiedSpec, kwargs...)
+function sfmodel_init(; spec::UnifiedSpec, method=nothing, kwargs...)
     if spec.datatype == :panel_TFE
         # Panel TFE: dispatch to Panel_Backend (for MCI/MSLE compatibility)
         # When method=:MLE is used, sfmodel_fit passes init=nothing so MLE uses OLS defaults
@@ -735,14 +768,29 @@ function sfmodel_init(; spec::UnifiedSpec, kwargs...)
         # MLE-only panel models: use MLE init
         return MLE_Backend.sfmodel_init(; spec=spec.mle_spec, kwargs...)
     elseif spec.datatype == :cross_sectional
-        if spec.mci_spec !== nothing
+        m = _resolve_method(method)
+        if m == :MCI
+            spec.mci_spec === nothing && error("Method :MCI requested but no MCI spec available.")
             return MCI_Backend.sfmodel_MCI_init(; spec=spec.mci_spec, kwargs...)
-        elseif spec.msle_spec !== nothing
+        elseif m == :MSLE
+            spec.msle_spec === nothing && error("Method :MSLE requested but no MSLE spec available.")
             return MSLE_Backend.sfmodel_MSLE_init(; spec=spec.msle_spec, kwargs...)
-        elseif spec.mle_spec !== nothing
+        elseif m == :MLE
+            spec.mle_spec === nothing && error("Method :MLE requested but no MLE spec available.")
             return MLE_Backend.sfmodel_init(; spec=spec.mle_spec, kwargs...)
+        elseif m === nothing
+            # Fallback: priority-based dispatch (backwards compatibility)
+            if spec.mci_spec !== nothing
+                return MCI_Backend.sfmodel_MCI_init(; spec=spec.mci_spec, kwargs...)
+            elseif spec.msle_spec !== nothing
+                return MSLE_Backend.sfmodel_MSLE_init(; spec=spec.msle_spec, kwargs...)
+            elseif spec.mle_spec !== nothing
+                return MLE_Backend.sfmodel_init(; spec=spec.mle_spec, kwargs...)
+            else
+                error("No backend specification available for initial value computation.")
+            end
         else
-            error("No backend specification available for initial value computation.")
+            error("Unknown method: :$m. Use `:MCI`, `:MSLE`, or `:MLE`.")
         end
     else
         error("Unknown datatype: :$(spec.datatype)")
@@ -1017,7 +1065,7 @@ end
 # ============================================================================
 
 """
-    sfmodel_panel_spec(; depvar, frontier, zvar, T_periods, noise, ineff, type=:prod, varnames=nothing, eqnames=nothing, eq_indices=nothing)
+    sfmodel_panel_spec(; depvar, frontier, zvar, id, noise, ineff, type=:prod, varnames=nothing, eqnames=nothing, eq_indices=nothing)
 
 Construct a panel model specification for the Wang and Ho (2010) stochastic frontier model.
 
@@ -1025,7 +1073,7 @@ Construct a panel model specification for the Wang and Ho (2010) stochastic fron
 - `depvar`: Response vector (N*T observations, stacked by firm).
 - `frontier`: Frontier design matrix (N*T × K).
 - `zvar`: Scaling function variables (N*T × L). Z is NOT demeaned; `h(z)=exp(z'δ)` is computed then demeaned.
-- `T_periods::Int`: Number of time periods per firm (balanced panel).
+- `id`: Unit identifier column (required). For balanced panels: `id = repeat(1:N, inner=T)`.
 - `noise::Symbol`: Noise distribution (`:Normal`).
 - `ineff::Symbol`: Inefficiency distribution (`:HalfNormal`).
 - `type::Symbol=:prod`: `:prod` (production) or `:cost`.
@@ -1117,6 +1165,10 @@ end
 export sfmodel_spec, sfmodel_method, sfmodel_init, sfmodel_opt, sfmodel_fit
 export sfmodel_panel_spec, sfmodel_panel_method, sfmodel_panel_init
 export sfmodel_panel_opt, sfmodel_panel_fit
+export sfmodel_MixTable, sfmodel_ChiSquareTable, sfmodel_CI, sfmodel_MoMTest
 export @useData, @depvar, @frontier, @zvar, @id
+
+# Re-export MLE utility functions applicable to all backends
+using .MLE_Backend: sfmodel_MixTable, sfmodel_ChiSquareTable, sfmodel_CI, sfmodel_MoMTest
 
 end # module SFrontiers

@@ -1,0 +1,269 @@
+<!DOCTYPE html>
+<html xmlns="http://www.w3.org/1999/xhtml" lang="en" xml:lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=yes" />
+  <meta name="author" content="Hung-Jen Wang" />
+  <meta name="description" content="User manual for SFrontiers.jl — stochastic frontier model estimation in Julia using simulation-based and analytic methods." />
+  <title>$title$</title>
+$for(css)$
+  <link rel="stylesheet" href="$css$" />
+$endfor$
+$for(header-includes)$
+  $header-includes$
+$endfor$
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Lato:ital,wght@0,300;0,400;0,700;0,900;1,400&display=swap" rel="stylesheet" />
+$if(math)$
+  $math$
+$endif$
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/styles/github.min.css" />
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/highlight.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/languages/julia.min.js"></script>
+</head>
+<body>
+
+<!-- Top navbar -->
+<nav class="top-navbar" id="topNavbar">
+  <div class="navbar-inner">
+    <button class="sidebar-toggle" id="sidebarToggle" aria-label="Toggle navigation">
+      <span></span><span></span><span></span>
+    </button>
+    <div class="navbar-brand">
+      <a href="#">SFrontiers.jl</a>
+    </div>
+    <div class="navbar-links">
+      <a href="https://github.com/HungJenWang1991/SFrontiers.jl" target="_blank" rel="noopener">
+        <svg width="20" height="20" viewBox="0 0 16 16" fill="currentColor"><path d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82.64-.18 1.32-.27 2-.27.68 0 1.36.09 2 .27 1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.013 8.013 0 0016 8c0-4.42-3.58-8-8-8z"/></svg>
+        GitHub
+      </a>
+    </div>
+  </div>
+</nav>
+
+<!-- Sidebar overlay for mobile -->
+<div class="sidebar-overlay" id="sidebarOverlay"></div>
+
+<!-- Sidebar -->
+<aside class="sidebar" id="sidebar">
+  <div class="sidebar-header">
+    <a href="#" class="sidebar-logo"><img src="logo.png" alt="SFrontiers.jl logo" /></a>
+    <div class="sidebar-tagline">Stochastic Frontier Analysis using Julia</div>
+  </div>
+  <div class="sidebar-search">
+    <input type="text" id="tocSearch" placeholder="Filter sections..." aria-label="Filter table of contents" />
+  </div>
+  <div class="sidebar-nav">
+$if(toc)$
+    $toc$
+$endif$
+  </div>
+  <div class="sidebar-footer">
+    <span class="version-badge">v1.0.1</span>
+    <span class="author-info">&copy; Hung-Jen Wang</span>
+  </div>
+</aside>
+
+<!-- Main content -->
+<main class="content" id="content">
+$for(include-before)$
+$include-before$
+$endfor$
+$body$
+$for(include-after)$
+$include-after$
+$endfor$
+
+  <footer class="page-footer">
+    <hr />
+    <p>SFrontiers.jl &mdash; Stochastic Frontier Model Estimation in Julia</p>
+    <p>&copy; Hung-Jen Wang &middot; <a href="mailto:wangh@ntu.edu.tw">wangh@ntu.edu.tw</a> &middot;
+       <a href="https://github.com/HungJenWang1991/SFrontiers.jl" target="_blank" rel="noopener">GitHub Repository</a></p>
+  </footer>
+</main>
+
+<!-- Back to top button -->
+<button class="back-to-top" id="backToTop" aria-label="Back to top">&#8679;</button>
+
+<script>
+(function() {
+  // --- Flatten TOC: promote nested sections to top level ---
+  // Pandoc nests everything under the single H1. We want the H2 sections
+  // (0. Theoretical, 1. Introduction, ...) to be top-level sidebar items.
+  (function flattenTOC() {
+    var nav = document.querySelector('.sidebar-nav');
+    var rootUl = nav.querySelector(':scope > ul');
+    if (!rootUl) return;
+
+    // The root <ul> has one <li> (the H1 title) whose child <ul> holds
+    // the real sections. Promote that child <ul> to be the root.
+    var topLi = rootUl.querySelector(':scope > li');
+    if (!topLi) return;
+    var innerUl = topLi.querySelector(':scope > ul');
+    if (!innerUl) return;
+
+    // Remove noise entries that duplicate info already in the header/body
+    var removeTexts = ['user manual for julia implementation', 'table of contents'];
+    innerUl.querySelectorAll(':scope > li').forEach(function(li) {
+      var a = li.querySelector(':scope > a');
+      if (a && removeTexts.indexOf(a.textContent.trim().toLowerCase()) !== -1) {
+        li.remove();
+      }
+    });
+
+    // Replace the root <ul> with the inner one
+    nav.replaceChild(innerUl, rootUl);
+  })();
+
+  // --- Sidebar toggle (mobile) ---
+  var toggle   = document.getElementById('sidebarToggle');
+  var sidebar  = document.getElementById('sidebar');
+  var overlay  = document.getElementById('sidebarOverlay');
+
+  function openSidebar()  { sidebar.classList.add('open'); overlay.classList.add('visible'); }
+  function closeSidebar() { sidebar.classList.remove('open'); overlay.classList.remove('visible'); }
+
+  toggle.addEventListener('click', function() {
+    sidebar.classList.contains('open') ? closeSidebar() : openSidebar();
+  });
+  overlay.addEventListener('click', closeSidebar);
+
+  // Close sidebar when a link is clicked (mobile)
+  sidebar.querySelectorAll('a').forEach(function(a) {
+    a.addEventListener('click', function() {
+      if (window.innerWidth < 1056) closeSidebar();
+    });
+  });
+
+  // --- Active section highlighting ---
+  var tocLinks = sidebar.querySelectorAll('.sidebar-nav a');
+  var headings = [];
+  tocLinks.forEach(function(link) {
+    var id = link.getAttribute('href');
+    if (id && id.startsWith('#')) {
+      var el = document.getElementById(id.slice(1));
+      if (el) headings.push({ el: el, link: link });
+    }
+  });
+
+  function updateActive() {
+    var scrollPos = window.scrollY + 120;
+    var current = null;
+    for (var i = 0; i < headings.length; i++) {
+      if (headings[i].el.offsetTop <= scrollPos) current = headings[i];
+    }
+    tocLinks.forEach(function(l) { l.classList.remove('active'); });
+    if (current) {
+      current.link.classList.add('active');
+      // Auto-expand parent section if collapsed
+      var parentUl = current.link.closest('ul');
+      while (parentUl && parentUl !== sidebar) {
+        if (parentUl.style.display === 'none') {
+          parentUl.style.display = 'block';
+          var t = parentUl.parentElement.querySelector(':scope > a .toc-toggle');
+          if (t) t.textContent = '\u25BC';
+        }
+        parentUl = parentUl.parentElement.closest('ul');
+      }
+      // Scroll the active link into view in the sidebar
+      current.link.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
+    }
+  }
+  window.addEventListener('scroll', updateActive, { passive: true });
+  updateActive();
+
+  // --- Back to top ---
+  var btn = document.getElementById('backToTop');
+  window.addEventListener('scroll', function() {
+    btn.classList.toggle('visible', window.scrollY > 400);
+  }, { passive: true });
+  btn.addEventListener('click', function() {
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+  });
+
+  // --- TOC search/filter ---
+  var searchInput = document.getElementById('tocSearch');
+  searchInput.addEventListener('input', function() {
+    var q = this.value.toLowerCase().trim();
+    var allItems = sidebar.querySelectorAll('.sidebar-nav li');
+    allItems.forEach(function(li) {
+      var text = li.textContent.toLowerCase();
+      li.style.display = (!q || text.indexOf(q) !== -1) ? '' : 'none';
+      // If a match, ensure parent <li>s are visible too
+      if (!q || text.indexOf(q) !== -1) {
+        var parent = li.parentElement.closest('li');
+        while (parent) {
+          parent.style.display = '';
+          parent = parent.parentElement.closest('li');
+        }
+      }
+    });
+    // If filtering, expand all sub-lists so matches are visible
+    if (q) {
+      sidebar.querySelectorAll('.sidebar-nav ul').forEach(function(ul) {
+        ul.style.display = 'block';
+      });
+      sidebar.querySelectorAll('.toc-toggle').forEach(function(t) {
+        t.textContent = '\u25BC';
+      });
+    }
+  });
+
+  // --- Smooth scroll for anchor links ---
+  document.querySelectorAll('a[href^="#"]').forEach(function(a) {
+    a.addEventListener('click', function(e) {
+      var target = document.getElementById(this.getAttribute('href').slice(1));
+      if (target) {
+        e.preventDefault();
+        target.scrollIntoView({ behavior: 'smooth', block: 'start' });
+        history.pushState(null, '', this.getAttribute('href'));
+      }
+    });
+  });
+
+  // --- Collapsible sidebar sections ---
+  sidebar.querySelectorAll('.sidebar-nav li').forEach(function(li) {
+    var subUl = li.querySelector(':scope > ul');
+    if (!subUl) return;
+
+    var link = li.querySelector(':scope > a');
+    if (!link) return;
+
+    var tog = document.createElement('span');
+    tog.className = 'toc-toggle';
+    tog.textContent = '\u25B6';
+    li.classList.add('has-children');
+    link.prepend(tog);
+
+    subUl.style.display = 'none';
+
+    tog.addEventListener('click', function(e) {
+      e.preventDefault();
+      e.stopPropagation();
+      var open = subUl.style.display !== 'none';
+      subUl.style.display = open ? 'none' : 'block';
+      tog.textContent = open ? '\u25B6' : '\u25BC';
+    });
+  });
+
+  // Expand the section containing the current hash
+  if (window.location.hash) {
+    var activeLink = sidebar.querySelector('a[href="' + window.location.hash + '"]');
+    if (activeLink) {
+      var parent = activeLink.closest('ul');
+      while (parent && parent !== sidebar) {
+        parent.style.display = 'block';
+        var t = parent.parentElement.querySelector(':scope > a .toc-toggle');
+        if (t) t.textContent = '\u25BC';
+        parent = parent.parentElement.closest('ul');
+      }
+    }
+  }
+  // --- Syntax highlighting via highlight.js ---
+  hljs.highlightAll();
+})();
+</script>
+
+</body>
+</html>

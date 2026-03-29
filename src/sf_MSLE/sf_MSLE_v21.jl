@@ -1042,7 +1042,11 @@ function sfmodel_MSLE_init(;
 
     # Mode 2: Component mode - user supplies individual parameters
     if frontier === nothing
-        error("Either `init` (full vector) or `frontier` (with other components) must be provided.")
+        # Default to OLS estimates for frontier coefficients
+        frontier = spec.frontier \ spec.depvar
+        if message
+            @info "Using OLS estimates as default initial values for frontier coefficients."
+        end
     end
 
     # Convert all inputs to Vector{Float64} (or nothing)

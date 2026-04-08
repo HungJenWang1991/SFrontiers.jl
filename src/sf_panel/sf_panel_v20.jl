@@ -2200,9 +2200,8 @@ end
 # ============================================================================
 
 """
-    sfmodel_panel_init(; spec::PanelModelSpec, init=nothing, frontier=nothing, delta=nothing,
-                         ln_sigma_u_sq=nothing, ln_sigma_v_sq=nothing,
-                         mu=nothing, ln_lambda=nothing, ln_k=nothing,
+    sfmodel_panel_init(; spec::PanelModelSpec, init=nothing, frontier=nothing, scaling=nothing,
+                         ln_sigma_v_sq=nothing, mu=nothing, ln_lambda=nothing, ln_k=nothing,
                          ln_sigma_sq=nothing, ln_alpha=nothing, ln_theta=nothing)
 
 Create initial parameter vector for panel estimation.
@@ -2211,13 +2210,12 @@ Create initial parameter vector for panel estimation.
 - `spec::PanelModelSpec`: Model specification from `sfmodel_panel_spec()`
 - `init=nothing`: Complete initial-value vector (overrides all component args)
 - `frontier=nothing`: Initial values for frontier coefficients (default: OLS on demeaned data)
-- `delta=nothing`: Initial values for h(z) coefficients (default: 0.1)
+- `scaling=nothing`: Initial values for h(z) coefficients (default: 0.1)
 - Distribution-specific keyword arguments (used when matching the distribution):
-  - `ln_sigma_u_sq`: HalfNormal, TruncatedNormal
+  - `ln_sigma_sq`: HalfNormal, TruncatedNormal, Lognormal, Rayleigh
   - `mu`: TruncatedNormal, Lognormal
   - `ln_lambda`: Exponential, Weibull, Lomax
   - `ln_k`: Weibull, Gamma
-  - `ln_sigma_sq`: Lognormal, Rayleigh
   - `ln_alpha`: Lomax
   - `ln_theta`: Gamma
   - `ln_sigma_v_sq`: all distributions
@@ -2228,8 +2226,7 @@ Create initial parameter vector for panel estimation.
 function sfmodel_panel_init(; spec::PanelModelSpec,
                               init=nothing,
                               frontier=nothing,
-                              delta=nothing,
-                              ln_sigma_u_sq=nothing,
+                              scaling=nothing,
                               ln_sigma_v_sq=nothing,
                               mu=nothing,
                               ln_lambda=nothing,
@@ -2271,16 +2268,12 @@ function sfmodel_panel_init(; spec::PanelModelSpec,
     if frontier !== nothing
         init_vec[idx.beta] .= Float64.(vec(frontier))
     end
-    if delta !== nothing
-        init_vec[idx.delta] .= Float64.(vec(delta))
+    if scaling !== nothing
+        init_vec[idx.delta] .= Float64.(vec(scaling))
     end
     if ln_sigma_v_sq !== nothing
         val = ln_sigma_v_sq isa Number ? ln_sigma_v_sq : first(ln_sigma_v_sq)
         init_vec[idx.ln_sigma_v_sq] = Float64(val)
-    end
-    if ln_sigma_u_sq !== nothing && haskey(idx, :ln_sigma_u_sq)
-        val = ln_sigma_u_sq isa Number ? ln_sigma_u_sq : first(ln_sigma_u_sq)
-        init_vec[idx.ln_sigma_u_sq] = Float64(val)
     end
     if mu !== nothing && haskey(idx, :mu)
         val = mu isa Number ? mu : first(mu)
@@ -2294,9 +2287,15 @@ function sfmodel_panel_init(; spec::PanelModelSpec,
         val = ln_k isa Number ? ln_k : first(ln_k)
         init_vec[idx.ln_k] = Float64(val)
     end
-    if ln_sigma_sq !== nothing && haskey(idx, :ln_sigma_sq)
-        val = ln_sigma_sq isa Number ? ln_sigma_sq : first(ln_sigma_sq)
-        init_vec[idx.ln_sigma_sq] = Float64(val)
+    if ln_sigma_sq !== nothing
+        if haskey(idx, :ln_sigma_sq)
+            val = ln_sigma_sq isa Number ? ln_sigma_sq : first(ln_sigma_sq)
+            init_vec[idx.ln_sigma_sq] = Float64(val)
+        end
+        if haskey(idx, :ln_sigma_u_sq)
+            val = ln_sigma_sq isa Number ? ln_sigma_sq : first(ln_sigma_sq)
+            init_vec[idx.ln_sigma_u_sq] = Float64(val)
+        end
     end
     if ln_alpha !== nothing && haskey(idx, :ln_alpha)
         val = ln_alpha isa Number ? ln_alpha : first(ln_alpha)
@@ -2894,8 +2893,8 @@ result = sfmodel_panel_fit(
 init = sfmodel_panel_init(
     spec          = spec,
     frontier      = [0.8, -0.3],   # override OLS-based β
-    delta         = [0.2],         # override default δ
-    ln_sigma_u_sq = 0.5,           # override default ln(σ_u²)
+    scaling       = [0.2],         # override default δ
+    ln_sigma_sq   = 0.5,           # override default ln(σ²)
     ln_sigma_v_sq = -0.5           # override default ln(σ_v²)
 )
 

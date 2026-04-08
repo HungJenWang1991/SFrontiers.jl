@@ -741,8 +741,8 @@ availability (MCI > MSLE > MLE).
 **Cross-sectional keyword arguments (MLE):** `init`, `frontier`, `mu`,
 `ln_sigma_u_sq`, `ln_sigma_v_sq`, `hscale`, `message`.
 
-**Panel TFE keyword arguments (Panel_Backend):** `init`, `frontier`, `delta`, `mu`,
-`ln_sigma_u_sq`, `ln_sigma_v_sq`, `ln_lambda`, `ln_k`, `ln_sigma_sq`,
+**Panel TFE keyword arguments (Panel_Backend):** `init`, `frontier`, `scaling`, `mu`,
+`ln_sigma_sq`, `ln_sigma_v_sq`, `ln_lambda`, `ln_k`,
 `ln_alpha`, `ln_theta`.
 
 **Panel TFE_CSW/TRE keyword arguments (MLE):** `init`, `frontier`, `mu`,
@@ -1112,7 +1112,7 @@ Compute or assemble initial values for the panel model.
 
 # Arguments
 - `spec`: Panel model specification from `sfmodel_panel_spec()`.
-- Keyword overrides: `frontier`, `delta`, `ln_sigma_u_sq`, `ln_sigma_v_sq`.
+- Keyword overrides: `frontier`, `scaling`, `ln_sigma_sq`, `ln_sigma_v_sq`.
 
 # Returns
 `Vector{Float64}` of initial parameter values.

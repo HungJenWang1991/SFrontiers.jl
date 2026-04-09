@@ -3,237 +3,212 @@ marp: false
 ---
 # SFrontiers.jl: Stochastic Frontier Model Estimation: Simulation-Based and Analytic Methods
 
-
 ## User Manual for Julia Implementation
 
-**Version 2**<br>
 **&copy; Hung-Jen Wang**<br>
 **wangh@ntu.edu.tw**
 
 ---
 
+## What is it
+
+**SFrontiers.jl** is a Julia package for flexible estimation of stochastic frontier models. Instead of limiting users to a small set of models with closed-form likelihoods, it provides simulation-based methods that make it practical to work with a much wider range of distributional assumptions, including three choices for the noise component (v) and eight choices for the inefficiency component (u), as well as copula dependence and selected panel-data settings, all within a unified workflow. It also takes advantage of automatic differentiation and GPU acceleration for accurate and efficient estimation.
+
+---
+
 ## Table of Contents
 
-0. [Theoretical Presentation](#0-theoretical-presentation)
-1. [Introduction](#1-introduction)
-2. [Software and Hardware Requirements](#2-software-and-hardware-requirements)
-3. [Installation and Dependencies](#3-installation-and-dependencies)
-4. [Quick Start Example](#4-quick-start-example)
-5. [Function Reference](#5-function-reference)
-   - 5.1 [sfmodel_spec()](#51-sfmodel_spec)
-   - 5.2 [sfmodel_method()](#52-sfmodel_method)
-   - 5.3 [sfmodel_init()](#53-sfmodel_init)
-   - 5.4 [sfmodel_opt()](#54-sfmodel_opt)
-   - 5.5 [sfmodel_fit()](#55-sfmodel_fit)
-   - 5.6 [sfmodel_MixTable() and sfmodel_ChiSquareTable()](#56-sfmodel_mixtable-and-sfmodel_chisquaretable)
-6. [Supported Models](#6-supported-models)
-7. [Distributions Reference](#7-distributions-reference)
-   - 7.1 [Distribution Selection Guidance](#71-distribution-selection-guidance)
-8. [Working with Results](#8-working-with-results)
-   - 8.1 [Interpreting Estimation Results](#81-interpreting-estimation-results)
-9. [Advanced Topics](#9-advanced-topics)
-   - 9.1 [Copula Interpretation Guide](#91-copula-interpretation-guide)
-   - 9.2 [Cost Frontier Interpretation](#92-cost-frontier-interpretation)
-10. [Panel Data Models](#10-panel-data-models)
+1. [Introduction](#introduction)
+2. [Hardware and Software Requirements](#hardware-and-software-requirements)
+3. [Installation and Dependencies](#installation-and-dependencies)
+4. [Quick Start and Reference Example](#quick-start-and-reference-example)
+5. [A Detailed Empirical Example](#a-detailed-empirical-example)
+6. [API Reference](#api-reference)
+   - 6.1 [sfmodel_spec()](#sfmodel_spec)
+   - 6.2 [sfmodel_method()](#sfmodel_method)
+   - 6.3 [sfmodel_init()](#sfmodel_init)
+   - 6.4 [sfmodel_opt()](#sfmodel_opt)
+   - 6.5 [sfmodel_fit()](#sfmodel_fit)
+   - 6.6 [sfmodel_MixTable() and sfmodel_ChiSquareTable()](#sfmodel_mixtable-and-sfmodel_chisquaretable)
+7. [Supported Models](#supported-models)
+   - [Distribution Selection Guidance](#distribution-selection-guidance)
+8. [Working with Results](#working-with-results)
+9. [Special Topics](#special-topics)
+    - 9.1 [Choosing Between MLE, MCI, and MSLE](#choosing-between-mle-mci-and-msle)
+    - 9.2 [GPU Computation](#gpu-computation)
+    - 9.3 [Copula Models](#copula-models)
+    - 9.4 [Scaling Property Model (Cross-Sectional)](#scaling-property-model-cross-sectional)
+    - 9.5 [Cost Frontier Models](#cost-frontier-models)
+    - 9.6 [Choosing the Number of Halton Draws](#choosing-the-number-of-halton-draws)
+    - 9.7 [Observation-Specific Halton Draws (multiRand)](#observation-specific-halton-draws-multirand)
+    - 9.8 [Custom Draw Sequences](#custom-draw-sequences)
+    - 9.9 [Handling Convergence Issues](#handling-convergence-issues)
+10. [Panel Data Models](#panel-data-models)
 
 ---
 
-## 0. Theoretical Presentation
 
-The stochastic frontier (SF) model was first proposed by Aigner et al. (1977) in which the inefficiency is assumed to have a half-normal distribution. The MLE was suggested as the estimation method, which has since then been the dominating method in the parametric SF literature.
-
-Greene (2003) is the first well-known study that used the simulation-based method to estimate stochastic frontier models. He considered models with complex joint densities that are difficult to derive analytically, and therefore he resorted to simulation-based approaches. Since then, simulation-based MLE has been adopted widely in the econometric literature, particularly for estimating discrete choice models and panel data models.
-
-Consider the standard stochastic frontier specification
-
-$$
-\begin{align}
-y_i &= x_i'\beta + \epsilon_i, \\
-\epsilon_i &= v_i - u_i,
-\end{align}
-$$
-
-where $v_i$ is the noise term and $u_i \ge 0$ is the inefficiency term. The density of the composed error $\epsilon_i$ is
-
-$$
-\begin{align}
-   f(\varepsilon_i \mid \theta)
-     & = \int_0^\infty f_{v}(\varepsilon_i + u_i \mid \theta)\, f_u(u_i \mid \theta)\, d u_i \notag \\
-     & = \mathbb{E}_{f_u(u \mid \theta)} \left[ f_{v}(\varepsilon_i + u_i \mid \theta)  \right].
-\end{align}
-$$
-
-The log-likelihood of the model is
-
-$$
-\begin{align}
-   \ln L & = \sum_{i=1}^N \ln \mathbb{E}_{f_u(u \mid \theta)} \left[ f_{v}(\varepsilon_i + u_i \mid \theta)  \right].
-\end{align}
-$$
-
-In estimation, the expected value is approximated by its empirical counterpart using quasi-random draws $u_i^{(s)}$, $s = 1, \ldots, S$:
-
-$$
-\mathbb{E}_{f_u(u \mid \theta)} \left[ f_{v}(\varepsilon_i + u_i \mid \theta)  \right] \approx
-\frac{1}{S}\sum_{s=1}^S  f_{v}(\varepsilon_i + u_i^{(s)} \mid \theta).
-$$
-
-This module provides two approaches for generating the draws $u_i^{(s)}$:
-
-### MSLE (Maximum Simulated Likelihood Estimation)
-
-The MSLE approach uses the **inverse CDF (quantile function)** of $f_u$ to generate draws. Given a set of Halton draws $t^{(s)} \in (0,1)$, the inefficiency draws are obtained as
-
-$$
-u_i^{(s)} = F_u^{-1}(t^{(s)} \mid \theta),
-$$
-
-where $F_u^{-1}$ is the quantile function of the inefficiency distribution.
-
-### MCI (Monte Carlo Integration)
-
-The MCI approach uses a **change-of-variable transformation** to map uniform draws to the support of $u$. Given a transformation function $g$ and Halton draws $t^{(s)} \in (0,1)$, the integral is rewritten as
-
-$$
-\int_0^\infty f_{v}(\varepsilon_i + u)\, f_u(u)\, du
-= \int_0^1 f_{v}(\varepsilon_i + g(t, s_i))\, f_u(g(t, s_i))\, |g'(t, s_i)|\, dt,
-$$
-
-where $s_i$ is a scale parameter derived from the inefficiency distribution's parameters for observation $i$, and $g'$ is the Jacobian of the transformation. The MCI approach supports several transformation rules (see [Section 5.2](#52-sfmodel_method)).
-
-As shown by Wang (2025), MSLE is a special case of MCI. When the quantile function is used as the transformation rule, the Jacobian reduces to $\frac{1}{f_u(g(t,s_i))}$, which cancels the density term and yields the familiar MSLE equation.
-
----
+<a id="introduction"></a>
 
 ## 1. Introduction
 
-This package provides a unified framework for estimating stochastic frontier (SF) models via simulation-based likelihood evaluation and, for a limited subset of models, analytic maximum likelihood estimation (MLE). The simulation-based methods -- Maximum Simulated Likelihood Estimation (MSLE) and Monte Carlo Integration (MCI) -- support a broad class of distributional and dependence specifications. For the classical Normal–HalfNormal, Normal–TruncatedNormal, and Normal–Exponential models, closed-form analytic MLE is also available.
+This package provides a unified framework for estimating stochastic frontier (SF) models via simulation-based likelihood evaluation and, for a limited subset of models, analytic maximum likelihood estimation (MLE). The simulation-based methods, including the Maximum Simulated Likelihood Estimation (MSLE) and Monte Carlo Integration (MCI), support a broad class of distributional and dependence specifications. For the classical Normal–half-normal, Normal–truncated-normal, and Normal–Exponential models, closed-form analytic MLE is also available. 
 
-### Key features include:
+To address the traditional drawbacks of simulation-based estimation, the package uses automatic differentiation for numerical accuracy and GPU computing for speed. Monte Carlo evidence in Wang and Cheng (2026) shows that the resulting estimators achieve bias and RMSE comparable to those of analytic maximum likelihood estimators where such benchmarks exist.
+
+For the theoretical background of the methods, see Wang and Cheng~(2026).
+
+### Key features of the package:
 
 * **Three estimation methods:** Maximum Simulated Likelihood Estimation (MSLE), Monte Carlo Integration (MCI), and Analytic Maximum Likelihood Estimation (MLE).
 
-  - **MSLE** and **MCI** are simulation-based, using quasi Monte Carlo (QMC) draws with Halton sequences. As shown in Wang (2025), MSLE is a special case of MCI. The two names are retained here following conventions in the literature. They support all 8 inefficiency distributions, up to 3 noise distributions, and copula dependence.
-  - **MLE** uses closed-form log-likelihoods — no simulation draws are needed, making it fast and exact. It is available for a limited subset of models: Normal noise with HalfNormal, TruncatedNormal, or Exponential inefficiency (no copula).
-* **Cross-sectional and panel data:** In addition to cross-sectional models, the module supports several panel stochastic frontier models:
+  - **MSLE** and **MCI** are simulation-based, using Halton base-2 sequence as the quasi Monte Carlo (QMC) draws. As shown in Wang and Cheng (2026), MSLE is a special case of MCI. The two names are retained here following conventions in the literature. 
+ 
 
-  - `datatype=:panel_TFE` — Wang and Ho (2010) true fixed-effect model. Supports MCI, MSLE, and MLE (HalfNormal/TruncatedNormal only for MLE).
-  - `datatype=:panel_TFE_CSW` — Chen, Schmidt, and Wang (2014) fixed-effect model. MLE only, HalfNormal only.
-  - `datatype=:panel_TRE` — True random-effect model. MLE only, HalfNormal or TruncatedNormal.
+  - **MLE** uses closed-form log-likelihoods — no simulation draws are needed, making it fast and exact. 
 
-  See [Section 10](#10-panel-data-models) for details.
-* **A large set of noise ($v$) and inefficiency ($u$) combinations:** For cross-sectional models (`datatype=:cross_sectional`), any combinations between the following sets are supported:
+* **Distributional flexibility for cross-sectional models:** For cross-sectional models (`datatype=:cross_sectional` in `sfmodel_spec()`), combinations between the following sets are supported using MSLE and MCI:
+  - $v$: Normal, Student T, and Laplace distributions.
+  - $u$: half-normal, truncated-normal, Exponential, Weibull, Lognormal, Lomax, Rayleigh, and Gamma distributions.
 
-  - $v$: Normal, Student T, and Laplace (cross-sectional); Normal only (panel)
-  - $u$: Half Normal, Truncated Normal, Exponential, Weibull, Lognormal, Lomax, Rayleigh, and Gamma distributions.
+  MCI supports all 8 inefficiency distributions, and MSLE supports all except Gamma (MSLE requires the quantile function, but the Gamma distribution lacks a closed-form inverse CDF; MCI avoids this via a change-of-variables approach). MLE is limited to half-normal, truncated-normal, and Exponential with Normal noise.
 
-  MCI supports all 8 inefficiency distributions (including Gamma, which is MCI-only). MSLE supports all except Gamma. MLE is limited to HalfNormal, TruncatedNormal, and Exponential with Normal noise.
+ * **Distributional flexibility for panel-data Models:** For panel data models, the noise ($v$) distribution is always fixed at the normal distribution. The package currently supports the following types of panel stochastic frontier models:
+   - `datatype=:panel_TFE` — Wang and Ho (2010) true fixed-effect model. Supports MCI, MSLE, and MLE (half-normal/truncated-normal only for MLE). The simulation-based panel model accommodates all 8 $u$ distributions via MCI/MSLE. 
+   - `datatype=:panel_TFE_CSW` — Chen, Schmidt, and Wang (2014) fixed-effect model. MLE only, half-normal only.
+   - `datatype=:panel_TRE` — True random-effect model. MLE only, half-normal or truncated-normal.
 
-  For panel data models, the noise ($v$) distribution is fixed at the Normal distribution. The simulation-based panel model (`datatype=:panel_TFE`) accommodates all 8 $u$ distributions via MCI/MSLE. The MLE-only panel models (`datatype=:panel_TFE_CSW`, `:panel_TRE`) support a subset (see [Section 10](#10-panel-data-models)).
-* **Copula dependence (cross-sectional only):** Gaussian, Gumbel, Clayton, and 90°-rotated Clayton copula support for modeling dependence between noise $v$ and inefficiency $u$, with automatic computation of the dependence parameter and Kendall's $\tau$.
+   See [Section 10](#panel-data-models) for details.
 
-  - Exception: When $v$ is Student T, the copula is not supported.
-  - Note: Copula models are not available for panel data.
+  
+* **Copula dependence (cross-sectional only):** Gaussian, Gumbel, Clayton, and 90°-rotated Clayton copula support for modeling dependence between noise $v$ and inefficiency $u$ for cross-sectional models, with automatic computation of the dependence parameter and Kendall's $\tau$. Copulas are not available for panel data models.
+
+  - Exception: When $v$ is Student T, the copula is not supported (the copula density requires evaluating the Student-t CDF, to which its standard implementation is not compatible with the automatic differentiation used in the package).
+
 * **Heteroscedastic inefficiency specifications:** For cross-sectional models, the parameters of the inefficiency distribution can be modeled as functions of covariates, consistent with common practice in modern SF applications. Cross-sectional models also support the **scaling property model** $u_i = h(\mathbf{z}_i) \cdot u_i^*$, where $h(\mathbf{z}_i) = \exp(\mathbf{z}_i'\boldsymbol{\delta})$ and $u_i^*$ follows a homoscedastic base distribution. For panel data models, heterogeneity enters via the same scaling function $h(z_{it}) = \exp(z_{it}'\delta)$.
 * **Compute important statistics and quantities:** For every model estimation, it automatically computes important statistics and quantities for post-estimation analysis. For instance, the inefficiency (JLMS) and efficiency (BC) index, the marginal effects of the determinants of inefficiency, the corresponding OLS loglikelihood values and the skewness of OLS residuals.
-* **CPU or GPU execution:** Numerical/simulation methods typically require a large number of draws for accuracy, making computation costly on the CPU. GPU execution substantially reduces runtime in such settings and makes applications practical.
-* **Automatic differentiation (AD):** The module uses AD to compute derivatives for gradient-based optimization. For the differentiable computations, AD is algebraically equivalent to analytic differentiation and typically attains near machine-precision accuracy in floating-point arithmetic. AD is significantly more reliable than finite-difference methods. The improved accuracy is especially important for maintaining numerical stability in challenging optimization problems.
-
-### Estimation proceeds in five steps:
-
-1. **Specify** the model using `sfmodel_spec()`.
-2. **Choose** the estimation method using `sfmodel_method()`.
-3. **Initialize** parameters using `sfmodel_init()`.
-4. **Configure** optimization using `sfmodel_opt()`.
-5. **Estimate** the model using `sfmodel_fit()`.
+* **CPU and GPU execution:** Simulation-based methods typically require a large number of Monte Carlo draws for accuracy, making computation costly on the CPU. GPU execution substantially reduces runtime in such settings and makes applications practical.
+* **Automatic differentiation (AD):** The module uses AD to compute derivatives for gradient-based optimization. For the differentiable computations, AD is algebraically equivalent to analytic differentiation and typically attains near machine-precision accuracy in floating-point arithmetic. The improved accuracy is especially important for maintaining numerical stability in challenging optimization problems.
+* **Estimation with a unified five-step procedures:** Some of the steps are optional.
+  - **Specify** the model using `sfmodel_spec()`.
+  - **Choose** the estimation method using `sfmodel_method()`.
+  - **Initialize** parameters using `sfmodel_init()`.
+  - **Configure** optimization using `sfmodel_opt()`.
+  - **Estimate** the model using `sfmodel_fit()`.
 
 ---
 
-## 2. Software and Hardware Requirements
+<a id="hardware-and-software-requirements"></a>
 
-### 2.1 Software
+## 2. Hardware and Software Requirements
 
-* **Julia,** which is a free and open-source programming language. A recent stable release is recommended. Julia 1.10 or later is required for GPU execution via CUDA.jl. The `Optim` package (used for maximum likelihood estimation) requires version 2.0 or above. ([julialang.org](https://julialang.org/))
-* **NVIDIA driver and CUDA.jl (optional).** GPU execution requires a compatible NVIDIA driver to be installed on the system. The Julia package CUDA.jl provides the programming interface and can be installed on any machine, but it relies on the NVIDIA driver at run time. The package also supports CPU-only execution, which does not require the driver or CUDA.jl. ([cuda.juliagpu.org](https://cuda.juliagpu.org/stable/installation/overview/))
+### 2.1 Hardware
 
-### 2.2 Hardware
+* **CPU execution.** Any modern personal computer supported by Julia is sufficient for CPU-only estimation. Runtime will scale with the number of observations and the number of Monte Carlo draws.
+* **GPU execution (optional but higly recommended for MSLE and MCI methods).** Requires NVIDIA GPU. The GPU memory requirements increase with the number of draws and changes with the degree of batching. In practice, larger datasets and larger numbers of simulation draws require larger VRAM. Nevertheless, if VRAM is limited, data can be divided into several chunks (by the `chunks` option in `sfmodel_method()`) and process each chunk sequentially.
 
-* **CPU execution.** Any modern personal computer supported by Julia is sufficient for CPU-only estimation. Runtime will scale with the number of observations, the number of parameters, and the number of QMC draws.
-* **GPU execution (optional).** Requires NVIDIA GPU. The GPU memory requirements increase with the number of draws and the degree of batching. In practice, larger VRAM allows larger draw blocks and reduces the need for chunking. In estimation, the number of batches/chunks is set by the `chunks` option in `sfmodel_method()`.
+
+
+### 2.2 Software
+
+* **Julia,** which is a free and open-source programming language. A recent stable release is recommended. Julia 1.10 or later is required for GPU execution via CUDA.jl. ([julialang.org](https://julialang.org/))
+* **Optim.jl,** the optimization package used by SFrontiers.jl for maximum likelihood estimation. Version 2.0 or above is required. It must be loaded (`using Optim`) alongside SFrontiers in every session.
+* **NVIDIA driver and CUDA.jl (optional).** In addition to a physical GPU unit, GPU execution also requires a compatible NVIDIA driver installed on the machine, and CUDA.jl installed in Julia. The package also supports CPU-only execution, which does not require the driver or CUDA.jl. ([cuda.juliagpu.org](https://cuda.juliagpu.org/stable/installation/overview/))
+
+
 
 ---
+
+<a id="installation-and-dependencies"></a>
 
 ## 3. Installation and Dependencies
 
-SFrontiers.jl is a registered Julia package. Install it from the Julia package manager:
+SFrontiers.jl is a registered Julia package. Install it from Julia using the built-in package manager `Pkg`:
 
 ```julia
 using Pkg
 Pkg.add("SFrontiers")
 ```
 
-
-To load the package:
-
-```julia
-using SFrontiers
-```
-
-### GPU Support (Optional)
-
-CUDA.jl is **not** a required dependency. It is only needed if you want GPU-accelerated estimation via `sfmodel_method(method=:MCI, GPU=true)` or `sfmodel_method(method=:MSLE, GPU=true)`. MLE estimation does not use GPU.
-
-> **Important:** If you plan to use GPU features, CUDA.jl must be loaded **before** SFrontiers.jl. This is because SFrontiers conditionally detects CUDA at load time and registers GPU function overloads only if CUDA is already available.
+### Load SFrontiers.jl and the required package for CPU-only computing: 
 
 ```julia
-# Correct order for GPU usage:
-using CUDA          # Load CUDA first
-using SFrontiers    # Then load SFrontiers
-
 # CPU-only usage (no CUDA needed):
 using SFrontiers
+using Optim
 ```
 
-If CUDA is loaded after SFrontiers, GPU features will not be available and you will need to restart Julia and load them in the correct order.
+### Load the packages for GPU computing:
+
+```julia
+# GPU usage:
+using CUDA          # Load CUDA first
+using SFrontiers    # Then load SFrontiers
+using Optim
+
+```
+
+> **Note 1:** CUDA.jl is needed only if you want GPU-accelerated estimation via `sfmodel_method(method=:MCI, GPU=true)` or `sfmodel_method(method=:MSLE, GPU=true)`. MLE estimation does not use GPU.
+
+> **Note 2:** If you plan to use GPU features, CUDA.jl must be loaded **before** SFrontiers.jl. This is because SFrontiers conditionally detects CUDA at load time and registers GPU function overloads only if CUDA is already available. If CUDA is loaded after SFrontiers, GPU features will not be available and you will need to restart Julia and load them in the correct order.
+
 
 ---
 
-## 4. Quick Start Example
+<a id="quick-start-and-reference-example"></a>
+
+## 4. Quick Start and Reference Example
+
+Here we show a complete five-step estimation example. Some steps are optional and can be skipped; more examples latter.
 
 ```julia
-using CSV, DataFrames
 using CUDA
 using SFrontiers
+using Optim
+using CSV, DataFrames
 
-# Load data
-df = CSV.read("sampledata.csv", DataFrame)
-y = df.y
+# Load data. The csv has column names y, x1, x2, and x3 that are used as variable names.
+df = CSV.read("demodata.csv", DataFrame)
+yvar = df.y
 X = hcat(ones(length(y)), df.x1, df.x2)  # Frontier variables (include constant)
-Z = hcat(ones(length(y)), df.z1)          # Inefficiency determinants
+Z = hcat(ones(length(y)), df.x3)          # Inefficiency determinants
 
 # Step 1: Specify the model
 myspec = sfmodel_spec(
-    depvar = y,                # dependent variable; a vector
+    type = :production,        # for production frontier; alt. :cost
+    depvar = yvar,             # dependent variable; a vector
     frontier = X,              # matrix of X vars in frontier
     zvar = Z,                  # matrix of Z vars for inefficiency
     noise = :Normal,           # dist of v
     ineff = :TruncatedNormal,  # dist of u
     hetero = [:mu, :sigma_sq], # heteroscedastic of u's μ & σ²
-    type = :production         # for production frontier; alt. :cost
+)
+
+# alternative Step 1: DSL style using DataFrame column names
+df._cons = ones(nrow(df))      # create a constant column first
+myspec_alt = sfmodel_spec(
+    type = :production,
+    @useData(df),
+    @depvar(y),                # column name in df
+    @frontier(_cons, x1, x2),  # column names 
+    @zvar(_cons, x3),          # column names
+    noise = :Normal,
+    ineff = :TruncatedNormal,
+    hetero = [:mu, :sigma_sq],
 )
 
 # Step 2: Choose the estimation method
 mymeth = sfmodel_method(
     method = :MSLE,           # :MLE, :MSLE, or :MCI
-    n_draws = 2^12 - 1,       # number of Halton draws
+    n_draws = 2^12,           # number of Halton draws per obs
     GPU = true,               # use GPU; default is `false` thus CPU
-    chunks = 10               # for GPU memory management; the default
+    chunks = 10               # for GPU memory management; default 10
 )
 
 # Step 3: Set initial values
 myinit = sfmodel_init(
     spec = myspec,              # from sfmodel_spec()
-    frontier = X \ y,           # OLS estimates
+    frontier = X \ yvar,        # OLS estimates
     mu = zeros(size(Z, 2)),     # μ coefficients
     ln_sigma_sq = zeros(size(Z, 2)),  # ln(σ²) coefficients
     ln_sigma_v_sq = [0.0]       # ln(σᵥ²)
@@ -263,17 +238,407 @@ println("BC efficiency index: ", result.bc)
 println("Marginal Effects of Z: ", result.marginal)
 ```
 
-> **MLE alternative:** For models with Normal noise and HalfNormal, TruncatedNormal, or Exponential inefficiency, analytic MLE is available and requires no simulation settings:
-> ```julia
-> mymeth_mle = sfmodel_method(method = :MLE)  # no draws, GPU, or chunks needed
-> result_mle = sfmodel_fit(spec = myspec, method = mymeth_mle, init = myinit, optim_options = myopt)
-> ```
+For models with Normal noise and half-normal, truncated-normal, or Exponential inefficiency, analytic MLE is available and requires no simulation settings:
+
+```julia
+mymeth_mle = sfmodel_method(method = :MLE)  # no draws, GPU, or chunks needed
+result_mle = sfmodel_fit(spec = myspec, 
+                         method = mymeth_mle, 
+                         init = myinit, 
+                         optim_options = myopt)
+```
 
 ---
 
-## 5. Function Reference
+<a id="a-detailed-empirical-example"></a>
 
-### 5.1 sfmodel_spec()
+## 5. A Detailed Empirical Example
+
+We replicate the empirical study of Wang (2002) using the same dataset to walk through the full specification and estimation process. The model is a cross-sectional stochastic production frontier with **normal noise and truncated-normal inefficiency**, where both $\mu$ and $\sigma_u^2$ of the inefficiency distribution are parameterized by exogenous determinants.
+
+Although this model admits a closed-form MLE (which was used by Wang 2002), we demonstrate estimation via MSLE to illustrate the simulation-based workflow. The MSLE estimates are extremely close to those of MLE in this example, with most of the estimates typically agreeing to at least 5 decimal places.
+
+
+### Model Setup
+
+The specification is the follows:
+
+$$
+\begin{aligned}
+y_i &= x_i'\beta + \varepsilon_i, \\
+\varepsilon_i &= v_i - u_i, \\
+v_i &\sim N(0, \sigma_v^2), \\
+u_i &\sim N^+(\mu_i, \sigma_{u,i}^2), \\
+\mu_i &= z_i'\delta, \quad \sigma_{u,i}^2 = \exp(z_i'\gamma).
+\end{aligned}
+$$
+
+Here, $N^+(\mu, \sigma_u^2)$ denotes a truncated-normal distribution obtained by truncating $N(\mu, \sigma_u^2)$ from below at 0. The vector $z_i$ contains exogenous determinants of inefficiency. Wang (2002) parameterizes both $\mu$ and $\sigma_u^2$ by the same vector $z_i$, while Battese and Coelli (1995) parameterize only $\mu$.
+
+### Goals of Estimation
+
+Our goals include:
+
+
+- Estimate model parameters $\{\beta, \delta, \gamma, \sigma_v^2\}$.
+- Compute the JLMS inefficiency index $E[u_i \mid \varepsilon_i]$ and the Battese--Coelli efficiency index $E[\exp(-u_i) \mid \varepsilon_i]$ at the observation level.
+- Calculate the marginal effect of $z_i$ on $E(u_i)$.
+
+### Step 1: Load Data and Specify the Model
+
+The data is rice farmers' production in India. The dependent variable $y$ is annual rice production and $x$ is a vector of agricultural inputs.
+
+
+
+```julia
+using CUDA
+using SFrontiers
+using Optim
+using DataFrames, CSV
+
+df = CSV.read("sampledata.csv", DataFrame)
+df._cons = ones(nrow(df))    # create a column of ones for intercepts
+```
+
+Let's see what is in the data:
+
+```julia
+julia> describe(df)
+11×7 DataFrame
+ Row │ variable  mean       min       median    max       nmissing  eltype
+     │ Symbol    Float64    Real      Float64   Real      Int64     DataType
+─────┼───────────────────────────────────────────────────────────────────────
+   1 │ yvar       7.27812    3.58666   7.28586   9.80335         0  Float64
+   2 │ Lland      1.05695   -1.60944   1.14307   3.04309         0  Float64
+   3 │ PIland     0.146997   0.0       0.0       1.0             0  Float64
+   4 │ Llabor     6.84951    3.2581    6.72263   9.46622         0  Float64
+   5 │ Lbull      5.64161    2.07944   5.68358   8.37008         0  Float64
+   6 │ Lcost      4.6033     0.0       5.1511    8.73311         0  Float64
+   7 │ yr         5.38007    1         5.0      10               0  Int64
+   8 │ age       53.8856    26        53.0      90               0  Int64
+   9 │ school     2.02583    0         0.0      10               0  Int64
+  10 │ yr_1       5.38007    1         5.0      10               0  Int64
+  11 │ _cons      1.0        1         1.0       1               0  Int64
+```
+
+Now we specify the model using the DSL macros:
+
+```julia
+myspec = sfmodel_spec(
+    type   = :production,
+    @useData(df),
+    @depvar(yvar),
+    @frontier(_cons, Lland, PIland, Llabor, Lbull, Lcost, yr),
+    @zvar(_cons, age, school, yr),
+    noise  = :Normal,
+    ineff  = :TruncatedNormal,
+    hetero = [:mu, :sigma_sq],    # both μ and σ²_u depend on zvar
+)
+```
+
+- `@useData(df)` binds the DataFrame so that subsequent macros can reference column names.
+- `@depvar(yvar)` specifies the dependent variable column.
+- `@frontier(...)` and `@zvar(...)` list the column names for the frontier and inefficiency-determinant equations, respectively.
+- `hetero = [:mu, :sigma_sq]` tells the package that both $\mu$ and $\sigma_u^2$ of the truncated-normal inefficiency depend on `zvar`.
+
+
+
+**Alternative: using matrix data**
+
+If data comes from matrices rather than a DataFrame (common in simulation studies), use keyword arguments directly:
+
+```julia
+y = df.yvar
+X = hcat(ones(nrow(df)), df.Lland, df.PIland, df.Llabor, df.Lbull, df.Lcost, df.yr)
+Z = hcat(ones(nrow(df)), df.age, df.school, df.yr)
+
+myspec = sfmodel_spec(
+    type     = :production,
+    depvar   = y,         # dependent variable vector
+    frontier = X,         # covariate matrix (include constant column)
+    zvar     = Z,         # covariates for inefficiency determinants
+    noise    = :Normal,
+    ineff    = :TruncatedNormal,
+    hetero   = [:mu, :sigma_sq],
+    varnames = ["_cons", "Lland", "PIland", "Llabor", "Lbull", "Lcost", "yr",
+                "_cons", "age", "school", "yr",
+                "_cons", "age", "school", "yr",
+                "_cons"],  # optional; auto-generated if omitted
+)
+```
+
+### Step 2: Choose the Estimation Method
+
+```julia
+mymeth = sfmodel_method(
+    method  = :MSLE,     # or :MCI, :MLE
+    n_draws = 2^13,      # number of Halton draws per observation
+    GPU     = true       # set true for GPU acceleration
+)
+```
+
+- `:MSLE` uses inverse-CDF sampling; `:MCI` uses change-of-variables integration; `:MLE` uses the closed-form analytic likelihood (available for this model since it is normal--truncated-normal).
+- More draws improve accuracy at the cost of computation time. GPU acceleration (`GPU = true`) makes large draw counts practical.
+
+### Step 3: Set Initial Values (optional)
+
+```julia
+myinit = sfmodel_init(
+    spec          = myspec,
+    # frontier    = ...,          # skip to use OLS-based defaults
+    mu            = zeros(4),     # 4 coefficients in μ equation
+    ln_sigma_sq   = zeros(4),     # 4 coefficients in ln(σ²_u) equation
+    ln_sigma_v_sq = [0.0]         # 1 coefficient in ln(σ²_v)
+)
+```
+
+- The order of keyword arguments does not matter.
+- If `sfmodel_init()` is not called, the package uses OLS-based defaults for the frontier and zeros for the rest.
+- Initial values for variance parameters are on the log scale (e.g., `ln_sigma_v_sq = [0.0]` means the initial $\sigma_v^2 = \exp(0) = 1.0$).
+
+### Step 4: Configure the Optimizer (optional)
+
+An effective strategy for challenging problems is a two-stage approach: a gradient-free solver first to find a good neighborhood, then a gradient-based solver for precise convergence.
+
+```julia
+myopt = sfmodel_opt(
+    warmstart_solver = NelderMead(),
+    warmstart_opt    = (iterations = 200, g_abstol = 1e-5),
+    main_solver      = Newton(),
+    main_opt         = (iterations = 100, g_abstol = 1e-8)
+)
+```
+
+- `NelderMead()` (gradient-free) in the warm-start stage is robust to poor starting values.
+- `Newton()` (second-order, gradient-based) in the main stage converges quickly and precisely.
+- If `sfmodel_opt()` is not called, the package uses a sensible two-stage default.
+
+### Step 5: Estimate the Model
+
+```julia
+result = sfmodel_fit(
+    spec          = myspec,     # from sfmodel_spec()
+    method        = mymeth,     # from sfmodel_method()
+    init          = myinit,     # from sfmodel_init()
+    optim_options = myopt,      # from sfmodel_opt()
+    marginal      = true,       # compute marginal effects (default)
+    jlms_bc_index = true,       # compute efficiency indices (default)
+    show_table    = true        # print results to console (default)
+)
+```
+
+### Results and Post-Estimation Analysis
+
+After estimation, `sfmodel_fit()` prints a formatted summary to the console. Below is sample output from the paddy-farmer example:
+
+```
+*********************************
+      Estimation Results
+*********************************
+Method: MSLE
+Model type: noise=Normal, ineff=TruncatedNormal
+Heteroscedastic parameters: [:mu, :sigma_sq]
+Number of observations: 271
+Number of frontier regressors (K): 7
+Number of Z columns (L): 4
+Number of draws: 8192
+Frontier type: production
+GPU computing: true
+Number of iterations: 16
+Converged: true
+Log-likelihood: -82.01844
+
+┌──────────┬────────┬─────────┬──────────┬──────────┬────────┬─────────┬─────────┐
+│          │   Var. │   Coef. │ Std.Err. │        z │  P>|z| │ 95%CI_l │ 95%CI_u │
+├──────────┼────────┼─────────┼──────────┼──────────┼────────┼─────────┼─────────┤
+│ frontier │  _cons │  1.5430 │   0.3578 │   4.3127 │ 0.0000 │  0.8418 │  2.2443 │
+│          │  Lland │  0.2582 │   0.0725 │   3.5611 │ 0.0004 │  0.1161 │  0.4004 │
+│          │ PIland │  0.1718 │   0.1761 │   0.9753 │ 0.3303 │ -0.1734 │  0.5169 │
+│          │ Llabor │  1.1658 │   0.0840 │  13.8805 │ 0.0000 │  1.0012 │  1.3304 │
+│          │  Lbull │ -0.4215 │   0.0596 │  -7.0666 │ 0.0000 │ -0.5384 │ -0.3046 │
+│          │  Lcost │  0.0142 │   0.0128 │   1.1090 │ 0.2685 │ -0.0109 │  0.0394 │
+│          │     yr │  0.0183 │   0.0095 │   1.9226 │ 0.0556 │ -0.0004 │  0.0369 │
+│        μ │  _cons │  1.0415 │   0.7284 │   1.4298 │ 0.1540 │ -0.3862 │  2.4691 │
+│          │    age │ -0.0479 │   0.0303 │  -1.5804 │ 0.1153 │ -0.1073 │  0.0115 │
+│          │ school │ -0.2143 │   0.1712 │  -1.2521 │ 0.2117 │ -0.5497 │  0.1212 │
+│          │     yr │  0.1480 │   0.1248 │   1.1854 │ 0.2369 │ -0.0967 │  0.3926 │
+│   ln_σᵤ² │  _cons │ -1.1393 │   0.8902 │  -1.2798 │ 0.2018 │ -2.8842 │  0.6055 │
+│          │    age │  0.0256 │   0.0096 │   2.6653 │ 0.0082 │  0.0068 │  0.0445 │
+│          │ school │  0.1141 │   0.0569 │   2.0054 │ 0.0460 │  0.0026 │  0.2256 │
+│          │     yr │ -0.2256 │   0.0496 │  -4.5500 │ 0.0000 │ -0.3228 │ -0.1284 │
+│   ln_σᵥ² │ ln_σᵥ² │ -3.2668 │   0.2623 │ -12.4553 │ 0.0000 │ -3.7808 │ -2.7527 │
+└──────────┴────────┴─────────┴──────────┴──────────┴────────┴─────────┴─────────┘
+
+Log-parameters converted to original scale (σ² = exp(log_σ²)):
+┌─────┬────────┬──────────┐
+│     │  Coef. │ Std.Err. │
+├─────┼────────┼──────────┤
+│ σᵥ² │ 0.0381 │   0.0100 │
+└─────┴────────┴──────────┘
+
+Table format: text
+***** Additional Information *********
+* OLS (frontier-only) log-likelihood: -104.96993
+* Skewness of OLS residuals: -0.70351
+* The sample mean of the JLMS inefficiency index: 0.33416
+* The sample mean of the BC efficiency index: 0.74619
+
+* The sample mean of inefficiency determinants' marginal effects on E(u): (age = -0.00264, school = -0.01197, yr = -0.0265)
+* Marginal effects of the inefficiency determinants at the observational level are saved in the return. See the follows.
+
+* Use `name.list` to see saved results (keys and values) where `name` is the return specified in `name = sfmodel_MSLE_fit(..)`. Values may be retrieved using the keys. For instance:
+   ** `name.loglikelihood`: the log-likelihood value of the model;
+   ** `name.jlms`: Jondrow et al. (1982) inefficiency index;
+   ** `name.bc`: Battese and Coelli (1988) efficiency index;
+   ** `name.marginal`: a DataFrame with variables' (if any) marginal effects on E(u).
+* Use `keys(name.list)` to see available keys.
+**************************************
+```
+
+The returned `result` is a `NamedTuple` whose fields provide programmatic access to all outputs:
+
+**Key fields:**
+
+
+| Field                      | Description                                                        |
+| -------------------------- | ------------------------------------------------------------------ |
+| `result.coeff`             | Full estimated parameter vector                                    |
+| `result.std_err`           | Asymptotic standard errors                                         |
+| `result.var_cov_mat`       | Variance--covariance matrix                                        |
+| `result.table`             | Formatted coefficient table                                        |
+| `result.jlms`              | JLMS inefficiency index$E[u_i \mid \varepsilon_i]$                 |
+| `result.bc`                | Battese--Coelli efficiency index$E[\exp(-u_i) \mid \varepsilon_i]$ |
+| `result.marginal`          | Observation-level marginal effects (DataFrame)                     |
+| `result.marginal_mean`     | Sample mean of marginal effects                                    |
+| `result.loglikelihood`     | Log-likelihood of the estimated model                              |
+| `result.OLS_loglikelihood` | Log-likelihood of the OLS model                                    |
+| `result.OLS_resid_skew`    | Skewness of OLS residuals                                          |
+| `result.converged`         | Whether the optimizer converged                                    |
+
+### Hypothesis Testing
+
+We can test whether the data support the frontier specification against an OLS model using a likelihood ratio (LR) test. The null hypothesis is that inefficiency is absent ($u_i = 0$).
+
+```julia
+julia> LR = -2 * (result.OLS_loglikelihood - result.loglikelihood)
+45.90297766691435
+```
+
+Because testing $u_i = 0$ is on the boundary of the parameter space, the appropriate distribution is the mixed $\bar{\chi}^2$. Critical values are obtained with `sfmodel_MixTable(dof)`, where `dof` is the number of parameters involved in $u_i$ (here, 4 parameters in $\mu$ and 4 in $\log \sigma_u^2$, and so the total is 8):
+
+```julia
+julia> sfmodel_MixTable(8)
+
+  * Significance levels and critical values of the mixed χ² distribution
+┌─────┬────────┬────────┬────────┬────────┐
+│ dof │   0.10 │   0.05 │  0.025 │   0.01 │
+├─────┼────────┼────────┼────────┼────────┤
+│ 8.0 │ 12.737 │ 14.853 │ 16.856 │ 19.384 │
+└─────┴────────┴────────┴────────┴────────┘
+
+source: Table 1, Kodde and Palm (1986, Econometrica).
+```
+
+Since the LR statistic ($45.903$) is much larger than the critical value at the 1% level ($19.384$), we overwhelmingly reject the null hypothesis of an OLS model.
+
+### Inefficiency and Efficiency Index
+
+The JLMS inefficiency index and the Battese--Coelli efficiency index are computed automatically and stored in the result:
+
+```julia
+julia> [result.jlms  result.bc]
+271×2 CuArray{Float64, 2, CUDA.DeviceMemory}:
+ 0.571107   0.574412
+ 0.510025   0.610202
+ 0.10391    0.904546
+ 0.287699   0.758798
+ 0.15192    0.864167
+ 0.570986   0.574326
+ ⋮
+ 1.17584    0.314265
+ 0.428374   0.662447
+ 0.847933   0.436294
+ 0.109994   0.899461
+ 0.175169   0.845739
+ 0.165553   0.853446
+```
+
+These can be visualized using standard plotting packages:
+
+```julia
+using Plots
+
+h1 = histogram(result.jlms, xlabel="JLMS", bins=100, label=false)
+h2 = histogram(result.bc, xlabel="BC", bins=50, label=false)
+plot(h1, h2, layout=(1, 2), legend=false)
+```
+
+![Histograms of the JLMS inefficiency index and the BC efficiency index](histPlot.svg)
+
+### Marginal Effects
+
+The marginal effects of the inefficiency determinants on $E(u_i)$ at the observation level are available as a DataFrame:
+
+```julia
+julia> result.marginal
+271×3 DataFrame
+│ Row │ marg_age    │ marg_school │ marg_yr     │
+│     │ Float64     │ Float64     │ Float64     │
+├─────┼─────────────┼─────────────┼─────────────┤
+│ 1   │ -0.0052194  │ -0.0234664  │ -0.0134735  │
+│ 2   │ -0.00636135 │ -0.028566   │ -0.00756538 │
+│ 3   │ -0.00775549 │ -0.0347949  │ -0.00113382 │
+│ 4   │ -0.00953588 │ -0.0427526  │ 0.00630896  │
+⋮
+│ 268 │ 0.00291455  │ 0.0128417   │ -0.0596646  │
+│ 269 │ 0.00221272  │ 0.0097239   │ -0.051836   │
+│ 270 │ 0.00160268  │ 0.00701424  │ -0.0449243  │
+│ 271 │ 0.00107203  │ 0.0046576   │ -0.0388295  │
+```
+
+The marginal effects can be plotted against covariates to reveal non-linear patterns:
+
+```julia
+using Plots
+
+scatter(df.age, result.marginal[:, :marg_age],
+        xlabel="age", ylabel="marginal effect of age on E(u)",
+        label=false)
+hline!([0.0], label=false, linestyle=:dash)
+```
+
+![Marginal effect of age on E(u)](margAge.svg)
+
+The plot reveals a non-monotonic effect: production inefficiency decreased with age in the early years of the farmer's life (perhaps due to experience accumulation), but increased with age in later years (perhaps due to deteriorating physical health). Wang's (2002) model allows this non-monotonic effect by parameterizing both $\mu$ and $\sigma_u^2$ by the same vector of inefficiency determinants.
+
+### Saving Results
+
+The result can be saved for later analysis. Using the [JLD2](https://github.com/JuliaIO/JLD2.jl) package for binary storage:
+
+```julia
+using JLD2
+
+save_object("model1.jld2", result)             # save everything
+result_loaded = load_object("model1.jld2")     # load it back
+```
+
+For cross-platform, human-readable text storage:
+
+```julia
+using CSV
+
+CSV.write("marginal.csv", result.marginal)     # marginal effects (DataFrame)
+```
+
+---
+
+<a id="api-reference"></a>
+
+## 6. API Reference
+
+<a id="sfmodel_spec"></a>
+
+### 6.1 sfmodel_spec()
 
 The `sfmodel_spec()` function creates a model specification object that encapsulates all data, distributional assumptions, and metadata required for estimation. It is independent of the choice of estimation method.
 
@@ -281,45 +646,24 @@ The `sfmodel_spec()` function creates a model specification object that encapsul
 
 `sfmodel_spec()` — define the model specification.
 
-**Required:**
-
-- `depvar` — dependent variable vector
-- `frontier` — covariate matrix for the frontier equation
-- `noise` — distribution of noise term $v$
-- `ineff` — distribution of inefficiency term $u$
-
-**Optional:**
-
-- `datatype` — `:cross_sectional` (default), `:panel_TFE`, `:panel_TFE_CSW`, or `:panel_TRE`
-- `type` — `:production` (default) or `:cost`
-- `zvar` — covariate matrix for heteroscedasticity / scaling function
-- `copula` — copula for $v$–$u$ dependence (default: none)
-- `hetero` — parameters of $u$ allowed to be heteroscedastic (default: none)
-- `T_periods` — number of time periods per firm (panel, balanced)
-- `id` — unit identifier column (panel, unbalanced)
-- `varnames` — variable names for output tables (default: auto-generated)
-- `eqnames` — equation block names (default: auto-generated)
-- `eq_indices` — equation boundary indices (default: auto-generated)
-
 #### Arguments
 
 
-| Argument     | Type           | Description                                                                                                                                                                                                                                                                                                        |
-| ------------ | -------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| `datatype`   | Symbol         | Data type. `:cross_sectional` (default), `:panel_TFE` (Wang and Ho 2010 true fixed-effect), `:panel_TFE_CSW` (Chen, Schmidt, and Wang 2014, MLE only), or `:panel_TRE` (true random-effect, MLE only). See [Section 10](#10-panel-data-models).                                                                     |
-| `type`       | Symbol         | Frontier type. Use`:production` or `:prod` for production frontier ($\varepsilon_i = v_i - u_i$), and `:cost` for cost frontier ($\varepsilon_i = v_i + u_i$).                                                                                                                                                     |
-| `depvar`     | Vector         | Dependent variable. Cross-sectional: $N$ observations. Panel: $N \times T$ stacked by firm.                                                                                                                                                                                                                         |
-| `frontier`   | Matrix         | Covariate matrix for the frontier equation, dimension$N\times K$. Accepts a `Matrix` or a list form `[v1, v2, ...]` that is internally assembled into a matrix. Cross-sectional: include a column of ones (`1`) for intercept. **Panel: do NOT include a constant column** (within-demeaning eliminates it).       |
-| `zvar`       | Matrix         | Covariate matrix. Cross-sectional: for heteroscedasticity equations, dimension $N\times L$; include a column of ones if an intercept is required. When `hetero=:scaling`, the `zvar` matrix supplies the $\mathbf{z}_i$ variables for the scaling function $h(\mathbf{z}_i)=\exp(\mathbf{z}_i'\boldsymbol{\delta})$; **do NOT include a constant column** (for identification). Panel: for scaling function $h(z)=\exp(z'\delta)$, dimension $NT \times L$; **do NOT include a constant column**. Optional for both. |
-| `noise`      | Symbol         | Distribution of the noise term $v$. Cross-sectional: `:Normal`, `:StudentT`, `:Laplace`. Panel: `:Normal` only. See [Section 6](#6-supported-models).                                                                                                                                                               |
-| `ineff`      | Symbol         | Distribution of the inefficiency term$u$. Supported options: `:HalfNormal`, `:TruncatedNormal`, `:Exponential`, `:Weibull`, `:Lognormal`, `:Lomax`, `:Rayleigh`, and `:Gamma`. See [Section 6](#6-supported-models). Note: `:Gamma` is MCI only; `method=:MLE` supports only `:HalfNormal`, `:TruncatedNormal`, `:Exponential`. |
-| `copula`     | Symbol         | *Cross-sectional only.* Copula for dependence between $v$ and $u$. Options: `:None` (default), `:Gaussian`, `:Clayton`, `:Clayton90`, `:Gumbel`. Not available with panel datatypes.                                                                                                                               |
-| `hetero`     | Vector{Symbol} or Symbol | *Cross-sectional only.* Parameters of the distributional specification that are allowed to be heteroscedastic (e.g., `[:mu, :sigma_sq]`), **or** the symbol `:scaling` to activate the scaling property model. Not available with panel datatypes. See [Section 7](#7-distributions-reference) and [Section 9.5](#scaling-property-model-cross-sectional). |
-| `T_periods`  | Int/Nothing    | *Panel only.* Number of time periods per firm (balanced panel). Required when using a panel `datatype` and `id` is not provided; use only for balanced panel.                                                                                                                                                      |
-| `id`         | Vector/Nothing | *Panel only.* Unit identifier column (unbalanced panel). Required when using a panel `datatype` and `T_periods` is not provided. Data must be grouped by unit.                                                                                                                                                     |
-| `varnames`   | Vector{String} | Variable names used in output tables. If`nothing` (default), names are generated automatically.                                                                                                                                                                                                                    |
-| `eqnames`    | Vector{String} | Equation block names (e.g.,`["frontier", "mu", "ln_sigma_u_sq"]`). If `nothing` (default), names are generated from `ineff`.                                                                                                                                                                                       |
-| `eq_indices` | Vector{Int}    | Equation boundary indices. If`nothing` (default), auto-generated based on the model structure.                                                                                                                                                                                                                     |
+| Argument     | Type                     | Description                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                         | Required |
+| ------------ | ------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | -------- |
+| `depvar`     | Vector                   | Dependent variable. Cross-sectional: $N$ observations. Panel: $N \times T$ stacked by firm.                                                                                                                                                                                                                                                                                                                                                                                                                          | Yes      |
+| `frontier`   | Matrix                   | Covariate matrix for the frontier equation, dimension$N\times K$. Accepts a `Matrix` or a list form `[v1, v2, ...]` that is internally assembled into a matrix. Cross-sectional: include a column of ones (`1`) for intercept. **Panel: do NOT include a constant column** (within-demeaning eliminates it).                                                                                                                                                                                                        | Yes      |
+| `noise`      | Symbol                   | Distribution of the noise term$v$. Cross-sectional: `:Normal`, `:StudentT`, `:Laplace`. Panel: `:Normal` only. See [Section 7](#supported-models).                                                                                                                                                                                                                                                                                                                                                                  | Yes      |
+| `ineff`      | Symbol                   | Distribution of the inefficiency term$u$. Supported options: `:HalfNormal`, `:TruncatedNormal`, `:Exponential`, `:Weibull`, `:Lognormal`, `:Lomax`, `:Rayleigh`, and `:Gamma`. See [Section 7](#supported-models). Note: `:Gamma` is MCI only; `method=:MLE` supports only `:HalfNormal`, `:TruncatedNormal`, `:Exponential`.                                                                                                                                                                                       | Yes      |
+| `datatype`   | Symbol                   | Data type.`:cross_sectional` (default), `:panel_TFE` (Wang and Ho 2010 true fixed-effect), `:panel_TFE_CSW` (Chen, Schmidt, and Wang 2014, MLE only), or `:panel_TRE` (true random-effect, MLE only). See [Section 10](#panel-data-models).                                                                                                                                                                                                                                                                         | No       |
+| `type`       | Symbol                   | Frontier type. Use`:production` or `:prod` for production frontier ($\varepsilon_i = v_i - u_i$), and `:cost` for cost frontier ($\varepsilon_i = v_i + u_i$).                                                                                                                                                                                                                                                                                                                                                      | No       |
+| `zvar`       | Matrix                   | Covariate matrix. <br>**Cross-sectional:** for heteroscedasticity equations, dimension $N\times L$; include a column of ones if an intercept is required. When `hetero=:scaling`, the `zvar` matrix supplies the $\mathbf{z}_i$ variables for the scaling function $h(\mathbf{z}_i)=\exp(\mathbf{z}_i'\boldsymbol{\delta})$; *do NOT include a constant column* (for identification).<br>**Panel:** for scaling function $h(z)=\exp(z'\delta)$, dimension $NT \times L$; *do NOT include a constant column*. Optional for both. | No       |
+| `copula`     | Symbol                   | *Cross-sectional only.* Copula for dependence between $v$ and $u$. Options: `:None` (default), `:Gaussian`, `:Clayton`, `:Clayton90`, `:Gumbel`. Not available with panel datatypes.                                                                                                                                                                                                                                                                                                                                | No       |
+| `hetero`     | Vector{Symbol} or Symbol | *Cross-sectional only.* Parameters of the distributional specification that are allowed to be heteroscedastic (e.g., `[:mu, :sigma_sq]`), **or** the symbol `:scaling` to activate the scaling property model. Not available with panel datatypes. See the Hetero Options column in [Section 7](#supported-models) and [Section 9.5](#scaling-property-model-cross-sectional).                                                                                                                                                            | No       |
+| `id`         | Vector                   | *Panel only.* Unit identifier column. Required for all panel datatypes. Data must be grouped by unit (contiguous rows for each firm). For balanced panels, create an id column: e.g., `id = repeat(1:N, inner=T)`.                                                                                                                                                                                                                                                                                                  | No       |
+| `varnames`   | Vector{String}           | Variable names used in output tables. If`nothing` (default), names are generated automatically.                                                                                                                                                                                                                                                                                                                                                                                                                     | No       |
+| `eqnames`    | Vector{String}           | Equation block names (e.g.,`["frontier", "mu", "ln_sigma_u_sq"]`). If `nothing` (default), names are generated from `ineff`.                                                                                                                                                                                                                                                                                                                                                                                        | No       |
+| `eq_indices` | Vector{Int}              | Equation boundary indices. If`nothing` (default), auto-generated based on the model structure.                                                                                                                                                                                                                                                                                                                                                                                                                      | No       |
 
 ---
 
@@ -329,58 +673,84 @@ Returns a `UnifiedSpec{T}` struct containing the model specifications internally
 
 #### Example: Basic Specification
 
+Using the paddy-farmer data from [Section 5](#a-detailed-empirical-example):
+
 ```julia
-spec1 = sfmodel_spec(  # homoscedastic, no Z
+using CUDA
+using SFrontiers, Optim
+using DataFrames, CSV
+
+df = CSV.read("sampledata.csv", DataFrame)
+df._cons = ones(nrow(df))  # add a column of _cons to the df DataFrame
+
+# --- Keyword form (matrix data) ---
+
+y = df.yvar
+X = hcat(df._cons, df.Lland, df.PIland, df.Llabor, df.Lbull, df.Lcost, df.yr)
+Z = hcat(df._cons, df.age, df.school, df.yr)
+
+# Homoscedastic (no Z needed)
+spec1 = sfmodel_spec(
     depvar = y,
     frontier = X,
     noise = :Normal,
     ineff = :TruncatedNormal,
 )
 
-spec2 = sfmodel_spec(  # heteroscedastic
+# Heteroscedastic, also with custom variable names
+spec2 = sfmodel_spec(
     depvar = y,
     frontier = X,
     zvar = Z,
     noise = :Normal,
     ineff = :TruncatedNormal,
-    hetero = [:mu]
+    hetero = [:mu],  # or [:sigma_sq], [:mu, :sigma_sq]. See the Hetero Options column in Section 7
+    varnames = ["constant", "land", "Iland", "labor", "bull", "cost", "year",  # frontier
+                "constant", "age", "schooling", "year",                        # mu
+                "constant",                                                    # ln_sigma_u_sq
+                "constant"],                                                   # ln_sigma_v_sq
 )
-```
 
-#### Example: Full Specification with Custom Names
+# --- DSL form (DataFrame). Instead of passing data vectors and matrices directly, users specify column names of the DataFrame in the macros (`@depvar`, `@frontier`, `@zvar`), and the data is extracted automatically. The macros can appear in any order.
 
-```julia
-spec = sfmodel_spec(
-    depvar = y,
-    frontier = X,
-    zvar = Z,
+# Heteroscedastic
+
+spec3 = sfmodel_spec(
+    @useData(df),             # the DataFrame
+    @depvar(yvar),            # arguments are column names, not data
+    @frontier(_cons, Lland, PIland, Llabor, Lbull, Lcost, yr),
+    @zvar(_cons, age, school, yr),
     noise = :Normal,
     ineff = :TruncatedNormal,
-    hetero = [:mu, :sigma_sq],
-    varnames = ["_cons", "output", "capital", "_cons", "age", "size", "_cons", "age", "size", "_cons"],
-    eqnames = ["frontier", "mu", "ln_sigma_u_sq", "ln_sigma_v_sq"]
+    hetero = [:mu],
 )
 ```
+
+
 
 #### Example: Scaling Property Model
 
-The scaling property model uses `hetero = :scaling` (a `Symbol`, not a `Vector{Symbol}`). In this specification, `zvar` provides the environmental variables $\mathbf{z}_i$ for the scaling function $h(\mathbf{z}_i) = \exp(\mathbf{z}_i'\boldsymbol{\delta})$, and the inefficiency distribution parameters remain scalar (homoscedastic). The `zvar` matrix must **not** contain a constant column (for identification; see [Section 9.5](#scaling-property-model-cross-sectional)).
+The scaling property model uses `hetero = :scaling`. In this specification, `zvar` provides the environmental variables $\mathbf{z}_i$ for the scaling function $h(\mathbf{z}_i) = \exp(\mathbf{z}_i'\boldsymbol{\delta})$, and the inefficiency distribution parameters remain scalar (homoscedastic). The `zvar` matrix must **not** contain a constant column (for identification; see [Section 9.5](#scaling-property-model-cross-sectional)).
 
 ```julia
-# Scaling property model (keyword form)
+# Scaling property model (using keyword form as an example)
 # Z_nocons must NOT contain a constant column
+
+Z_nocons = hcat(df.age, df.school, df.yr)
+
 spec = sfmodel_spec(
+    type = :production,
     depvar = y,
     frontier = X,           # include constant as usual
     zvar = Z_nocons,        # environmental variables (no constant!)
     noise = :Normal,
     ineff = :HalfNormal,
     hetero = :scaling,      # scaling property model
-    type = :production
 )
 
 # Scaling + copula (allowed)
 spec = sfmodel_spec(
+    type = :production,
     depvar = y,
     frontier = X,
     zvar = Z_nocons,
@@ -388,132 +758,74 @@ spec = sfmodel_spec(
     ineff = :Exponential,
     hetero = :scaling,
     copula = :Clayton,
-    type = :production
 )
 ```
 
 > **Notes on scaling property model:**
-> - `hetero = :scaling` cannot be combined with heteroscedastic parameters (`:mu`, `:sigma_sq`, etc.).
-> - `zvar` is required and must not contain a constant column.
-> - All 8 inefficiency distributions are supported. `:Gamma` requires `method = :MCI`.
-> - Copula models are compatible with `hetero = :scaling`.
-> - Both `:MSLE` and `:MCI` estimation methods are supported (`:Gamma` is MCI only).
+> 
+>  - `hetero = :scaling` cannot be combined with heteroscedastic parameters (`:mu`, `:sigma_sq`, etc.), since the heteroscedasticy is specified through the scaling function, not individual parameters.
+>  - `zvar` is required and must not contain a constant column in the case of `hetero = :scaling`.
+>  - All 8 inefficiency distributions are supported. `:Gamma` requires `method = :MCI`.
+>  - Copula models are supported.
+>  - Both `:MSLE` and `:MCI` estimation methods are supported (`ineff = :Gamma` is MCI only).
 
-#### DSL-Style Specification with DataFrames
-
-The function also supports a macro-based interface using DataFrames. Instead of passing data vectors and matrices directly, you specify **column names** of the DataFrame in the macros (`@depvar`, `@frontier`, `@zvar`), and the data is extracted automatically. The macros can appear in **any order** — they are identified by type, not by position.
-
-```julia
-# Add constant column
-df._cons = ones(nrow(df))
-
-# DSL-style specification — arguments are column names, not data
-spec = sfmodel_spec(
-    @useData(df),   # specify the DataFrame
-    @depvar(yvar),
-    @frontier(_cons, Lland, PIland, Llabor),
-    @zvar(_cons, age, school),
-    noise = :Normal,
-    ineff = :TruncatedNormal,
-    hetero = [:mu, :sigma_sq]
-)
-```
-
-#### Example: Scaling Property Model (DSL)
-
-```julia
-# DSL-style scaling property model — zvar columns must NOT include a constant
-spec = sfmodel_spec(
-    @useData(df),
-    @depvar(yvar),
-    @frontier(_cons, Lland, PIland, Llabor),
-    @zvar(age, school),           # no constant column!
-    noise = :Normal,
-    ineff = :HalfNormal,
-    hetero = :scaling
-)
-```
 
 #### Example: Panel Data Specification
 
+Assume a panel dataset has been loaded and the vectors/matrices $y$, $X$, $Z$, and $firm\_id$ are constructed. The $firm\_id$ is a vector uniquely identifies each firm. We use keyword form in the examples; DSL form is also available.
+
+
 ```julia
-# Panel TFE — Wang and Ho (2010) true fixed-effect (balanced, keyword form)
-# Supports method=:MCI, :MSLE, and :MLE (HalfNormal/TruncatedNormal for MLE)
+# Panel TFE — Wang and Ho (2010) true fixed-effect model.
+#   method=:MCI, :MSLE for all inefficiency distributions, :MLE only for half-normal/truncated-normal
 spec = sfmodel_spec(
+    type = :production,     # the default; optional
     datatype = :panel_TFE,  # Wang and Ho 2010 panel model
-    type = :production,
     depvar = y,             # N*T stacked by firm
     frontier = X,           # NT x K (no constant)
     zvar = Z,               # NT x L (no constant)
+    hetero = :scaling,      # optional; :scaling is the default and the only permission option for panel_TFE
+    id = firm_id,           # unit individual identifier (required for all panel models)
     noise = :Normal,
-    ineff = :TruncatedNormal,
-    T_periods = 10,         # balanced panel with 10 periods
+    ineff = :TruncatedNormal     
 )
 
-# Panel TFE — unbalanced (keyword form)
-spec = sfmodel_spec(
-    depvar = y,
-    frontier = X,
-    zvar = Z,
-    noise = :Normal,
-    ineff = :HalfNormal,
-    datatype = :panel_TFE,
-    id = firm_ids           # unit identifier column
-)
 
-# Panel TFE_CSW — Chen, Schmidt, and Wang (2014) fixed-effect (MLE only, HalfNormal only)
+# Panel TFE_CSW — Chen, Schmidt, and Wang (2014) fixed-effect model.
+#   MLE only, half-normal only
 spec = sfmodel_spec(
-    depvar = y,
-    frontier = X,
-    noise = :Normal,
-    ineff = :HalfNormal,
     datatype = :panel_TFE_CSW,
-    id = firm_ids
+    depvar = y,
+    frontier = X,
+    id = firm_id,
+    noise = :Normal,
+    ineff = :HalfNormal
 )
 
-# Panel TRE — True random-effect (MLE only, HalfNormal or TruncatedNormal)
+
+# Panel TRE — True random-effect model 
+#   MLE only, half-normal or truncated-normal
 spec = sfmodel_spec(
+    datatype = :panel_TRE,
     depvar = y,
     frontier = X,
     zvar = Z,
+    id = firm_id,
     noise = :Normal,
-    ineff = :HalfNormal,
-    datatype = :panel_TRE,
-    id = firm_ids
-)
-
-# Balanced panel (DSL form)
-spec = sfmodel_spec(
-    @useData(df),
-    @depvar(yvar),
-    @frontier(Lland, PIland, Llabor),
-    @zvar(age, school),
-    noise = :Normal,
-    ineff = :HalfNormal,
-    datatype = :panel_TFE,
-    T_periods = 10
-)
-
-# Unbalanced panel (DSL form with @id)
-spec = sfmodel_spec(
-    @useData(df),
-    @depvar(yvar),
-    @frontier(Lland, PIland, Llabor),
-    @zvar(age, school),
-    @id(firm),
-    noise = :Normal,
-    ineff = :HalfNormal,
-    datatype = :panel_TFE
+    ineff = :HalfNormal
 )
 ```
 
-> **Important:** Panel models do not support `copula` or `hetero` arguments. In the panel model, heterogeneity enters through the scaling function $h(z_{it}) = \exp(z_{it}'\delta)$, and the `frontier` and `zvar` matrices must NOT include a constant column. See [Section 10](#10-panel-data-models) for details.
->
-> For cross-sectional models, the scaling property model is activated by `hetero = :scaling`. See [Section 9.5](#scaling-property-model-cross-sectional) for the mathematical formulation and usage details.
+> **Notes:** 
+>  - Panel models do not support `copula`. 
+>  - For `hetero`, it is only permissible in `panel_TFE` and has to be `hetero=:scaling` which is the default and may be omitted. That is, heterogeneity enters the model through the scaling function $h(z_{it}) = \exp(z_{it}'\delta)$. The `hetero` is not available with other panel data models. 
+>  - The `frontier` and `zvar` matrices must NOT include a constant column (except `panel_TRE`, where a constant in `frontier` is allowed). See [Section 10](#panel-data-models) for details.
 
 ---
 
-### 5.2 sfmodel_method()
+<a id="sfmodel_method"></a>
+
+### 6.2 sfmodel_method()
 
 The `sfmodel_method()` function specifies the estimation method and its computational settings (number of draws, GPU usage, etc.). This is separate from `sfmodel_spec()` so that the same model specification can be estimated under different methods.
 
@@ -521,39 +833,35 @@ The `sfmodel_method()` function specifies the estimation method and its computat
 
 `sfmodel_method()` — choose the estimation method and simulation settings.
 
-**Required:**
-
-- `method` — `:MSLE`, `:MCI`, or `:MLE`
-
-**Optional (MCI/MSLE only — ignored with a warning for MLE):**
-
-- `transformation` — only when `method=:MCI`; transformation rule (default: distribution-specific)
-- `draws` — user-supplied draws as a 1 × D row matrix (default: auto-generated Halton)
-- `n_draws` — number of Halton draws per observation (default: 1024)
-- `multiRand` — observation-specific Halton draws (default: true)
-- `GPU` — use GPU acceleration (default: false, i.e., CPU)
-- `chunks` — number of data chunks for memory management (default: 10)
-- `distinct_Halton_length` — max length of distinct Halton sequence (default: 2¹⁵ − 1) used in the entire NxD matrix.
-
 #### Arguments
 
 
-| Argument                 | Type           | Description                                                                                                                                                                                                                                                                           |
-| ------------------------ | -------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `method`                 | Symbol         | Estimation method. Use `:MSLE` for Maximum Simulated Likelihood Estimation, `:MCI` for Monte Carlo Integration, or `:MLE` for analytic Maximum Likelihood Estimation (available for a limited subset of models). Required. MLE does not use any simulation arguments below.                                                       |
-| `transformation`         | Symbol/Nothing | **MCI only.** Transformation rule for mapping uniform draws to inefficiency values. Options: `:expo_rule`, `:logistic_1_rule`, `:logistic_2_rule`, or `nothing` for distribution-specific defaults. Ignored with a warning if `method=:MSLE`.                         |
-| `draws`                  | Matrix         | Draws for Monte Carlo integration as a**1 x D row matrix**. Use `reshape(your_draws, 1, length(your_draws))` to convert a vector. If `nothing` (default), Halton draws are auto-generated with correct shape.                                                                         |
-| `n_draws`                | Int            | Number of Halton draws per observation. Default: 1024 for both MCI and MSLE. Used only when`draws` is not provided. When `multiRand=true`, must be $\leq$ `distinct_Halton_length`.                                                                                                   |
-| `multiRand`              | Bool           | Whether each observation gets different Halton draws.`true` (default) generates an N x D wrapped Halton matrix where each observation uses different consecutive draws. `false` uses the original 1 x D shared draws. When `true`, `n_draws` must be $\leq$ `distinct_Halton_length`. |
-| `GPU`                    | Bool           | Whether to use GPU computing.`false` (default) uses CPU, and `true` uses GPU (requires `using CUDA`).                                                                                                                                                                                 |
-| `chunks`                 | Int            | Number of chunks for processing data, most useful for GPU memory management when`GPU = true` (default: `10`).                                                                                                                                                                         |
-| `distinct_Halton_length` | Int            | Maximum length of the distinct Halton sequence generated for`multiRand=true` mode (default: `2^15-1 = 32767`). Increase this if you need `n_draws` larger than the default limit. See [Observation-Specific Halton Draws](#observation-specific-halton-draws-multirand).              |
+| Argument                 | Type           | Description                                                                                                                                                                                                                                                                           | Required |
+| ------------------------ | -------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | -------- |
+| `method`                 | Symbol         | Estimation method. Use`:MSLE` for Maximum Simulated Likelihood Estimation, `:MCI` for Monte Carlo Integration, or `:MLE` for analytic Maximum Likelihood Estimation (available for a limited subset of models). MLE does not use any simulation arguments below.                      | Yes      |
+| `transformation`         | Symbol/Nothing | **MCI only.** Transformation rule for mapping uniform draws to inefficiency values. Options: `:expo_rule`, `:logistic_1_rule`, `:logistic_2_rule`, or `nothing` for distribution-specific defaults. Ignored with a warning if `method=:MSLE`.          | No       |
+| `n_draws`                | Int            | Number of Halton draws per observation. Default: 1024 for both MCI and MSLE. Used when`draws` is not provided. When `multiRand=true`, must be $\leq$ `distinct_Halton_length`.                                 | No       |
+| `draws`                  | Matrix         | Draws for Monte Carlo integration as a**1 x S row matrix**. Use `reshape(your_draws, 1, length(your_draws))` to convert a vector to matrix. If `nothing` (default), Halton draws are auto-generated with correct shape.                                                                         | No       |
+| `multiRand`              | Bool           | Whether each observation gets different Halton draws.`true` (default) generates an N x S wrapped Halton matrix where each observation uses different consecutive draws. `false` uses the original 1 x S shared draws. When `true`, `n_draws` must be $\leq$ `distinct_Halton_length`. | No       |
+| `GPU`                    | Bool           | Whether to use GPU computing.`false` (default) uses CPU, and `true` uses GPU (requires `using CUDA`).                                                                                                                                                                                 | No       |
+| `chunks`                 | Int            | Number of chunks for splitting data in MCI/MSLE estimation (default: `10`). Effective for both CPU and GPU; especially useful for GPU memory management. Not used by MLE.                                                                                                              | No       |
+| `distinct_Halton_length` | Int            | Maximum length of the distinct Halton sequence generated for`multiRand=true` mode (default: `2^15-1 = 32767`). Increase this if you need `n_draws` larger than the default limit. See [Observation-Specific Halton Draws](#observation-specific-halton-draws-multirand).              | No       |
+
+
 
 #### About `GPU` and `chunks` options
 
-The `chunks` option controls how the computation is split for memory management. It works for both CPU and GPU computation, but is particularly essential for GPU computing (`GPU=true`). When `chunks=1`, all N observations are processed simultaneously, creating an N x D matrix (where D is the number of Halton draws). For large datasets (big N) or a large `n_draws` (big D), this matrix may exceed available GPU memory, creating an estimation bottleneck.
+The `chunks` option is effective for simulation-based estimators (`:MSLE` and `:MCI`); no use for `:MLE`. It works for both CPU and GPU computation and is particularly essential for GPU computing (`GPU=true`). 
 
-Setting `chunks` to a value greater than 1 (e.g., `chunks=10`) splits the observations into smaller batches, creating matrices of size (N/chunks) x D. Each batch is processed sequentially while accumulating the log-likelihood. This reduces peak memory usage, allowing larger datasets and `n_draws` to fit in GPU memory at the expense of slightly increased computation overhead due to the splitting and looping.
+> |        | `:MSLE` | `:MCI` | `:MLE` |
+> | ------ | :-----: | :----: | :----: |
+> | CPU    |    ✓    |   ✓    |   —    |
+> | GPU    |   ✓✓   |  ✓✓   |   —    |
+
+
+Simulation-based estimation (MSLE and MCI) requires evaluating the likelihood contribution for every combination of N observations and S draws, forming an N x S matrix. When N or S is large, this matrix can exceed available memory (especially GPU VRAM), creating a bottleneck. The `chunks` option addresses this by splitting the N observations into smaller batches. 
+
+When `chunks=1`, all N observations are processed at once as a single N x S matrix. Setting `chunks` to a value greater than 1 (e.g., `chunks=10`) splits the observations into smaller batches, creating matrices of size (N/chunks) x S. Each batch is processed sequentially while accumulating the log-likelihood. This reduces peak memory usage, allowing larger datasets and `n_draws` to fit in GPU memory at the expense of slightly increased computation overhead due to the splitting and looping.
 
 In Windows, users may use Task Manager to monitor the memory usage and adjust `chunks` to avoid bottlenecks.
 
@@ -561,26 +869,32 @@ In Windows, users may use Task Manager to monitor the memory usage and adjust `c
 
 When `method=:MCI`, the `transformation` option controls the change-of-variable mapping from uniform draws $t \in (0,1)$ to inefficiency values $u \geq 0$. If `nothing`, a distribution-specific default is used.
 
+> |        | `:MSLE` | `:MCI` | `:MLE` |
+> | ------ | :-----: | :----: | :----: |
+> | CPU    |    —    |   ✓    |   —    |
+> | GPU    |    —    |   ✓    |   —    |
 
-| Rule               | Formula                   | Jacobian      | Default for                            |
-| ------------------ | ------------------------- | ------------- | -------------------------------------- |
-| `:expo_rule`       | $u = s \cdot (-\ln(1-t))$ | $s/(1-t)$     | Exponential, Weibull, Gamma, Rayleigh  |
-| `:logistic_1_rule` | $u = s \cdot t/(1-t)$     | $s/(1-t)^2$   | HalfNormal, TruncatedNormal, Lognormal, Lomax |
-| `:logistic_2_rule` | $u = s \cdot (t/(1-t))^2$ | $2st/(1-t)^3$ | --                                     |
+The following is a table showing the available rules in the package.
 
-Here $s$ is a scale parameter derived from the inefficiency distribution's parameters. When heteroscedasticity is specified, $s$ becomes observation-specific ($s_i$). The scale parameter for each distribution is:
+| Rule               | Formula                   | Jacobian      | Default for                                   |
+| ------------------ | ------------------------- | ------------- | --------------------------------------------- |
+| `:expo_rule`       | $u = s \cdot (-\ln(1-t))$ | $s/(1-t)$     | Exponential, Weibull, Gamma, Rayleigh         |
+| `:logistic_1_rule` | $u = s \cdot t/(1-t)$     | $s/(1-t)^2$   | half-normal, truncated-normal, Lognormal, Lomax |
+| `:logistic_2_rule` | $u = s \cdot (t/(1-t))^2$ | $2st/(1-t)^3$ | --                                            |
+
+Here $s$ is a scale parameter derived from the inefficiency distribution, determined automatically by the package. When heteroscedasticity is specified, $s$ becomes observation-specific ($s_i$). The scale parameters are:
 
 
-| Distribution    | Scale$s$   | Meaning                                                          |
-| --------------- | ---------- | ---------------------------------------------------------------- |
-| HalfNormal      | $\sigma$   | Standard deviation of$N^+(0, \sigma^2)$                          |
-| TruncatedNormal | $\sigma_u$ | Standard deviation of$N^+(\mu, \sigma_u^2)$                      |
-| Exponential     | $\sqrt{\lambda}$  | $\sqrt{\lambda}$, where $\lambda = \text{Var}(u)$              |
-| Weibull         | $\lambda$  | Scale parameter of$\text{Weibull}(\lambda, k)$                   |
-| Lognormal       | $\sigma$   | Log-scale standard deviation of$\text{LogNormal}(\mu, \sigma^2)$ |
-| Lomax           | $\lambda$  | Scale parameter of$\text{Lomax}(\alpha, \lambda)$                |
-| Rayleigh        | $\sigma$   | Scale parameter of$\text{Rayleigh}(\sigma)$                      |
-| Gamma           | $\theta$   | Scale parameter of$\text{Gamma}(k, \theta)$                      |
+| Distribution    | Scale$s$         | Meaning                                                          |
+| --------------- | ---------------- | ---------------------------------------------------------------- |
+| half-normal      | $\sigma$         | Standard deviation of$N^+(0, \sigma^2)$                          |
+| truncated-normal | $\sigma_u$       | Standard deviation of$N^+(\mu, \sigma_u^2)$                      |
+| Exponential     | $\sqrt{\lambda}$ | $\sqrt{\lambda}$, where $\lambda = \text{Var}(u)$                |
+| Weibull         | $\lambda$        | Scale parameter of$\text{Weibull}(\lambda, k)$                   |
+| Lognormal       | $\sigma$         | Log-scale standard deviation of$\text{LogNormal}(\mu, \sigma^2)$ |
+| Lomax           | $\lambda$        | Scale parameter of$\text{Lomax}(\alpha, \lambda)$                |
+| Rayleigh        | $\sigma$         | Scale parameter of$\text{Rayleigh}(\sigma)$                      |
+| Gamma           | $\theta$         | Scale parameter of$\text{Gamma}(k, \theta)$                      |
 
 #### Return Value
 
@@ -592,13 +906,13 @@ Returns a method specification struct that encodes both the estimation method an
 # MSLE with default settings
 meth1 = sfmodel_method(method = :MSLE)
 
-# MCI with custom draws and GPU
+# MCI with default Halton draws, custom # of draws, and GPU
 meth2 = sfmodel_method(
     method = :MCI,
-    n_draws = 2^12 - 1,
+    n_draws = 2^12,    # custom number
+    transformation = :logistic_1_rule 
     GPU = true,
     chunks = 10,
-    transformation = :logistic_1_rule
 )
 
 # Larger Halton pool for multiRand mode
@@ -606,6 +920,16 @@ meth3 = sfmodel_method(
     method = :MSLE,
     n_draws = 50000,
     distinct_Halton_length = 2^16 - 1  # 65535
+    GPU = true,
+    chunks = 20 
+)
+
+# User-supplied draws (uniform on (0,1), reshaped to 1×S row matrix)
+my_draws = reshape(rand(2^12), 1, :)
+meth4 = sfmodel_method(
+    method = :MSLE,
+    draws = my_draws,  # identical for each obs
+    GPU = true,
 )
 
 # MLE — analytic, no simulation parameters needed (limited model support)
@@ -616,7 +940,9 @@ meth0 = sfmodel_method(method = :MLE)
 
 ---
 
-### 5.3 sfmodel_init()
+<a id="sfmodel_init"></a>
+
+### 6.3 sfmodel_init()
 
 The `sfmodel_init()` function creates an initial value vector for optimization. The initial-value vector depends only on the model specification (distribution choice), not on the estimation method. It supports two usage modes: full vector mode and component mode.
 
@@ -624,52 +950,27 @@ The `sfmodel_init()` function creates an initial value vector for optimization. 
 
 `sfmodel_init()` — set initial values for optimization.
 
-**Required:**
-
-- `spec` — model specification from `sfmodel_spec()`
-
-**Optional (full vector mode):**
-
-- `init` — a single vector of all initial values
-
-**Optional (component mode):**
-
-- `frontier` — frontier equation coefficients
-- `scaling` — scaling function coefficients δ (when `hetero = :scaling`)
-- `mu` — μ coefficients
-- `ln_sigma_sq` — ln(σ²) coefficients
-- `ln_sigma_v_sq` — ln(σᵥ²)
-- `ln_nu_minus_2` — ln(ν − 2), for Student T noise
-- `ln_b` — ln(b), for Laplace noise
-- `ln_lambda` — ln(λ), for Exponential
-- `ln_k` — ln(k), for Weibull shape
-- `ln_lambda` — ln(λ), for Lomax
-- `ln_alpha` — ln(α), for Lomax
-- `ln_theta` — ln(θ), for Gamma
-- `theta_rho` — copula dependence parameter
-- `message` — print summary of initial values (default: true)
-
 #### Arguments
 
 
-| Argument        | Type         | Description                                                                                                                           |
-| --------------- | ------------ | ------------------------------------------------------------------------------------------------------------------------------------- |
-| `spec`          | UnifiedSpec  | Model specification returned by`sfmodel_spec()`. Required.                                                                            |
-| `init`          | Vector/Tuple | Complete initial-value vector (or tuple). If`init` is provided, all other component initial-value arguments are ignored.              |
-| `frontier`      | Vector/Tuple | Initial values for the frontier coefficients ($K$ elements).                                                                          |
-| `scaling`       | Vector/Tuple | Initial values for the scaling function coefficients $\boldsymbol{\delta}$ ($L$ elements, one per column of `zvar`). Used when `hetero = :scaling`. |
-| `mu`            | Vector/Tuple | Initial values for$\mu$ (used by `TruncatedNormal` and `Lognormal` inefficiency specifications).                                      |
-| `ln_sigma_sq`   | Vector/Tuple | Initial values for$\ln(\sigma^2)$ (used by `TruncatedNormal`, `HalfNormal`, `Lognormal`, and `Rayleigh` inefficiency specifications). |
-| `ln_sigma_v_sq` | Vector/Tuple | Initial values for$\ln(\sigma_v^2)$ (used when the noise distribution is `Normal` or `StudentT`).                                     |
-| `ln_nu_minus_2` | Vector/Tuple | Initial values for$\ln(\nu-2)$ (used when the noise distribution is `StudentT`).                                                      |
-| `ln_b`          | Vector/Tuple | Initial values for$\ln(b)$ (used when the noise distribution is `Laplace`).                                                           |
-| `ln_lambda`     | Vector/Tuple | Initial values for$\ln(\lambda)$ (used by `Exponential` and `Weibull` inefficiency specifications).                                   |
-| `ln_k`          | Vector/Tuple | Initial values for$\ln(k)$ (used by `Weibull` and `Gamma` inefficiency specifications).                                               |
-| `ln_lambda`     | Vector/Tuple | Initial values for$\ln(\lambda)$ (used by `Lomax` inefficiency specifications).                                                        |
-| `ln_alpha`      | Vector/Tuple | Initial values for$\ln(\alpha)$ (used by `Lomax` inefficiency specifications).                                                        |
-| `ln_theta`      | Vector/Tuple | Initial values for$\ln(\theta)$ (used by `Gamma` inefficiency specifications; MCI only).                                              |
-| `theta_rho`     | Vector/Tuple | Initial value for the copula parameter$\theta_\rho$ (used when `copula` $\neq$ `:None`).                                              |
-| `message`       | Bool         | If`true`, print a warning when `init` overrides the component initial-value arguments.                                                |
+| Argument        | Type         | Description                                                                                                                                        | Required |
+| --------------- | ------------ | -------------------------------------------------------------------------------------------------------------------------------------------------- | -------- |
+| `spec`          | UnifiedSpec  | Model specification returned by`sfmodel_spec()`.                                                                                                   | Yes      |
+| `init`          | Vector/Tuple | Complete initial-value vector (or tuple). If`init` is provided, all other component initial-value arguments are ignored.                           | No       |
+| `frontier`      | Vector/Tuple | Initial values for the frontier coefficients ($K$ elements).                                                                                       | No       |
+| `scaling`       | Vector/Tuple | Initial values for the scaling function coefficients$\boldsymbol{\delta}$ ($L$ elements, one per column of `zvar`). Used when `hetero = :scaling`. | No       |
+| `mu`            | Vector/Tuple | Initial values for$\mu$ (used by `TruncatedNormal` and `Lognormal` inefficiency specifications).                                                   | No       |
+| `ln_sigma_sq`   | Vector/Tuple | Initial values for$\ln(\sigma^2)$ (used by `TruncatedNormal`, `HalfNormal`, `Lognormal`, and `Rayleigh` inefficiency specifications).              | No       |
+| `ln_sigma_v_sq` | Vector/Tuple | Initial values for$\ln(\sigma_v^2)$ (used when the noise distribution is `Normal` or `StudentT`).                                                  | No       |
+| `ln_nu_minus_2` | Vector/Tuple | Initial values for$\ln(\nu-2)$ (used when the noise distribution is `StudentT`).                                                                   | No       |
+| `ln_b`          | Vector/Tuple | Initial values for$\ln(b)$ (used when the noise distribution is `Laplace`).                                                                        | No       |
+| `ln_lambda`     | Vector/Tuple | Initial values for$\ln(\lambda)$ (used by `Exponential` and `Weibull` inefficiency specifications).                                                | No       |
+| `ln_k`          | Vector/Tuple | Initial values for$\ln(k)$ (used by `Weibull` and `Gamma` inefficiency specifications).                                                            | No       |
+| `ln_lambda`     | Vector/Tuple | Initial values for$\ln(\lambda)$ (used by `Lomax` inefficiency specifications).                                                                    | No       |
+| `ln_alpha`      | Vector/Tuple | Initial values for$\ln(\alpha)$ (used by `Lomax` inefficiency specifications).                                                                     | No       |
+| `ln_theta`      | Vector/Tuple | Initial values for$\ln(\theta)$ (used by `Gamma` inefficiency specifications; MCI only).                                                           | No       |
+| `theta_rho`     | Vector/Tuple | Initial value for the copula parameter$\theta_\rho$ (used when `copula` $\neq$ `:None`).                                                           | No       |
+| `message`       | Bool         | If`true`, print a warning when `init` overrides the component initial-value arguments.                                                             | No       |
 
 #### Return Value
 
@@ -677,7 +978,7 @@ Returns a `Vector{Float64}` containing the initial parameter values in the corre
 
 #### Mode 1: Full Vector Mode
 
-Provide the complete parameter vector directly:
+Provide the complete parameter vector directly via the `init` keyword. The values must follow the exact equation order used internally by the likelihood function. This mode is generally **not recommended** for first-time use, since you need to know the internal parameter ordering. It is most useful when recycling estimates from a previous round of estimation (e.g., using a converged coefficient vector as a warm start for a re-specification).
 
 ```julia
 myinit = sfmodel_init(
@@ -691,7 +992,7 @@ myinit = sfmodel_init(
 Specify initial values by parameter group. The required groups depend on the model specification. The ordering of equation blocks is irrelevant; the program maps each block to the correct position in the coefficient vector automatically.
 
 ```julia
-# Normal + TruncatedNormal with hetero = [:mu]
+# Normal + truncated-normal with hetero = [:mu]
 myinit = sfmodel_init(
     spec = myspec,
     frontier = [0.5, 0.3, 0.2],     # frontier coefficients
@@ -715,7 +1016,7 @@ myinit2 = sfmodel_init(
 When `hetero = :scaling`, provide the `scaling` keyword with initial values for the $\boldsymbol{\delta}$ coefficients (one per column of `zvar`). All inefficiency distribution parameters are scalar:
 
 ```julia
-# Normal + HalfNormal with scaling property
+# Normal + half-normal with scaling property
 myinit = sfmodel_init(
     spec = myspec,
     frontier = X \ y,                   # OLS estimates
@@ -727,37 +1028,21 @@ myinit = sfmodel_init(
 
 #### Panel Initial Values
 
-When `spec.datatype == :panel_TFE`, the function dispatches to the Panel backend. When `spec.datatype` is `:panel_TFE_CSW` or `:panel_TRE`, it dispatches to the MLE backend. The keyword arguments differ from cross-sectional:
-
-
-| Argument        | Description                                                           |
-| --------------- | --------------------------------------------------------------------- |
-| `frontier`      | Initial values for frontier coefficients ($K$ elements)               |
-| `delta`         | Initial values for scaling function$h(z)$ coefficients ($L$ elements) |
-| `mu`            | TruncatedNormal, Lognormal: $\mu$ (scalar)                             |
-| `ln_sigma_u_sq` | HalfNormal, TruncatedNormal: $\ln(\sigma_u^2)$ (scalar)                |
-| `ln_sigma_v_sq` | All distributions: $\ln(\sigma_v^2)$ (scalar)                          |
-| `ln_lambda`     | Exponential, Weibull: $\ln(\lambda)$ (scalar)                          |
-| `ln_k`          | Weibull, Gamma: $\ln(k)$ (scalar)                                      |
-| `ln_sigma_sq`   | Lognormal, Rayleigh: $\ln(\sigma^2)$ (scalar)                          |
-| `ln_lambda`     | Lomax: $\ln(\lambda)$ (scalar)                                         |
-| `ln_alpha`      | Lomax: $\ln(\alpha)$ (scalar)                                          |
-| `ln_theta`      | Gamma: $\ln(\theta)$ (scalar)                                          |
+Panel models use the same keywords as cross-sectional (see table above). The only difference is that all inefficiency distribution parameters are **scalar** (not heteroscedastic).
 
 ```julia
-# Panel TFE: Normal + HalfNormal
+# Panel TFE: Normal + half-normal
 myinit = sfmodel_init(
-    spec = myspec,                # spec with datatype=:panel_TFE
+    spec = myspec,                # assume spec with datatype=:panel_TFE
     frontier = X_tilde \ y_tilde, # OLS on demeaned data (auto-computed if omitted)
-    delta = [0.1, 0.1],          # scaling function coefficients
-    ln_sigma_u_sq = 0.1,         # scalar
+    scaling = [0.1, 0.1],        # scaling function coefficients
+    ln_sigma_sq = 0.1,           # scalar
     ln_sigma_v_sq = 0.1          # scalar
 )
 ```
 
-**Note:** In panel models, all inefficiency distribution parameters are **scalar** (not heteroscedastic). If `frontier` and `delta` are omitted, OLS-based defaults are used automatically.
+**Note:** In panel models, all inefficiency distribution parameters are **scalar** (not heteroscedastic). If `frontier` and `scaling` are omitted, OLS-based defaults are used automatically.
 
-> **Panel TFE + MLE:** When `datatype=:panel_TFE` and `method=:MLE`, `sfmodel_fit` automatically uses MLE's own OLS-based defaults for initial values (the Panel-backend init is not passed to MLE). You may still call `sfmodel_init` for MCI/MSLE estimation of the same spec.
 
 #### Input Format Flexibility
 
@@ -772,48 +1057,40 @@ frontier = (0.5, 0.3, 0.2)    # Tuple
 
 ---
 
-### 5.4 sfmodel_opt()
+<a id="sfmodel_opt"></a>
 
-The `sfmodel_opt()` function specifies the optimization options. Solvers and options are passed directly to Julia's `Optim.jl` interface, so any solver (e.g., `NelderMead()`, `BFGS()`, `Newton()`) and any `Optim.Options` keyword (e.g., `iterations`, `g_abstol`, `show_trace`) are permissible. All three estimation methods (MCI, MSLE, and MLE) use the same optimizer interface, so no `method` argument is needed. The function supports a two-stage approach: a derivative-free solver in the first stage (*warmstart*) to refine the initial values (which is often very useful for highly nonlinear models), followed by a gradient-based solver in the second stage (*main*) for accurate convergence.
+### 6.4 sfmodel_opt()
+
+The `sfmodel_opt()` function specifies the optimization options. Solvers and options are passed directly to Julia's [`Optim.jl` interface](https://julianlsolvers.github.io/Optim.jl/stable/), so any solver and any `Optim.Options` keyword are permissible. All three estimation methods (MCI, MSLE, and MLE) use the same optimizer interface, so no `method` argument is needed. 
+
+The function supports a two-stage approach where the first-stage result is used as initial values for the second-stage optimization. A practical usage is to use a derivative-free solver (e.g., `NelderMead()`) in the first stage (*warmstart*) to quickly and robustly zoom in on a good neighborhood of the optimum, and use a gradient-based solver (e.g., `Newton()`) in the second stage (*main*) to achieve precise convergence. This is often very useful for highly nonlinear models where gradient-based solvers alone may fail from poor starting values. An one-stage estimation is possible by omiiting the first stage (*warmstart*) estimation.
 
 #### Syntax
 
 `sfmodel_opt()` — configure optimization solvers and options.
 
-**Required:**
-
-- `main_solver` — main optimizer, e.g., `Newton()`, `BFGS()`
-- `main_opt` — main optimizer options as a NamedTuple
-
-**Optional:**
-
-- `warmstart_solver` — warmstart optimizer, e.g., `NelderMead()`
-- `warmstart_opt` — warmstart options as a NamedTuple
-
 #### Arguments
 
 
-| Argument           | Description                                                                   | Required |
-| ------------------ | ----------------------------------------------------------------------------- | -------- |
-| `warmstart_solver` | Warmstart optimizer, e.g.,`NelderMead()`, `BFGS()`                            | No       |
-| `warmstart_opt`    | Warmstart options as a NamedTuple, e.g.,`(iterations = 400, g_abstol = 1e-5)` | No       |
-| `main_solver`      | Main optimizer, e.g.,`Newton()`, `BFGS()`                                     | Yes      |
-| `main_opt`         | Main options as a NamedTuple, e.g.,`(iterations = 2000, g_abstol = 1e-8)`     | Yes      |
+| Argument           | Type       | Description                                                                   | Required |
+| ------------------ | ---------- | ----------------------------------------------------------------------------- | -------- |
+| `warmstart_solver` | Solver     | Warmstart optimizer, e.g.,`NelderMead()`, `BFGS()`                            | No       |
+| `warmstart_opt`    | NamedTuple | Warmstart options as a NamedTuple, e.g.,`(iterations = 200, g_abstol = 1e-5)` | No       |
+| `main_solver`      | Solver     | Main optimizer, e.g.,`Newton()`, `BFGS()`                                     | Yes      |
+| `main_opt`         | NamedTuple | Main options as a NamedTuple, e.g.,`(iterations = 200, g_abstol = 1e-8)`     | Yes      |
 
 **Common options for `warmstart_opt` and `main_opt`:**
 
 
-| Parameter            | Description                  | Typical Value |
-| -------------------- | ---------------------------- | ------------- |
-| `iterations`         | Maximum iterations           | 200--2000     |
-| `g_abstol`<br> `g_reltol` | Gradient absolute and relative tolerance  | 1e-5 to 1e-8  |
+| Parameter                 | Description                               | Typical Value |
+| ------------------------- | ----------------------------------------- | ------------- |
+| `iterations`              | Maximum iterations                        | 20--1000     |
+| `g_abstol`<br> `g_reltol` | Gradient absolute and relative tolerance  | 1e-4 to 1e-8  |
 | `f_abstol`<br> `f_reltol` | Function absolute and relative tolerance  | 1e-32         |
 | `x_abstol`<br> `x_reltol` | Parameter absolute and relative tolerance | 1e-32         |
-| `show_trace`         | Display iteration progress   | `false`       |
+| `show_trace`              | Display iteration progress                | `false`       |
 
-**Notes:**
 
-- If `warmstart_solver` is omitted, the warmstart stage is skipped.
 
 #### Return Value
 
@@ -843,6 +1120,8 @@ myopt = sfmodel_opt(
 
 #### Notes
 
+- If `warmstart_solver` is omitted, the warmstart stage is skipped.
+
 - If `warmstart_solver` is provided without `warmstart_opt`, default options are used: `(iterations = 100, g_abstol = 1e-3)`.
 
 #### Common Pitfall: Trailing Comma for Single-Element Options
@@ -865,7 +1144,7 @@ main_opt = (iterations = 200, g_abstol = 1e-8)
 main_opt = (iterations = 200, g_abstol = 1e-8,)  # trailing comma optional
 ```
 
-If you forget the trailing comma, the function will display a helpful error message:
+If you forget the trailing comma, the function will display an error message:
 
 ```
 ERROR: Invalid `main_opt`: expected a NamedTuple, got Int64.
@@ -875,7 +1154,9 @@ Hint: For single-element options, use a trailing comma:
 
 ---
 
-### 5.5 sfmodel_fit()
+<a id="sfmodel_fit"></a>
+
+### 6.5 sfmodel_fit()
 
 The `sfmodel_fit()` function is the main estimation routine. It organizes the entire workflow: optimization, variance-covariance computation, efficiency index calculation, marginal effects, and results presentation.
 
@@ -883,33 +1164,19 @@ The `sfmodel_fit()` function is the main estimation routine. It organizes the en
 
 `sfmodel_fit()` — run estimation and produce results.
 
-**Required:**
-
-- `spec` — model specification from `sfmodel_spec()`
-- `method` — estimation method from `sfmodel_method()`
-
-**Optional:**
-
-- `init` — initial values from `sfmodel_init()`
-- `optim_options` — optimization settings from `sfmodel_opt()`
-- `jlms_bc_index` — compute JLMS/BC efficiency index (default: true)
-- `marginal` — compute marginal effects (default: true)
-- `show_table` — display results table (default: true)
-- `verbose` — print progress messages (default: true)
-
 #### Arguments
 
 
-| Argument        | Type          | Description                                                                                                      |
-| --------------- | ------------- | ---------------------------------------------------------------------------------------------------------------- |
-| `spec`          | UnifiedSpec   | Model specification from`sfmodel_spec()` (required).                                                             |
-| `method`        | UnifiedMethod | Method specification from`sfmodel_method()` (required).                                                          |
-| `init`          | Vector        | Initial parameter vector from`sfmodel_init()`. If `nothing`, uses OLS for frontier and 0.1 for other parameters. |
-| `optim_options` | --            | Optimization options from`sfmodel_opt()`. If `nothing`, uses defaults.                                           |
-| `jlms_bc_index` | Bool          | Compute JLMS and BC efficiency indices (default:`true`).                                                         |
-| `marginal`      | Bool          | Compute marginal effects of$Z$ on E(u) (default: `true`).                                                        |
-| `show_table`    | Bool          | Print formatted estimation table (default:`true`).                                                               |
-| `verbose`       | Bool          | Print detailed progress information (default:`true`).                                                            |
+| Argument        | Type          | Description                                                                                                      | Required |
+| --------------- | ------------- | ---------------------------------------------------------------------------------------------------------------- | -------- |
+| `spec`          | UnifiedSpec   | Model specification from`sfmodel_spec()`.                                                                        | Yes      |
+| `method`        | UnifiedMethod | Method specification from`sfmodel_method()`.                                                                     | Yes      |
+| `init`          | Vector        | Initial parameter vector from`sfmodel_init()`. If `nothing`, uses OLS for frontier and 0.1 for other parameters. | No       |
+| `optim_options` | --            | Optimization options from`sfmodel_opt()`. If `nothing`, uses defaults.                                           | No       |
+| `jlms_bc_index` | Bool          | Compute JLMS and BC efficiency indices (default:`true`).                                                         | No       |
+| `marginal`      | Bool          | Compute marginal effects of$Z$ on E(u) (default: `true`).                                                        | No       |
+| `show_table`    | Bool          | Print formatted estimation table (default:`true`).                                                               | No       |
+| `verbose`       | Bool          | Print detailed progress information (default:`true`).                                                            | No       |
 
 #### Return Value
 
@@ -926,14 +1193,15 @@ Returns a `NamedTuple` with comprehensive results:
 
 **Method Information**
 
-| Field                    | Type   | Description                                            |
-| ------------------------ | ------ | ------------------------------------------------------ |
-| `GPU`                    | Bool   | Whether GPU acceleration was used                      |
+
+| Field                    | Type   | Description                                                    |
+| ------------------------ | ------ | -------------------------------------------------------------- |
+| `GPU`                    | Bool   | Whether GPU acceleration was used                              |
 | `n_draws`                | Int    | Actual number of draws per observation (or per firm for panel) |
-| `multiRand`              | Bool   | Whether per-observation/per-firm Halton draws were used |
-| `chunks`                 | Int    | Number of chunks for memory management                 |
-| `distinct_Halton_length` | Int    | Maximum Halton sequence length for multiRand           |
-| `estimation_method`      | Symbol | Estimation method used (`:MCI`, `:MSLE`, `:MLE`)       |
+| `multiRand`              | Bool   | Whether per-observation/per-firm Halton draws were used        |
+| `chunks`                 | Int    | Number of chunks for memory management                         |
+| `distinct_Halton_length` | Int    | Maximum Halton sequence length for multiRand                   |
+| `estimation_method`      | Symbol | Estimation method used (`:MCI`, `:MSLE`, `:MLE`)               |
 
 **Model Results**
 
@@ -997,7 +1265,8 @@ Individual coefficient vectors are also available:
 - `frontier` -- Frontier coefficients ($\beta$)
 - `delta` -- Scaling function coefficients ($\boldsymbol{\delta}$), when `hetero = :scaling`
 - `mu` -- $\mu$ coefficients (if applicable)
-- `sigma_sq` / `sigma_u` -- $\sigma^2$ coefficients
+- `sigma_sq` -- $\ln(\sigma^2)$ coefficients (Lognormal, Rayleigh)
+- `sigma_u` -- $\ln(\sigma_u^2)$ coefficients (HalfNormal, TruncatedNormal)
 - `lambda` -- $\lambda$ coefficients (Exponential, Weibull)
 - `k` -- Shape parameter $k$ (Weibull, Gamma)
 - `theta` -- Scale parameter $\theta$ (Gamma, MCI only)
@@ -1020,10 +1289,10 @@ result.coeff         # alternative
 
 ```julia
 result = sfmodel_fit(
-    spec = myspec,
-    method = mymeth,
-    init = myinit,
-    optim_options = myopt,
+    spec = myspec,          # from sfmodel_spec()
+    method = mymeth,        # from sfmodel_method()
+    init = myinit,          # from sfmodel_init()
+    optim_options = myopt,  # from sfmodel_opt()
     jlms_bc_index = true,
     marginal = true,
     show_table = true,
@@ -1064,9 +1333,11 @@ The function monitors convergence and sets `redflag = 1` if:
 - Iteration limit was reached
 - Variance-covariance matrix has non-positive diagonal elements
 
-### 5.6 `sfmodel_MixTable()` and `sfmodel_ChiSquareTable()`
+<a id="sfmodel_mixtable-and-sfmodel_chisquaretable"></a>
 
-These utility functions print critical values for hypothesis testing. They are available from the MLE backend.
+### 6.6 `sfmodel_MixTable()` and `sfmodel_ChiSquareTable()`
+
+These utility functions print critical values for hypothesis testing. 
 
 #### `sfmodel_MixTable(dof)`
 
@@ -1123,8 +1394,10 @@ ll_sf  = result_sf.loglikelihood
 # Compute LR statistic
 LR = -2 * (ll_ols - ll_sf)
 
-# Compare against mixed chi-squared critical values
-# dof = 1 (one restriction: sigma_u^2 = 0)
+# Compare against mixed chi-squared critical values:
+# Assuming u~N(0, sigma_u^2) so that there is only
+# one additional parameter (sigma_u^2). 
+# Thus, dof = 1 (one restriction: sigma_u^2 = 0).
 sfmodel_MixTable(1)
 # At 5% level, critical value is 2.705
 # If LR > 2.705, reject H0 (inefficiency is statistically significant)
@@ -1132,95 +1405,65 @@ sfmodel_MixTable(1)
 
 ---
 
-## 6. Supported Models
+<a id="supported-models"></a>
+
+## 7. Supported Models
 
 ### Noise Distributions
 
+Each table below has five columns: **Symbol** is the keyword used in `sfmodel_spec()` (e.g., `noise=:Normal`); **Distribution** gives the statistical specification; **Init Parameters** lists the parameter names and their transformations used in `sfmodel_init()`; **Models** indicates whether the distribution is available for cross-sectional data, panel data, or both; **Methods** shows the compatible estimation methods (MLE, MSLE, MCI). The Inefficiency Distributions table has an additional **Hetero Options** column showing valid symbols for the `hetero` argument in `sfmodel_spec()`.
 
 | Symbol      | Distribution                            | Init Parameters                                                         | Models       | Methods        |
 | ----------- | --------------------------------------- | ----------------------------------------------------------------------- | ------------ | -------------- |
 | `:Normal`   | $v \sim N(0, \sigma_v^2)$               | `ln_sigma_v_sq` $= \log(\sigma_v^2)$                                    | cross, panel | MCI, MSLE, MLE |
-| `:StudentT` | $v \sim t(0, \sigma_v, \nu)$, $\nu > 2$ | `ln_sigma_v_sq` $= \log(\sigma_v^2)$, `ln_nu_minus_2` $= \log(\nu - 2)$ | cross        | MCI, MSLE      |
+| `:StudentT` | $v \sim t(0, \sigma_v, \nu)$, $\nu > 2$ | `ln_sigma_v_sq` $= \log(\sigma_v^2)$<br>`ln_nu_minus_2` $= \log(\nu - 2)$ | cross        | MCI, MSLE      |
 | `:Laplace`  | $v \sim \text{Laplace}(0, b)$           | `ln_b` $= \log(b)$                                                      | cross        | MCI, MSLE      |
 
 ### Inefficiency Distributions
 
 
-| Symbol             | Distribution                             | Init Parameters                                                 | Models       | Methods        |
-| ------------------ | ---------------------------------------- | --------------------------------------------------------------- | ------------ | -------------- |
-| `:HalfNormal`      | $u \sim N^+(0, \sigma^2)$                | `ln_sigma_sq` $= \log(\sigma^2)$                                | cross, panel | MCI, MSLE, MLE |
-| `:TruncatedNormal` | $u \sim N^+(\mu, \sigma_u^2)$            | `mu` $= \mu$, `ln_sigma_sq` $= \log(\sigma_u^2)$                | cross, panel | MCI, MSLE, MLE |
-| `:Exponential`     | $u \sim \text{Exp}(\lambda)$, $\lambda = \text{Var}(u)$ | `ln_lambda` $= \log(\lambda)$                                   | cross, panel | MCI, MSLE, MLE |
-| `:Weibull`         | $u \sim \text{Weibull}(\lambda, k)$      | `ln_lambda` $= \log(\lambda)$, `ln_k` $= \log(k)$               | cross, panel | MCI, MSLE      |
-| `:Lognormal`       | $u \sim \text{LogNormal}(\mu, \sigma^2)$ | `mu` $= \mu$, `ln_sigma_sq` $= \log(\sigma^2)$                  | cross, panel | MCI, MSLE      |
-| `:Lomax`           | $u \sim \text{Lomax}(\alpha, \lambda)$   | `ln_lambda` $= \log(\lambda)$, `ln_alpha` $= \log(\alpha)$       | cross, panel | MCI, MSLE      |
-| `:Rayleigh`        | $u \sim \text{Rayleigh}(\sigma)$         | `ln_sigma_sq` $= \log(\sigma^2)$                                | cross, panel | MCI, MSLE      |
-| `:Gamma`           | $u \sim \text{Gamma}(k, \theta)$         | `ln_k` $= \log(k)$ (shape), `ln_theta` $= \log(\theta)$ (scale) | cross, panel | MCI            |
+| Symbol             | Distribution                                            | Init Parameters                                                    | Models       | Methods        | Hetero Options                                    |
+| ------------------ | ------------------------------------------------------- | ------------------------------------------------------------------ | ------------ | -------------- | ------------------------------------------------- |
+| `:HalfNormal`      | $u \sim N^+(0, \sigma^2)$                               | `ln_sigma_sq` $= \log(\sigma^2)$                                   | cross, panel | MCI, MSLE, MLE | `:sigma_sq` for $\sigma^2$                        |
+| `:TruncatedNormal` | $u \sim N^+(\mu, \sigma_u^2)$                           | `mu` $= \mu$<br>`ln_sigma_sq` $= \log(\sigma_u^2)$                 | cross, panel | MCI, MSLE, MLE | `:mu` for $\mu$<br>`:sigma_sq` for $\sigma_u^2$   |
+| `:Exponential`     | $u \sim \text{Exp}(\lambda)$, $\lambda = \text{Var}(u)$ | `ln_lambda` $= \log(\lambda)$                                      | cross, panel | MCI, MSLE, MLE | `:lambda` for $\lambda$                           |
+| `:Weibull`         | $u \sim \text{Weibull}(\lambda, k)$                     | `ln_lambda` $= \log(\lambda)$<br>`ln_k` $= \log(k)$                | cross, panel | MCI, MSLE      | `:lambda` for $\lambda$<br>`:k` for $k$           |
+| `:Lognormal`       | $u \sim \text{LogNormal}(\mu, \sigma^2)$                | `mu` $= \mu$<br>`ln_sigma_sq` $= \log(\sigma^2)$                   | cross, panel | MCI, MSLE      | `:mu` for $\mu$<br>`:sigma_sq` for $\sigma^2$     |
+| `:Lomax`           | $u \sim \text{Lomax}(\alpha, \lambda)$                  | `ln_lambda` $= \log(\lambda)$<br>`ln_alpha` $= \log(\alpha)$       | cross, panel | MCI, MSLE      | `:lambda` for $\lambda$<br>`:alpha` for $\alpha$   |
+| `:Rayleigh`        | $u \sim \text{Rayleigh}(\sigma)$                        | `ln_sigma_sq` $= \log(\sigma^2)$                                   | cross, panel | MCI, MSLE      | `:sigma_sq` for $\sigma^2$                        |
+| `:Gamma`           | $u \sim \text{Gamma}(k, \theta)$                        | `ln_k` $= \log(k)$ (shape)<br>`ln_theta` $= \log(\theta)$ (scale)  | cross, panel | MCI            | `:k` for $k$<br>`:theta` for $\theta$             |
+
+**Note of Scaling property model alternative**: Instead of making individual distribution parameters heteroscedastic (via `hetero = [:mu]`, etc.), you can use `hetero = :scaling` to model heterogeneity through a single multiplicative scaling function $u_i = h(\mathbf{z}_i) \cdot u_i^*$. Under scaling, all distribution parameters remain scalar and a separate set of $\boldsymbol{\delta}$ coefficients is estimated. All 8 inefficiency distributions support the scaling property model. See [Section 9.5](#scaling-property-model-cross-sectional).
 
 ### Copula Models
 
-_Cross-sectional models only._ A copula models the dependence between the noise term $v$ and the inefficiency term $u$. When `copula=:None` (default), $v$ and $u$ are assumed independent. With a copula, the joint density becomes $f(v,u) = f_v(v) \cdot f_u(u) \cdot c(F_v(v), F_u(u); \rho)$, where $c$ is the copula density and $\rho$ is the dependence parameter.
+_Cross-sectional models only._ A copula function models the dependence between the noise term $v$ and the inefficiency term $u$. When `copula=:None` (default), $v$ and $u$ are assumed independent. With a copula, the joint density becomes $f(v,u) = f_v(v) \cdot f_u(u) \cdot c(F_v(v), F_u(u); \rho)$, where $c$ is the copula density and $\rho$ is the dependence parameter.
 
 
-| Symbol       | Copula                | Domain            | Kendall's$\tau$        | Tail Dependence               | Init Parameter                           |
-| ------------ | --------------------- | ----------------- | ---------------------- | ----------------------------- | ---------------------------------------- |
-| `:Gaussian`  | Gaussian              | $\rho \in (-1,1)$ | $(2/\pi)\arcsin(\rho)$ | None                          | `theta_rho` $= \text{atanh}(\rho/0.999)$ |
-| `:Clayton`   | Clayton               | $\rho > 0$        | $\rho/(2+\rho)$        | Lower: $2^{-1/\rho}$           | `theta_rho` $= \log(\rho - 10^{-6})$     |
-| `:Clayton90` | Clayton 90° rotation | $\rho > 0$        | $-\rho/(2+\rho)$       | Upper-lower: $2^{-1/\rho}$ | `theta_rho` $= \log(\rho - 10^{-6})$     |
-| `:Gumbel`    | Gumbel                | $\rho \geq 1$     | $1 - 1/\rho$           | Upper: $2 - 2^{1/\rho}$        | `theta_rho` $= \log(\rho - 1)$           |
+| Symbol       | Copula                | Parameter            | Kendall's $\tau$        | Tail Dependence           | Init Parameter                           |
+| ------------ | --------------------- | ----------------- | ---------------------- | ------------------------- | ---------------------------------------- |
+| `:Gaussian`  | Gaussian              | $\rho \in (-1,1)$ | $(2/\pi)\arcsin(\rho)$ | None                      | `theta_rho` $= \text{atanh}(\rho)$ |
+| `:Clayton`   | Clayton               | $\rho > 0$        | $\rho/(2+\rho)$        | Lower: $2^{-1/\rho}$       | `theta_rho` $= \log(\rho)$     |
+| `:Clayton90` | Clayton 90° rotation | $\rho > 0$        | $-\rho/(2+\rho)$       | Upper-lower: $2^{-1/\rho}$ | `theta_rho` $= \log(\rho)$     |
+| `:Gumbel`    | Gumbel                | $\rho \geq 1$     | $1 - 1/\rho$           | Upper: $2 - 2^{1/\rho}$    | `theta_rho` $= \log(\rho - 1)$           |
 
 **Notes:**
 
-- Copula models are not available with `noise=:StudentT` (the Student-t CDF is not yet implemented for copula use).
+- Copula models are not available with `noise=:StudentT` (the copula density requires evaluating the Student-t CDF, to which its standard implementation is not compatible with the automatic differentiation used in the package).
 - The `theta_rho` initial value is on the transformed (unconstrained) scale. A value of `0.0` is a reasonable default for all copula types.
 - Clayton captures lower tail dependence (co-movement in the lower tail of distributions).
-- Clayton 90° (rotated) captures upper-lower tail dependence. It uses $F_v(-v)$ instead of $1 - F_v(v)$ internally for numerical precision.
+- Clayton 90° (rotated) captures upper-lower tail dependence.
 - Gumbel captures upper tail dependence (co-movement in the upper tail of distributions).
 - Gaussian has no tail dependence but allows flexible symmetric dependence.
-
----
-
-## 7. Distributions Reference
-
-##### Noise Distributions
-
-
-| Distribution | Specification                               | Required Init Parameters                                              |
-| ------------ | ------------------------------------------- | --------------------------------------------------------------------- |
-| Normal       | $v \sim N(0, \sigma_v^2)$                   | `ln_sigma_v_sq` = $\log(\sigma_v^2)$                                  |
-| StudentT     | $v \sim t(0, \sigma_v, \nu)$ with $\nu > 2$ | `ln_sigma_v_sq` = $\log(\sigma_v^2)$,<br> `ln_nu_minus_2` = $\log(\nu-2)$ |
-| Laplace      | $v \sim \text{Laplace}(0, b)$               | `ln_b` = $\log(b)$                                                    |
-
-##### Inefficiency Distributions
-
-
-| Distribution    | Specification                               | Required Init Parameters                         | Hetero Options                                 |
-| --------------- | ------------------------------------------- | ------------------------------------------------ | ---------------------------------------------- |
-| TruncatedNormal | $u \sim N^+(\mu, \sigma_u^2)$               | `mu` = $\mu$,<br> `ln_sigma_sq` = $\log(\sigma_u^2)$ | `:mu` for $\mu$,<br> `:sigma_sq` for $\sigma_u^2$  |
-| HalfNormal      | $u \sim N^+(0, \sigma^2)$                   | `ln_sigma_sq` = $\log(\sigma^2)$                 | `:sigma_sq` for $\sigma^2$                     |
-| Exponential     | $u \sim \text{Exp}(\lambda)$, $\lambda = \text{Var}(u)$ | `lambda` = $\lambda$                             | `:lambda` for $\lambda$                        |
-| Weibull         | $u \sim \text{Weibull}(\lambda, k)$         | `lambda` = $\lambda$, <br>`k` = $k$                  | `:lambda` for $\lambda$,<br> `:k` for $k$          |
-| Lognormal       | $u \sim \text{LogNormal}(\mu, \sigma^2)$    | `mu` = $\mu$,<br> `ln_sigma_sq` = $\log(\sigma^2)$   | `:mu` for $\mu$,<br> `:sigma_sq` for $\sigma^2$    |
-| Lomax           | $u \sim \text{Lomax}(\alpha, \lambda)$      | `ln_lambda` = $\log(\lambda)$, <br>`ln_alpha` = $\log(\alpha)$ | `:lambda` for $\lambda$,<br> `:alpha` for $\alpha$ |
-| Rayleigh        | $u \sim \text{Rayleigh}(\sigma)$            | `ln_sigma_sq` = $\log(\sigma^2)$               | `:sigma_sq` for $\sigma^2$                     |
-| Gamma           | $u \sim \text{Gamma}(k, \theta)$ (MCI only) | `k` = $k$, <br>`theta` = $\theta$                    | `:k` for $k$,<br> `:theta` for $\theta$            |
-
----
-
-**Notes:**
-
-- The "Required Init Parameters" column shows the argument names used in `sfmodel_init()` component mode.
-- The "Hetero Options" column shows valid symbols for the `hetero` argument in `sfmodel_spec()`.
-- **Scaling property model alternative**: Instead of making individual distribution parameters heteroscedastic (via `hetero = [:mu]`, etc.), you can use `hetero = :scaling` to model heterogeneity through a single multiplicative scaling function $u_i = h(\mathbf{z}_i) \cdot u_i^*$. Under scaling, all distribution parameters remain scalar and a separate set of $\boldsymbol{\delta}$ coefficients is estimated. All 8 inefficiency distributions support the scaling property model. See [Section 9.5](#scaling-property-model-cross-sectional).
 
 ### Parameterization
 
 When a parameter is modeled as heteroscedastic (observation-specific), we use a link function to ensure it stays in the correct domain:
 
 * **Linear link** for parameters on $(-\infty,\infty)$.
-  Example (TruncatedNormal): $\mu_i = Z_i'\delta$.
+  Example (truncated-normal): $\mu_i = Z_i'\delta$.
 * **Exponential link** for parameters on $(0,\infty)$.
-  Example (TruncatedNormal): $\sigma_{u,i}^2 = \exp(Z_i'\gamma)$, equivalently $\log(\sigma_{u,i}^2) = Z_i'\gamma$.
+  Example (truncated-normal): $\sigma_{u,i}^2 = \exp(Z_i'\gamma)$, equivalently $\log(\sigma_{u,i}^2) = Z_i'\gamma$.
 
 ### Parameter Vector Length
 
@@ -1235,7 +1478,7 @@ hetero = Symbol[]
 hetero = [:mu]
 # -> mu contributes L parameters (one for each Z column)
 
-# Fully heteroscedastic TruncatedNormal
+# Fully heteroscedastic truncated-normal
 hetero = [:mu, :sigma_sq]
 # -> mu contributes L, sigma_u^2 contributes L
 
@@ -1261,10 +1504,10 @@ spec = sfmodel_spec(
 )
 
 # Parameter vector structure:
-# [beta_1, beta_2, beta_3,           <- frontier (K = 3)
-#  delta_1, delta_2, delta_3, delta_4,     <- mu (L = 4, heteroscedastic)
-#  gamma_1, gamma_2, gamma_3, gamma_4,     <- ln_sigma_u^2 (L = 4, heteroscedastic)
-#  ln_sigma_v^2]                           <- noise variance (1)
+# [beta_1, beta_2, beta_3,               <- frontier (K = 3)
+#  delta_1, delta_2, delta_3, delta_4,   <- mu (L = 4, heteroscedastic)
+#  gamma_1, gamma_2, gamma_3, gamma_4,   <- ln_sigma_u^2 (L = 4, heteroscedastic)
+#  ln_sigma_v^2]                         <- noise variance (1)
 # Total: 3 + 4 + 4 + 1 = 12 parameters
 ```
 
@@ -1285,51 +1528,58 @@ spec = sfmodel_spec(
 
 # Parameter vector structure:
 # [beta_1, beta_2, beta_3,    <- frontier (K = 3)
-#  delta_1, delta_2,           <- scaling function (L_scaling = 2)
-#  ln_sigma^2,                 <- inefficiency (scalar, 1)
-#  ln_sigma_v^2]               <- noise variance (1)
+#  delta_1, delta_2,          <- scaling function (L_scaling = 2)
+#  ln_sigma^2,                <- inefficiency (scalar, 1)
+#  ln_sigma_v^2]              <- noise variance (1)
 # Total: 3 + 2 + 1 + 1 = 7 parameters
 ```
 
-### 7.1 Distribution Selection Guidance {#71-distribution-selection-guidance}
+### Distribution Selection Guidance
 
 #### Inefficiency Distribution
 
 The choice of inefficiency distribution affects the shape of the estimated inefficiency, particularly its mode and tail behavior. The following table summarizes the key properties:
 
-| Distribution | Parameters | Mode at Zero? | Tail | Recommended Use |
-| ------------ | ---------- | ------------- | ---- | --------------- |
-| HalfNormal | 1 ($\sigma$) | Yes | Light | Default starting point; most common in the literature |
-| Exponential | 1 ($\lambda$) | Yes | Light | Simple alternative to HalfNormal; monotone decreasing density |
-| TruncatedNormal | 2 ($\mu$, $\sigma$) | Not necessarily | Light | When the mode of inefficiency may be at a positive value |
-| Rayleigh | 1 ($\sigma$) | No (mode > 0) | Light | One-parameter distribution with mode away from zero |
-| Weibull | 2 ($\lambda$, $k$) | Flexible | Moderate | Flexible shape: mode at zero ($k \le 1$) or positive ($k > 1$) |
-| Lognormal | 2 ($\mu$, $\sigma$) | No (mode > 0) | Heavy | Right-skewed inefficiency with a heavy right tail |
-| Lomax | 2 ($\alpha$, $\lambda$) | Yes | Heavy | Heavy-tailed; useful when a few firms are highly inefficient |
-| Gamma | 2 ($k$, $\theta$) | Flexible | Moderate | Maximum flexibility; requires MCI method |
+
+| Distribution    | Parameters              | Mode at Zero?   | Tail     | Recommended Use                                                |
+| --------------- | ----------------------- | --------------- | -------- | -------------------------------------------------------------- |
+| half-normal      | 1 ($\sigma$)            | Yes             | Light    | Default starting point; most common in the literature          |
+| Exponential     | 1 ($\lambda$)           | Yes             | Light    | Simple alternative to half-normal; monotone decreasing density  |
+| truncated-normal | 2 ($\mu$, $\sigma$)     | Not necessarily | Light    | When the mode of inefficiency may be at a positive value       |
+| Rayleigh        | 1 ($\sigma$)            | No (mode > 0)   | Light    | One-parameter distribution with mode away from zero            |
+| Weibull         | 2 ($\lambda$, $k$)      | Flexible        | Moderate | Flexible shape: mode at zero ($k \le 1$) or positive ($k > 1$) |
+| Lognormal       | 2 ($\mu$, $\sigma$)     | No (mode > 0)   | Heavy    | Right-skewed inefficiency with a heavy right tail              |
+| Lomax           | 2 ($\alpha$, $\lambda$) | Yes             | Heavy    | Heavy-tailed; useful when a few firms are highly inefficient   |
+| Gamma           | 2 ($k$, $\theta$)       | Flexible        | Moderate | Maximum flexibility; requires MCI method                       |
 
 **Practical workflow:**
 
-1. **Start simple.** Begin with HalfNormal or Exponential. These one-parameter distributions are easy to estimate (MLE available) and serve as a baseline.
-2. **Allow non-zero mode.** If theory suggests that most firms have some positive level of inefficiency (rather than clustering near zero), try TruncatedNormal or Rayleigh.
+1. **Start simple.** Begin with half-normal or Exponential. These one-parameter distributions are easy to estimate (MLE available) and serve as a baseline.
+2. **Allow non-zero mode.** If theory suggests that most firms have some positive level of inefficiency (rather than clustering near zero), try truncated-normal or Rayleigh.
 3. **Add flexibility.** If one- or two-parameter distributions seem restrictive, try Weibull, Lognormal, or Gamma. These can capture a wider variety of shapes but require simulation-based estimation (MCI or MSLE).
-4. **Compare models.** Compare log-likelihood values across specifications. Higher log-likelihood (less negative) indicates better fit. For nested models, use a likelihood ratio test (see [Section 5.6](#56-sfmodel_mixtable-and-sfmodel_chisquaretable) for critical values).
+
 
 #### Noise Distribution
 
-| Distribution | When to Use |
-| ------------ | ----------- |
-| Normal | Default and standard assumption. Use unless there is specific evidence otherwise. |
-| Student-t | When residuals exhibit excess kurtosis (heavier tails than Normal). The degrees-of-freedom parameter $\nu$ is estimated. |
-| Laplace | When the noise distribution is believed to be double-exponential (sharper peak, heavier tails than Normal). |
+
+| Distribution | When to Use                                                                                                             |
+| ------------ | ----------------------------------------------------------------------------------------------------------------------- |
+| Normal       | Default and standard assumption.                                       |
+| Student-t    | When residuals exhibit excess kurtosis (heavier tails than Normal). The degrees-of-freedom parameter$\nu$ is estimated. |
+| Laplace      | When the noise distribution is believed to be double-exponential (sharper peak, heavier tails than Normal).             |
 
 > **Note:** Student-t and Laplace noise require simulation-based estimation (MCI or MSLE) and are available for cross-sectional models only.
 
 ---
 
+<a id="working-with-results"></a>
+
 ## 8. Working with Results
 
-### Accessing Efficiency Indices
+### Efficiency Indices
+
+- **JLMS inefficiency index** $E(u_i \mid \varepsilon_i)$: The conditional expectation of inefficiency for each observation. Higher values indicate greater inefficiency.
+- **Battese-Coelli (BC) efficiency index** $E(e^{-u_i} \mid \varepsilon_i)$: The efficiency ratio, bounded between 0 and 1. A BC value of 0.85 means the firm produces 85% of its potential output.
 
 ```julia
 result = sfmodel_fit(spec = myspec, method = mymeth, jlms_bc_index = true)
@@ -1347,9 +1597,14 @@ println("Firm 1 efficiency: ", bc[1])
 println("Firm 1 inefficiency: ", jlms[1])
 ```
 
-### Working with Marginal Effects
+### Marginal Effects
 
-Marginal effects measure how changes in Z variables affect expected inefficiency E(u):
+Marginal effects measure how changes in Z variables affect expected inefficiency $E(u)$. They are available when `zvar` is specified and `marginal = true` in `sfmodel_fit()`.
+
+- **Observation-level marginal effects** (`result.marginal`): A DataFrame with one row per observation, showing $\partial E(u_i) / \partial z_{ij}$ for each Z variable.
+- **Mean marginal effects** (`result.marginal_mean`): Sample averages of the observation-level effects.
+- **Interpretation:** A positive marginal effect means that increasing $z_j$ increases expected inefficiency.
+
 
 ```julia
 result = sfmodel_fit(spec = myspec, method = mymeth, marginal = true)
@@ -1399,24 +1654,8 @@ if haskey(result.list, :ln_sigma_v_sq)
 end
 ```
 
-### 8.1 Interpreting Estimation Results {#81-interpreting-estimation-results}
 
-#### Efficiency Indices
-
-- **JLMS inefficiency index** $E(u_i \mid \varepsilon_i)$: The conditional expectation of inefficiency for each observation. Higher values indicate greater inefficiency. Typical summary statistics to report: mean, median, min, max, and standard deviation across firms.
-
-- **Battese-Coelli (BC) efficiency index** $E(e^{-u_i} \mid \varepsilon_i)$: The efficiency ratio, bounded between 0 and 1. A BC value of 0.85 means the firm produces 85% of its potential output. For cost frontiers, the same value means the firm's costs are $1/0.85 \approx 117.6\%$ of the efficient cost level.
-
-#### Marginal Effects
-
-When `zvar` is specified and `marginal = true` in `sfmodel_fit()`:
-
-- **Observation-level marginal effects** (`result.marginal`): A DataFrame with one row per observation, showing $\partial E(u_i) / \partial z_{ij}$ for each Z variable.
-- **Mean marginal effects** (`result.marginal_mean`): Sample averages of the observation-level effects.
-- **Interpretation:** A positive marginal effect means that increasing $z_j$ increases expected inefficiency.
-- **Scaling property model:** The estimated $\delta_j$ coefficients are semi-elasticities: $\partial \ln E(u_i) / \partial z_{ij} = \delta_j$. A coefficient of 0.10 means a one-unit increase in $z_j$ increases expected inefficiency by approximately 10%.
-
-#### Log-Transformed Parameters
+### Log-Transformed Parameters
 
 Many parameters are estimated on a log-transformed scale (e.g., `ln_sigma_sq`, `ln_sigma_v_sq`, `ln_lambda`). To recover the original-scale value, take the exponential:
 
@@ -1425,43 +1664,34 @@ sigma_u_sq = exp(result.ln_sigma_sq)    # σ_u²
 sigma_v_sq = exp(result.ln_sigma_v_sq)  # σ_v²
 ```
 
-The auxiliary table printed by `sfmodel_fit()` (when `show_table = true`) already reports the original-scale values alongside the log-transformed estimates.
+The auxiliary table printed by `sfmodel_fit()` (when `show_table = true`) already reports the original-scale values alongside the log-transformed estimates, and the corresponding standard errors are calculated using the delta method.
 
-#### Red Flags
-
-Watch for these warning signs in the estimation output:
-
-| Indicator | What It Means |
-| --------- | ------------- |
-| `redflag = 1` | Convergence issues detected (large gradient, iteration limit, or non-positive Hessian diagonal) |
-| Wrong-sign `OLS_resid_skew` | Data may not support the presence of inefficiency in the assumed direction (see [Cost Frontier Interpretation](#92-cost-frontier-interpretation)) |
-| BC values near 1.0 for all firms | Inefficiency may be negligible; consider whether a frontier model is appropriate |
-| Very large standard errors | Possible multicollinearity in covariates or near-boundary parameter estimates |
-| Gradient norm > 0.1 | Optimization did not reach a stationary point; results may be unreliable |
 
 ---
 
-## 9. Advanced Topics
+<a id="special-topics"></a>
+
+## 9. Special Topics
 
 ### Choosing Between MLE, MCI, and MSLE
 
 The package offers three estimation methods. MLE uses analytic (closed-form) log-likelihoods, while MCI and MSLE are simulation-based and use Halton quasi-random draws.
 
 
-| Feature              | MLE                            | MCI                           | MSLE                            |
-| -------------------- | ------------------------------ | ----------------------------- | ------------------------------- |
-| Likelihood           | Analytic (exact)               | Simulated                     | Simulated                       |
-| Simulation draws     | Not needed                     | Halton QMC                    | Halton QMC                      |
-| GPU support          | No                             | Yes                           | Yes                             |
-| Noise distributions  | Normal only                    | Normal, StudentT, Laplace     | Normal, StudentT, Laplace       |
-| Ineff distributions  | HalfNormal, TruncNormal, Expo | All 8                         | All except Gamma                |
-| Copula support       | None                           | Gaussian, Clayton, Clayton90, Gumbel | Gaussian, Clayton, Clayton90, Gumbel |
-| Scaling property     | Yes (TruncNormal only)         | All 8 distributions           | All except Gamma                |
-| Heteroscedastic      | Yes                            | Yes                           | Yes                             |
-| Panel models         | TFE, TFE_CSW, TRE             | TFE only                      | TFE only                        |
-| Default`n_draws`     | N/A                            | 1024                          | 1024                            |
+| Feature             | MLE                           | MCI                                  | MSLE                                 |
+| ------------------- | ----------------------------- | ------------------------------------ | ------------------------------------ |
+| Likelihood          | Analytic (exact)              | Simulated                            | Simulated                            |
+| Simulation draws    | Not needed                    | Halton sequence<br>or user supplied sequence                           | Halton sequence<br>or user supplied sequence                           |
+| GPU support         | No                            | Yes                                  | Yes                                  |
+| Noise distributions | Normal only                   | Normal, StudentT, Laplace            | Normal, StudentT, Laplace            |
+| Ineff distributions | half-normal, trunc-normal, Expo | All 8                                | All except Gamma                     |
+| Copula support      | None                          | Gaussian, Clayton, Clayton90, Gumbel | Gaussian, Clayton, Clayton90, Gumbel |
+| Scaling property    | Yes (TruncNormal only)        | All 8 distributions                  | All except Gamma                     |
+| Heteroscedastic     | Yes                           | Yes                                  | Yes                                  |
+| Panel models        | TFE, TFE_CSW, TRE             | TFE only                             | TFE only                             |
+| Default`n_draws`    | N/A                           | 1024                                 | 1024                                 |
 
-**When to use MLE:** If your model uses Normal noise with HalfNormal, TruncatedNormal, or Exponential inefficiency (and no copula), MLE is the natural first choice — it is exact (no simulation error), fast, and does not require tuning the number of draws.
+**When to use MLE:** If your model uses Normal noise with half-normal, truncated-normal, or Exponential inefficiency (and no copula), MLE is the natural first choice — it is exact (no simulation error), fast, and does not require tuning the number of draws.
 
 **When to use MCI/MSLE:** For models that MLE cannot handle (non-Normal noise, copula dependence, Weibull/Lognormal/Lomax/Rayleigh/Gamma inefficiency), the simulation-based methods are required. For models supported by all three methods, MLE and simulation estimates typically agree closely.
 
@@ -1469,23 +1699,33 @@ The package offers three estimation methods. MLE uses analytic (closed-form) log
 
 ### GPU Computation
 
-For large datasets, GPU computation can significantly speed up estimation:
+GPU acceleration is available for the simulation-based methods (MCI and MSLE) and is highly recommended when the number of draws or the sample size is large. MLE does not use GPU because its likelihood is analytic.
+
+**Why GPU helps.** Simulation-based estimation evaluates the likelihood contribution for every combination of $N$ observations and $S$ draws, forming an $N \times S$ matrix. These element-wise operations are massively parallel and map naturally onto GPU architectures. In practice, enabling GPU can reduce estimation time from minutes to seconds.
+
+**Requirements:**
+
+1. An NVIDIA GPU with a compatible driver installed on the machine.
+2. The Julia package CUDA.jl (`using CUDA`). Julia 1.10 or later is required.
+3. CUDA.jl must be loaded **before** SFrontiers.jl in every session. SFrontiers detects CUDA at load time; if the order is reversed, GPU features will not be available and you must restart Julia (see [Section 3](#installation-and-dependencies)).
+
+**Usage:**
 
 ```julia
-using CUDA
+using CUDA          # must come before SFrontiers
+using SFrontiers
 
 meth = sfmodel_method(
     method = :MSLE,
     n_draws = 2^12 - 1,
-    GPU = true,        # Enable GPU
-    chunks = 10        # Split computation into 10 chunks for memory management
+    GPU = true,        # enable GPU acceleration
+    chunks = 10        # split data into 10 batches for memory management
 )
 ```
 
-Requirements:
+**Managing GPU memory with `chunks`.** When $N$ or $S$ is large, the full $N \times S$ matrix may exceed GPU VRAM. The `chunks` option splits the $N$ observations into smaller batches of size $N/\text{chunks}$, processing each sequentially while accumulating the log-likelihood. This trades a small amount of overhead for significantly lower peak memory usage. Start with the default (`chunks = 10`) and increase if you encounter out-of-memory errors. On Windows, Task Manager can be used to monitor VRAM usage in real time.
 
-- CUDA.jl must be loaded **before** SFrontiers.jl (see [Section 3](#3-installation-and-dependencies))
-- The `chunks` parameter controls memory usage by processing data in chunks
+> **Tip:** The `chunks` option also works on CPU and can help with large datasets even without a GPU.
 
 ### Copula Models
 
@@ -1494,12 +1734,12 @@ To model dependence between the noise and inefficiency terms, specify a copula:
 ```julia
 # Clayton copula (lower tail dependence)
 spec = sfmodel_spec(
+    type = :production,
     depvar = y,
     frontier = X,
     noise = :Normal,
     ineff = :HalfNormal,
     copula = :Clayton,
-    type = :production
 )
 
 # Initial values must include theta_rho for the copula parameter
@@ -1513,22 +1753,22 @@ myinit = sfmodel_init(
 
 # Clayton 90° rotated copula (upper-lower tail dependence)
 spec_c90 = sfmodel_spec(
+    type = :production,
     depvar = y,
     frontier = X,
     noise = :Normal,
     ineff = :HalfNormal,
     copula = :Clayton90,
-    type = :production
 )
 
 # Gumbel copula (upper tail dependence)
 spec_g = sfmodel_spec(
+    type = :production,
     depvar = y,
     frontier = X,
     noise = :Normal,
     ineff = :Exponential,
     copula = :Gumbel,
-    type = :production
 )
 ```
 
@@ -1538,29 +1778,19 @@ The estimation output includes a copula auxiliary table showing:
 - Kendall's $\tau$: rank correlation measure
 - Tail dependence coefficient
 
-#### Copula Interpretation Guide {#91-copula-interpretation-guide}
 
-**Interpreting Kendall's $\tau$:**
-
-Kendall's $\tau$ measures the degree of concordance (rank correlation) between the noise term $v$ and the inefficiency term $u$. A positive $\tau$ means that firms with larger noise shocks tend to have larger inefficiency (and vice versa). A negative $\tau$ indicates the opposite pattern. The magnitude of $\tau$ reflects the strength of the dependence.
 
 **Tail dependence by copula type:**
 
-| Copula | Tail Dependence | Interpretation |
-| ------ | --------------- | -------------- |
-| Gaussian | None (symmetric, no tail dependence) | Dependence is moderate and evenly spread; no extreme co-movement in the tails |
-| Clayton | Lower tail | Firms at the low end of both $v$ and $u$ tend to co-move; captures "floor effects" where small disturbances coincide with low inefficiency |
-| Clayton 90° | Upper-lower (rotated) | Mixed tail dependence pattern; useful when dependence is asymmetric in a non-standard direction |
-| Gumbel | Upper tail | Firms at the high end of both $v$ and $u$ tend to co-move; captures "ceiling effects" where large shocks coincide with high inefficiency |
 
-**When to choose which copula:**
+| Copula       | Tail Dependence                      | Interpretation                                                                                                                            |
+| ------------ | ------------------------------------ | ----------------------------------------------------------------------------------------------------------------------------------------- |
+| Gaussian     | None (symmetric, no tail dependence) | Dependence is moderate and evenly spread; no extreme co-movement in the tails                                                             |
+| Clayton      | Lower tail                           | Firms at the low end of $v$ (e.g., negative shock) and low end of $u$ (e.g., efficient) move together. |
+| Clayton 90° | Upper-lower (rotated)                | Firms at the high end of $v$ (e.g., positive shock) and low end of $u$ (e.g., efficient) move together.                                           |
+| Gumbel       | Upper tail                           | Firms at the high end of both $v$ and $u$ move together.  |
 
-1. **Start with `copula = :None`** (independence). Estimate the model without copula dependence as a baseline.
-2. **Try Gaussian** if you suspect general dependence but have no strong prior on tail behavior. It is the most flexible symmetric option.
-3. **Try Clayton or Gumbel** if you expect that dependence is stronger for extreme values (e.g., very efficient or very inefficient firms behave differently from the rest).
-4. **Compare models** using the log-likelihood values across specifications. Also check whether the estimated $\hat{\rho}$ (copula parameter) is statistically significant — its standard error and z-statistic are reported in the estimation output.
-
-> **Note:** Copula models are supported only for cross-sectional data. Student-t noise is not compatible with copulas.
+> **Note:** Copula models are supported only for cross-sectional data. Student-t noise is not compatible with copulas (the copula density requires evaluating the Student-t CDF, to which its standard implementation is not compatible with the automatic differentiation used in the package).
 
 ### Scaling Property Model (Cross-Sectional)
 
@@ -1581,33 +1811,34 @@ where $u_i^*$ follows a homoscedastic (scalar-parameter) base distribution and $
 
 **Unconditional mean** $E(u_i) = h(\mathbf{z}_i) \cdot E(u_i^*)$, where $E(u_i^*)$ depends on the base distribution:
 
-| Distribution    | $E(u_i^*)$                                                                    |
-| --------------- | ----------------------------------------------------------------------------- |
-| HalfNormal      | $\sigma\sqrt{2/\pi}$                                                          |
-| TruncatedNormal | $\sigma_u(\Lambda + \phi(\Lambda)/\Phi(\Lambda))$, $\Lambda = \mu/\sigma_u$   |
-| Exponential     | $\sqrt{\lambda}$                                                               |
-| Weibull         | $\lambda\,\Gamma(1 + 1/k)$                                                    |
-| Lognormal       | $\exp(\mu + \sigma^2/2)$                                                       |
-| Lomax           | $\lambda / (\alpha - 1)$, $\alpha > 1$                                         |
-| Rayleigh        | $\sigma\sqrt{\pi/2}$                                                           |
-| Gamma           | $k\theta$                                                                      |
 
-**Identification constraint**: The `zvar` matrix must **not** contain a constant column. A constant in $\mathbf{z}_i$ would create an intercept $\delta_0$ that is not separately identified from the scale parameter of the base distribution (e.g., $\sigma$ in HalfNormal or $\lambda$ in Exponential).
+| Distribution    | $E(u_i^*)$                                                                  |
+| --------------- | --------------------------------------------------------------------------- |
+| half-normal      | $\sigma\sqrt{2/\pi}$                                                        |
+| truncated-normal | $\sigma_u(\Lambda + \phi(\Lambda)/\Phi(\Lambda))$, $\Lambda = \mu/\sigma_u$ |
+| Exponential     | $\sqrt{\lambda}$                                                            |
+| Weibull         | $\lambda\,\Gamma(1 + 1/k)$                                                  |
+| Lognormal       | $\exp(\mu + \sigma^2/2)$                                                    |
+| Lomax           | $\lambda / (\alpha - 1)$, $\alpha > 1$                                      |
+| Rayleigh        | $\sigma\sqrt{\pi/2}$                                                        |
+| Gamma           | $k\theta$                                                                   |
 
-**Supported distributions**: All 8 inefficiency distributions are supported. The Gamma distribution requires `method = :MCI`. All other distributions work with both `:MSLE` and `:MCI`.
+**Identification constraint**: The `zvar` matrix must **not** contain a constant column. A constant in $\mathbf{z}_i$ would create an intercept that is not separately identified from the scale parameter of the base distribution (e.g., $\sigma$ in half-normal or $\lambda$ in Exponential).
+
+**Supported distributions**: All 8 inefficiency distributions are supported. The Gamma distribution requires `method = :MCI`.
 
 #### Usage Example
 
 ```julia
 # Step 1: Specify a scaling property model
 spec = sfmodel_spec(
+    type = :production,
     depvar = y,
     frontier = X,                 # include constant
     zvar = Z_nocons,              # environmental variables (NO constant!)
     noise = :Normal,
     ineff = :HalfNormal,
     hetero = :scaling,            # activates scaling property model
-    type = :production
 )
 
 # Step 2: Choose estimation method (both MSLE and MCI work)
@@ -1655,6 +1886,7 @@ The scaling property model can be combined with copula dependence:
 
 ```julia
 spec = sfmodel_spec(
+    type = :production,
     depvar = y,
     frontier = X,
     zvar = Z_nocons,
@@ -1662,7 +1894,6 @@ spec = sfmodel_spec(
     ineff = :HalfNormal,
     hetero = :scaling,
     copula = :Clayton,
-    type = :production
 )
 
 init = sfmodel_init(
@@ -1675,18 +1906,18 @@ init = sfmodel_init(
 )
 ```
 
-### Cost Frontier Models {#92-cost-frontier-interpretation}
+### Cost Frontier Models
 
 For cost frontiers, where inefficiency increases costs:
 
 ```julia
 spec = sfmodel_spec(
+    type = :cost,           # Cost frontier
     depvar = totalC,
     frontier = X,
     zvar = Z,
     noise = :Normal,
     ineff = :Exponential,
-    type = :cost    # Cost frontier
 )
 ```
 
@@ -1701,14 +1932,15 @@ The software handles the sign convention internally when `type = :cost` is set. 
 
 #### Interpretation Differences
 
-| Aspect | Production Frontier | Cost Frontier |
-| ------ | ------------------- | ------------- |
-| Composed error | $\varepsilon = v - u$ | $\varepsilon = v + u$ |
-| OLS residual skewness | Should be **negative** | Should be **positive** |
-| JLMS $E(u \mid \varepsilon)$ | Higher = more inefficient | Same interpretation |
-| BC $E(e^{-u} \mid \varepsilon)$ | Closer to 1 = more efficient | Same interpretation |
-| BC interpretation | Firm produces $\text{BC} \times 100\%$ of potential output | Firm's cost is $\frac{1}{\text{BC}} \times 100\%$ of the efficient cost level |
-| Frontier coefficients | Output elasticities | Cost elasticities |
+
+| Aspect                         | Production Frontier                                       | Cost Frontier                                                                |
+| ------------------------------ | --------------------------------------------------------- | ---------------------------------------------------------------------------- |
+| Composed error                 | $\varepsilon = v - u$                                     | $\varepsilon = v + u$                                                        |
+| OLS residual skewness          | Should be**negative**                                     | Should be**positive**                                                        |
+| JLMS$E(u \mid \varepsilon)$    | Higher = more inefficient                                 | Same interpretation                                                          |
+| BC$E(e^{-u} \mid \varepsilon)$ | Closer to 1 = more efficient                              | Same interpretation                                                          |
+| BC interpretation              | Firm produces$\text{BC} \times 100\%$ of potential output | Firm's cost is$\frac{1}{\text{BC}} \times 100\%$ of the efficient cost level |
+| Frontier coefficients          | Output elasticities                                       | Cost elasticities                                                            |
 
 #### Common Pitfall: Wrong-Sign Skewness
 
@@ -1721,12 +1953,12 @@ If the skewness has the wrong sign, the data may not support the presence of ine
 
 ### Choosing the Number of Halton Draws
 
-The number of QMC draws affects accuracy and computation time:
+The number of Monte Carlo draws affects accuracy and computation time. The following is provided only as a rough reference.
 
 
 | n_draws           | Typical Use Case              |
 | ----------------- | ----------------------------- |
-| 127               | Quick testing                 |
+| 127               | Quick testing, CPU comfortable                 |
 | 1024              | Standard estimation (default) |
 | 4095 ($2^{12}-1$) | Publication-quality results   |
 | 8191              | High precision                |
@@ -1738,27 +1970,33 @@ meth = sfmodel_method(
 )
 ```
 
-### Observation-Specific Halton Draws (multiRand)
+### Observation-Specific Halton Draws (`multiRand`)
 
-By default (`multiRand=true`), each observation receives a different consecutive segment of the Halton sequence, providing better quasi-Monte Carlo coverage for the model:
+Simulation-based estimation (MCI and MSLE) approximates the likelihood by drawing simulated inefficiency values $\{u_i^s\}$, $s = 1, \ldots, S$, for each observation $i$. These are generated from a set of uniform draws $\{r_i^s\} \in (0, 1)$ via **inverse transform sampling**: $u_i^s = F^{-1}(r_i^s)$, where $F^{-1}$ is the inverse CDF (quantile function) of the assumed inefficiency distribution. This works because if $r$ is uniformly distributed on $(0, 1)$, then $F^{-1}(r)$ follows the distribution $F$.
 
-- Observation 1 gets draws [1, 2, ..., D]
-- Observation 2 gets draws [D+1, D+2, ..., 2D]
-- And so on, recycling the sequence when it runs out
+Instead of using pseudo-random uniform draws, the package uses the base-2 **Halton sequence** — a deterministic low-discrepancy sequence that covers the $(0, 1)$ interval more evenly than random sampling, leading to faster convergence of the simulated likelihood. For further variance reduction, the draws $\{r_i^s\}$ should be fixed across optimization iterations for a given observation $i$ but vary across different observations. The `multiRand=true` option (default) achieves this by assigning each observation its own consecutive segment of the Halton sequence. The algorithm, proposed by Chen and Wang (2026), is designed to maximize the number of distinct elements while leveraging the optimal coverage properties of the base-2 Halton sequence.
 
-The mechanism is designed so that a complete, equidistributed Halton sequence of length $L$ is generated and then assigned to $N$ observations in consecutive blocks of $D$ draws, and it is recycled, if necessary, to fill in the $N\times D$ elements.
+**Algorithm.** Let $S$ denote the number of draws per observation and $N$ the sample size.
 
-We impose a default upper bound of $L=2^{15}-1=32767$ (controlled by `distinct_Halton_length`) to avoid generating points that lie extremely close to 0 or 1, which can trigger numerical instability in floating-point arithmetic (e.g., through $\log(t)$, $\log(1-t)$, or divisions by $t$ or $(1-t)$). This bound can be increased via the `distinct_Halton_length` option in `sfmodel_method()`.
+1. Compute the total number of draws needed: $Q = N \times S$.
+2. Find the largest integer $m^*$ such that $2^{m^*} - 1 \leq Q$, i.e., $m^* = \lfloor \log_2(Q + 1) \rfloor$. Generate a base-2 Halton sequence of length $M = 2^{m^*} - 1$.
+3. If $Q > M$, extend the sequence by wrapping around: append the first $Q - M$ elements of the sequence to itself, bringing the total length to exactly $Q$. Since any subset of the Halton sequence retains its low-discrepancy property, the recycled portion preserves the uniformity of the original sequence.
 
-Ideally $L \leq N \times D$ so that the full sequence is consumed and recycled if necessary. When $N \times D < L$, the length-$L$ sequence cannot be fully utilized. In this case, the program automatically selects the longest $L'$ satisfying $L' \leq N \times D$ and uses it as described.
+The resulting length-$Q$ sequence is then divided among observations in consecutive blocks: observation 1 receives elements $[1, \ldots, S]$, observation 2 receives $[S+1, \ldots, 2S]$, and so on.
 
-**Constraint**: When `multiRand=true`, `n_draws` (the number of draws per observation) must be $\leq$ `distinct_Halton_length` (default $2^{15} - 1 = 32767$). To use more draws, either increase `distinct_Halton_length` or set `multiRand=false`.
+> **Why $2^m - 1$?** The base-2 Halton sequence achieves particularly well-balanced spacing at lengths of $2^m - 1$. For example, at $m = 3$ the sequence produces 7 points $\{0.5, 0.25, 0.75, 0.125, 0.625, 0.375, 0.875\}$, which are evenly distributed over $[0,1)$. Adding an 8th point ($0.0625$) would disrupt this balance. The algorithm therefore truncates at the largest such length that fits within $Q$ to ensure optimal coverage.
+
+**Example.** Suppose $N = 200$ and $S = 60$. Then $Q = 12{,}000$ and $m^* = \lfloor \log_2(12{,}001) \rfloor = 13$, so the algorithm generates $M = 2^{13} - 1 = 8{,}191$ distinct Halton points and recycles the first $3{,}809$ to fill the remaining slots, for a total of $12{,}000$. Each observation is assigned a consecutive block of 60 draws. If $N$ increases to $5{,}000$ (with the same $S = 60$), then $Q = 300{,}000$, $m^* = 18$, and $M = 262{,}143$ distinct elements are generated.
+
+**Upper bound on sequence length.** The option `distinct_Halton_length` (default $2^{15} - 1 = 32{,}767$) caps the length of the generated sequence to avoid Halton points that lie extremely close to 0 or 1, which can trigger numerical instability through operations like $\log(t)$ or $1/(1 - t)$. In practice, the algorithm uses $\min(M,\, \texttt{distinct\_Halton\_length})$ as the effective sequence length. This cap can be increased via the `distinct_Halton_length` option in `sfmodel_method()`.
+
+**Constraint**: When `multiRand=true`, `n_draws` must be $\leq$ `distinct_Halton_length` (default $32{,}767$). To use more draws per observation, either increase `distinct_Halton_length` or set `multiRand=false`.
 
 ```julia
 # Default: observation-specific draws (recommended)
 meth = sfmodel_method(
     method = :MSLE,
-    n_draws = 1024,    # Must be <= distinct_Halton_length (default 32767)
+    n_draws = 1024,    # per obs draws; must be <= distinct_Halton_length (default 32767)
     multiRand = true   # Default
 )
 
@@ -1778,21 +2016,33 @@ meth = sfmodel_method(
 )
 ```
 
-### Custom Halton Sequences
+### Custom Draw Sequences
 
-For reproducibility or special requirements when using `multiRand=false`:
+Instead of using the built-in base-2 Halton sequence, users can supply their own uniform draws $\{r^s\}$, $s = 1, \ldots, S$, via the `draws` option in `sfmodel_method()`. This allows the use of alternative low-discrepancy sequences (e.g., Halton with a different base, Sobol sequences) or pseudo-random numbers. The custom sequence must be a $1 \times S$ matrix, and the same draws are applied to all observations (`multiRand=false` is required).
+
+
 
 ```julia
+# Example 1: Custom Halton sequence (e.g., different base via HaltonSequences.jl)
 using HaltonSequences
 
-# Generate custom Halton sequence as 1xD matrix (required format for multiRand=false)
 halton_vec = make_halton_p(1024; T = Float64)
-halton = reshape(halton_vec, 1, length(halton_vec))  # Convert to 1xD
+halton = reshape(halton_vec, 1, length(halton_vec))  # Convert to 1xS
 
 meth = sfmodel_method(
     method = :MSLE,
-    draws = halton,     # Pre-reshaped 1xD matrix
-    multiRand = false   # Required when providing custom 1xD draws
+    draws = halton,     # 1xS matrix
+    multiRand = false   # required when providing custom draws
+)
+
+# Example 2: Pseudo-random uniform draws
+S = 1024
+rand_draws = reshape(rand(S), 1, S)  # 1xS matrix of U(0,1) draws
+
+meth = sfmodel_method(
+    method = :MSLE,
+    draws = rand_draws,
+    multiRand = false
 )
 ```
 
@@ -1802,17 +2052,11 @@ If estimation fails to converge:
 
 1. **Try different initial values**
 
-   ```julia
-   # Use grid search for starting values
-   for sigma_init in [-2.0, -1.0, 0.0, 1.0]
-       init = sfmodel_init(spec=spec, ..., ln_sigma_sq=[sigma_init])
-       result = sfmodel_fit(spec=spec, method=meth, init=init)
-       if result.converged
-           break
-       end
-   end
-   ```
-2. **Increase warmstart iterations**
+   Convergence failures are often caused by poor starting points. Use `sfmodel_init()` to supply values closer to the expected estimates — for example, based on OLS residuals or results from a simpler model. Even small changes in initial values can determine whether the optimizer finds the global maximum or gets stuck at a local optimum or saddle point.
+
+2. **Change warmstart iterations**
+
+    Note, more warmstart iterations are not always better — an excessive warmstart can overshoot and move the parameters away from the basin of the global optimum, making it harder for the main solver to converge.
 
    ```julia
    myopt = sfmodel_opt(
@@ -1832,14 +2076,8 @@ If estimation fails to converge:
        main_opt = (iterations = 2000,)
    )
    ```
-4. **Check the gradient norm**
 
-   ```julia
-   if result.gradient_norm > 0.1
-       println("Warning: Large gradient norm indicates poor convergence")
-   end
-   ```
-5. **Try a different estimation method**
+4. **Try a different estimation method**
 
    If one method has convergence difficulties, try another:
 
@@ -1849,49 +2087,44 @@ If estimation fails to converge:
    result = sfmodel_fit(spec = spec, method = meth_alt)
 
    # Or try MLE (if the model supports it: Normal noise, no copula,
-   # HalfNormal/TruncatedNormal/Exponential inefficiency)
+   # half-normal/truncated-normal/Exponential inefficiency)
    meth_mle = sfmodel_method(method = :MLE)
    result = sfmodel_fit(spec = spec, method = meth_mle)
    ```
-6. **Check OLS residual skewness**
+5. **Check OLS residual skewness**
 
    Before investing effort in convergence tuning, verify that the data supports the presence of inefficiency. If `result.OLS_resid_skew` has the wrong sign (positive for production, negative for cost), the data may not exhibit the one-sided pattern that stochastic frontier models require. In such cases, even a perfectly converged model may produce meaningless estimates.
-
-7. **Reduce model complexity first**
+6. **Reduce model complexity first**
 
    If a heteroscedastic or copula model fails to converge, first estimate a simpler version:
+
    - Drop the copula (`copula = :None`) to establish a baseline.
    - Remove heteroscedasticity (`hetero = Symbol[]`) and use a homoscedastic specification.
-   - Use a simpler inefficiency distribution (e.g., HalfNormal instead of Lognormal).
+   - Use a simpler inefficiency distribution (e.g., half-normal instead of Lognormal).
 
    Once the simple model converges, use its estimates as initial values for the more complex specification.
-
-8. **Diagnostic decision tree**
-
-   | Symptom | Likely Cause | Action |
-   | ------- | ------------ | ------ |
-   | Warmstart did not converge | Poor starting region | Increase warmstart iterations (e.g., 500+) or switch to `ParticleSwarm()` for global search |
-   | Main stage did not converge | Starting values still far from optimum | Use warmstart estimates as init, increase main iterations, or try `BFGS()` instead of `Newton()` |
-   | Hessian non-invertible | Model overparameterized or data insufficient | Reduce model complexity; check for multicollinearity in X or Z |
-   | Very large standard errors | Near-boundary parameters or collinear covariates | Check correlation among Z variables; consider dropping redundant covariates |
-   | Gradient norm between 0.01 and 0.1 | Near convergence but not quite | Increase `iterations` or loosen `g_abstol` slightly |
-   | Gradient norm > 1 | Far from optimum | Completely different initial values needed; try grid search |
+                               |
 
 ---
 
+<a id="panel-data-models"></a>
+
 ## 10. Panel Data Models
 
-The module supports several panel stochastic frontier models for estimating **persistent firm-level inefficiency** from balanced or unbalanced panel data. Panel estimation is accessed through the same unified API by setting the `datatype` argument in `sfmodel_spec()`.
+The module supports several panel stochastic frontier models for estimating **firm-level inefficiency** from balanced or unbalanced panel data. Panel estimation is accessed through the same unified API by setting the `datatype` argument in `sfmodel_spec()`.
 
 ### Panel Model Types
 
-| `datatype`       | Model                                      | Methods            | Ineff (MLE)                   |
-| ---------------- | ------------------------------------------ | ------------------ | ----------------------------- |
-| `:panel_TFE`     | Wang and Ho (2010) true fixed-effect       | MCI, MSLE, MLE     | HalfNormal, TruncatedNormal   |
-| `:panel_TFE_CSW` | Chen, Schmidt, and Wang (2014) fixed-effect | MLE only           | HalfNormal only               |
-| `:panel_TRE`     | True random-effect                         | MLE only           | HalfNormal, TruncatedNormal   |
+
+| `datatype`       | Model                                       | Methods        | Ineff (MLE)                 |
+| ---------------- | ------------------------------------------- | -------------- | --------------------------- |
+| `:panel_TFE`     | Wang and Ho (2010) true fixed-effect        | MCI, MSLE, MLE | half-normal, truncated-normal |
+| `:panel_TFE_CSW` | Chen, Schmidt, and Wang (2014) fixed-effect | MLE only       | half-normal only             |
+| `:panel_TRE`     | Greene (2005) True random-effect                          | MLE only       | half-normal, truncated-normal |
 
 For `panel_TFE`, the simulation-based methods (MCI, MSLE) support all 8 inefficiency distributions. MLE support is limited to the distributions listed above. For `panel_TFE_CSW` and `panel_TRE`, only MLE is available.
+
+<a id="theoretical-background"></a>
 
 ### 10.1 Theoretical Background
 
@@ -1903,7 +2136,7 @@ $$
 y_{it} = \alpha_i + x_{it}'\beta + v_{it} - h(z_{it}) \cdot u_i^*
 $$
 
-where $\alpha_i$ is a firm-specific fixed effect, $v_{it} \sim N(0, \sigma_v^2)$ is noise, $u_i^* \ge 0$ is persistent inefficiency, and $h(z_{it}) = \exp(z_{it}'\delta)$ is a scaling function.
+where $\alpha_i$ is a firm-specific fixed effect, $v_{it} \sim N(0, \sigma_v^2)$ is noise, $u_i^* \ge 0$ is inefficiency, and $h(z_{it}) = \exp(z_{it}'\delta)$ is a scaling function.
 
 To eliminate $\alpha_i$, a within-group transformation (demeaning) is applied:
 
@@ -1930,12 +2163,9 @@ The CSW model (Chen, Schmidt, and Wang 2014, *Journal of Econometrics*) provides
 - **No scaling function needed.** Unlike the Wang-Ho TFE model, CSW does not require the $h(z_{it}) = \exp(z_{it}'\delta)$ structure. Consequently, no `zvar` argument is needed.
 - **No exogenous inefficiency determinants.** Because there is no scaling function, this model cannot incorporate Z variables that explain heterogeneity in inefficiency.
 - **MLE only.** The closed-form likelihood means no simulation is required, but it also means only the MLE method is available.
-- **HalfNormal inefficiency only.** The CSN derivation relies on the half-normal distribution.
+- **Half-normal inefficiency only.** The CSN derivation relies on the half-normal distribution.
 
-**When to use CSW vs. Wang-Ho TFE:**
 
-- Use **CSW** when you have panel data with persistent inefficiency but do not need exogenous determinants of inefficiency, and prefer a simpler model with a closed-form likelihood and no simulation error.
-- Use **Wang-Ho TFE** when you need flexible distributional assumptions (any of the 8 inefficiency distributions via MCI/MSLE) or when you want to model how Z variables affect the level of inefficiency through the scaling function.
 
 #### True Random-Effect (`panel_TRE`)
 
@@ -1944,9 +2174,9 @@ The TRE model, attributed to Greene (2005), treats the individual effect $\alpha
 **Key characteristics:**
 
 - **Random individual effects.** Assumes $\alpha_i$ is uncorrelated with the regressors $x_{it}$. If this assumption is violated (e.g., firm size is correlated with both input choices and the firm effect), the TRE estimates may be inconsistent.
-- **MLE only.** Available with HalfNormal or TruncatedNormal inefficiency.
+- **MLE only.** Available with half-normal or truncated-normal inefficiency.
 - **Constant term allowed.** Unlike TFE and CSW, you may include a column of ones in `frontier`.
-- **Supports `zvar`.** Inefficiency determinants can be modeled through $\mu_i = z_i'\delta$ (for TruncatedNormal) or through the overall variance.
+- **Supports `zvar`.** Inefficiency determinants can be modeled through $\mu_i = z_i'\delta$ (for truncated-normal) or through the overall variance.
 
 **When to use TRE vs. TFE:**
 
@@ -1960,9 +2190,9 @@ The choice between TRE and TFE mirrors the classic random-effects vs. fixed-effe
 #### Example: Panel TFE with MSLE (simulation-based)
 
 ```julia
-using CSV, DataFrames, Optim
 using CUDA
 using SFrontiers
+using CSV, DataFrames, Optim
 
 # Load panel data (stacked: firm 1 all T periods, firm 2 all T periods, ...)
 df = CSV.read("panel_data.csv", DataFrame)
@@ -1972,14 +2202,14 @@ Z = hcat(df.z1)            # NT x L — no constant column!
 
 # Step 1: Specify panel model
 myspec = sfmodel_spec(
+    type = :production,
+    datatype = :panel_TFE,    # Wang and Ho 2010 true fixed-effect
     depvar = y,
     frontier = X,
     zvar = Z,
     noise = :Normal,
     ineff = :HalfNormal,
-    datatype = :panel_TFE,    # Wang and Ho 2010 true fixed-effect
-    T_periods = 10,           # balanced panel, 10 periods
-    type = :production
+    id = df.firm,             # unit identifier (required for all panel models)
 )
 
 # Step 2: Choose estimation method
@@ -1988,8 +2218,8 @@ mymeth = sfmodel_method(method = :MSLE, n_draws = 1024)
 # Step 3: Set initial values (panel-specific keywords)
 myinit = sfmodel_init(
     spec = myspec,
-    delta = [0.1],            # scaling function coefficient
-    ln_sigma_u_sq = 0.1,     # scalar
+    scaling = [0.1],          # scaling function coefficient
+    ln_sigma_sq = 0.1,       # scalar
     ln_sigma_v_sq = 0.1      # scalar
 )
 
@@ -2019,7 +2249,7 @@ println("Mean BC: ", mean(result.bc))            # firm-level, N-vector
 #### Example: Panel TFE with MLE (analytic)
 
 ```julia
-# Same spec as above — MLE is available when ineff is HalfNormal or TruncatedNormal
+# Same spec as above — MLE is available when ineff is half-normal or truncated-normal
 mymeth_mle = sfmodel_method(method = :MLE)  # no draws needed
 result_mle = sfmodel_fit(spec = myspec, method = mymeth_mle, show_table = true)
 ```
@@ -2028,12 +2258,12 @@ result_mle = sfmodel_fit(spec = myspec, method = mymeth_mle, show_table = true)
 
 ```julia
 spec_csw = sfmodel_spec(
+    datatype = :panel_TFE_CSW,
     depvar = y,
     frontier = X,
     noise = :Normal,
-    ineff = :HalfNormal,        # CSW requires HalfNormal
-    datatype = :panel_TFE_CSW,
-    id = firm_ids               # unbalanced panel
+    ineff = :HalfNormal,        # CSW requires half-normal
+    id = firm_id
 )
 meth = sfmodel_method(method = :MLE)
 result = sfmodel_fit(spec = spec_csw, method = meth)
@@ -2043,13 +2273,13 @@ result = sfmodel_fit(spec = spec_csw, method = meth)
 
 ```julia
 spec_tre = sfmodel_spec(
+    datatype = :panel_TRE,
     depvar = y,
     frontier = X,
     zvar = Z,
     noise = :Normal,
     ineff = :HalfNormal,        # or :TruncatedNormal
-    datatype = :panel_TRE,
-    id = firm_ids
+    id = firm_id
 )
 meth = sfmodel_method(method = :MLE)
 result = sfmodel_fit(spec = spec_tre, method = meth)
@@ -2058,130 +2288,48 @@ result = sfmodel_fit(spec = spec_tre, method = meth)
 ### 10.3 Panel vs. Cross-Sectional Differences
 
 
-| Feature                      | Cross-Sectional                                                        | Panel (TFE / TFE_CSW / TRE)                  |
-| ---------------------------- | ---------------------------------------------------------------------- | --------------------------------------------- |
-| `datatype`                   | `:cross_sectional` (default)                                           | `:panel_TFE`, `:panel_TFE_CSW`, `:panel_TRE` |
-| Noise distributions          | Normal, Student T, Laplace                                             | Normal only                                   |
-| Inefficiency distributions   | All 8                                                                  | TFE: all 8 (MCI/MSLE), 2 (MLE); CSW: HalfNormal; TRE: 2 |
-| Methods                      | MCI, MSLE, MLE                                                         | TFE: all 3; CSW/TRE: MLE only                |
-| Copula                       | Gaussian, Clayton, Clayton90, Gumbel                                   | Not supported                                 |
-| Heteroscedastic`hetero`      | Yes (via Z), or `hetero=:scaling` for scaling property model           | Not supported; use$h(z)$ scaling              |
-| Scaling property model       | `hetero=:scaling`; `zvar` has no constant; init keyword: `scaling`     | Always active; `zvar` has no constant; init keyword: `delta` |
-| Constant in`frontier`/`zvar` | Required in `frontier`; required in `zvar` unless `hetero=:scaling`    | **Not allowed** (within-demeaning eliminates) |
-| JLMS/BC indices              | Observation-level ($N$ vector)                                         | Firm-level ($N_{\text{firms}}$ vector)        |
-| Panel structure              | N/A                                                                    | `T_periods` (balanced) or `id` (unbalanced)   |
-| Init: scaling coefficients   | `scaling` keyword (when `hetero=:scaling`)                             | `delta` keyword                               |
-| Marginal effects             | Yes (heteroscedastic and scaling)                                      | N/A                                           |
-
-### 10.4 Supported Panel Inefficiency Distributions
-
-#### Panel TFE (Wang and Ho 2010)
-
-All eight inefficiency distributions are supported via MCI/MSLE. MLE supports a subset:
+| Feature                      | Cross-Sectional                                                    | Panel (TFE / TFE_CSW / TRE)                                 |
+| ---------------------------- | ------------------------------------------------------------------ | ----------------------------------------------------------- |
+| `datatype`                   | `:cross_sectional` (default)                                       | `:panel_TFE`, `:panel_TFE_CSW`, `:panel_TRE`                |
+| Noise distributions          | Normal, Student T, Laplace                                         | Normal only                                                 |
+| Inefficiency distributions   | All 8                                                              | TFE: all 8 (MCI/MSLE), 2 (MLE); CSW: half-normal; TRE: 2     |
+| Methods                      | MCI, MSLE, MLE                                                     | TFE: all 3; CSW/TRE: MLE only                               |
+| Copula                       | Gaussian, Clayton, Clayton90, Gumbel                               | Not supported                                               |
+| Heteroscedastic `hetero`      | Yes (via Z), or `hetero=:scaling` for scaling property model        | supported through scaling function                            |
+| Scaling property model       | `hetero=:scaling`; `zvar` has no constant; init keyword: `scaling` | Always active; `zvar` has no constant; init keyword: `scaling` |
+| Constant in `frontier`/`zvar` | Required in `frontier`; required in `zvar` unless `hetero=:scaling` | **Not allowed** (within-demeaning eliminates)               |
+| JLMS/BC indices              | Observation-level ($N$ vector)                                     | Observation-level vector                      |
+| Panel id variable              | N/A                                                                | `id` (required for both balanced and unbalanced)            |
+|                                                       |
 
 
-| Distribution       | Parameters (scalar)   | MLE | MSLE | MCI |
-| ------------------ | --------------------- | --- | ---- | --- |
-| `:HalfNormal`      | `ln_sigma_u_sq`       | Yes | Yes  | Yes |
-| `:TruncatedNormal` | `mu`, `ln_sigma_u_sq` | Yes | Yes  | Yes |
-| `:Exponential`     | `ln_lambda`           | No  | Yes  | Yes |
-| `:Weibull`         | `ln_lambda`, `ln_k`   | No  | Yes  | Yes |
-| `:Lognormal`       | `mu`, `ln_sigma_sq`   | No  | Yes  | Yes |
-| `:Lomax`           | `ln_lambda`, `ln_alpha` | No  | Yes  | Yes |
-| `:Rayleigh`        | `ln_sigma_sq`         | No  | Yes  | Yes |
-| `:Gamma`           | `ln_k`, `ln_theta`    | No  | No   | Yes |
 
-#### Panel TFE_CSW (Chen, Schmidt, and Wang 2014)
 
-| Distribution       | MLE |
-| ------------------ | --- |
-| `:HalfNormal`      | Yes |
-
-#### Panel TRE (True Random-Effect)
-
-| Distribution       | MLE |
-| ------------------ | --- |
-| `:HalfNormal`      | Yes |
-| `:TruncatedNormal` | Yes |
-
-**Important:** In all panel models, inefficiency distribution parameters are **scalar** (not heteroscedastic via Z). Heterogeneity enters only through the scaling function $h(z_{it}) = \exp(z_{it}'\delta)$.
-
-### 10.5 Balanced vs. Unbalanced Panels
-
-**Balanced panels** have the same number of time periods for all firms. Use the `T_periods` keyword:
-
-```julia
-spec = sfmodel_spec(depvar = y, frontier = X, zvar = Z,
-    noise = :Normal, ineff = :HalfNormal,
-    datatype = :panel_TFE, T_periods = 10)
-```
-
-Data must be stacked by firm: all $T$ observations for firm 1, then all $T$ for firm 2, etc.
-
-**Unbalanced panels** have varying numbers of time periods per firm. Use the `id` keyword:
-
-```julia
-spec = sfmodel_spec(depvar = y, frontier = X, zvar = Z,
-    noise = :Normal, ineff = :HalfNormal,
-    datatype = :panel_TFE, id = firm_ids)
-```
-
-Data must be grouped by firm (contiguous rows for each unit). The number of periods per firm is inferred from the `id` column.
-
-### 10.6 No Constant Columns
+### 10.4 No Constant Columns
 
 In the Wang and Ho (2010) panel model (`panel_TFE`), within-group demeaning eliminates any constant terms. Therefore:
 
 - **Do NOT include a column of ones** in `frontier` or `zvar`.
 - The model will raise an error if a constant column is detected.
 - This differs from cross-sectional models, where constants are typically required.
-- The same applies to `panel_TFE_CSW`. For `panel_TRE`, a constant term **is** allowed in `frontier` (see [Section 10.1](#101-theoretical-background)).
+- The same applies to `panel_TFE_CSW`. For `panel_TRE`, a constant term **is** allowed in `frontier` (see [Section 10.1](#theoretical-background)).
 
-### 10.7 Panel DSL Macros
 
-In addition to `@useData`, `@depvar`, `@frontier`, and `@zvar`, panel models support the `@id` macro for unbalanced panels:
-
-```julia
-# Panel TFE — balanced (no @id, requires T_periods keyword)
-spec = sfmodel_spec(@useData(df), @depvar(y), @frontier(x1, x2), @zvar(z1),
-    noise = :Normal, ineff = :HalfNormal, datatype = :panel_TFE, T_periods = 10)
-
-# Panel TFE — unbalanced (with @id)
-spec = sfmodel_spec(@useData(df), @depvar(y), @frontier(x1, x2), @zvar(z1), @id(firm),
-    noise = :Normal, ineff = :HalfNormal, datatype = :panel_TFE)
-
-# Panel TRE — unbalanced (with @id)
-spec = sfmodel_spec(@useData(df), @depvar(y), @frontier(x1, x2), @id(firm),
-    noise = :Normal, ineff = :HalfNormal, datatype = :panel_TRE)
-```
-
-### 10.8 Error Messages for Unsupported Configurations
-
-When `method=:MLE` is used with a configuration that MLE does not support, `sfmodel_fit` issues an informative error listing the reason and the supported alternatives. For example:
-
-- `method=:MLE` + `datatype=:panel_TFE` + `ineff=:Exponential` → error explaining MLE supports only HalfNormal/TruncatedNormal for panel TFE, with `:MCI` and `:MSLE` listed as alternatives.
-- `method=:MCI` + `datatype=:panel_TRE` → error explaining panel TRE supports only `:MLE`.
-
-### 10.9 Standalone Panel API (Backward Compatible)
-
-For users who prefer the standalone panel API (without the unified `sfmodel_spec` interface), the following functions are available and delegate directly to the Panel backend (Wang and Ho 2010 model only):
-
-```julia
-sfmodel_panel_spec(; kwargs...)      # Panel model specification
-sfmodel_panel_method(; kwargs...)    # Panel method specification
-sfmodel_panel_init(; kwargs...)      # Panel initial values
-sfmodel_panel_opt(; kwargs...)       # Panel optimization options
-sfmodel_panel_fit(; kwargs...)       # Panel estimation
-```
-
-These are retained for backward compatibility with existing panel scripts.
 
 ---
 
 ## Citation
 
-- Wang, H.J. (2025) NSC Project.
-- Wang, H.-J. and Ho, C.-W. (2010). Estimating fixed-effect panel stochastic frontier models by model transformation. *Journal of Econometrics*, 157(2), 286-296.
-- Chen, Y.-Y., Schmidt, P. and Wang, H.-J. (2014). Consistent estimation of the fixed effects stochastic frontier model. *Journal of Econometrics*, 181(2), 65-76.
+- Chen, Y.-Y., Schmidt, P. and Wang, H.-J. (2014). "Consistent estimation of the fixed effects stochastic frontier model," *Journal of Econometrics*, 181(2), 65-76.
+
+- Chen, Y.-Y. and Wang, H.-J. (2026) "Tradeoff between Efficiency and Resilience: Evidence from Power Plants and Rice Farmers," *manuscript*, National Taiwan University.
+
+- Wang, H.-J. (2002) "Heteroscedasticity and Non-Monotonic Efficiency Effects of a Stochastic Frontier Model," *Journal of Productivity Analysis*, 18, pp.241-253.
+
+- Wang, H.-J. and Cheng, E.-T. (2026) "SFrontiers.jl: A Simulation-Based Likelihood Estimation Framework for Stochastic Frontier Models with Distributional Flexibility," *manuscript*, National Taiwan University.
+
+- Wang, H.-J. and Ho, C.-W. (2010). "Estimating fixed-effect panel stochastic frontier models by model transformation," *Journal of Econometrics*, 157(2), 286-296.
+
+
 
 ---

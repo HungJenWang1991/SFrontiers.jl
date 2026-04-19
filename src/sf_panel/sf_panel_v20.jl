@@ -265,6 +265,10 @@ struct PanelModelSpec{T<:AbstractFloat}
     varnames::Vector{String}
     eqnames::Vector{String}
     eq_indices::Vector{Int}
+
+    # Firm identifiers (unique, in first-appearance order; used by predict()
+    # to align fit-time draws rows to predict-time firms by id).
+    firm_ids::AbstractVector
 end
 
 """
@@ -2039,6 +2043,7 @@ function sfmodel_panel_spec(; depvar, frontier, zvar,
     id_vec = id isa AbstractVector ? id : error("`id` must be a vector, got $(typeof(id)).")
     length(id_vec) == NT || error("id column has $(length(id_vec)) elements, expected $NT (same as depvar).")
     N, T_vec, offsets = _compute_panel_structure(id_vec)
+    firm_ids = unique(id_vec)  # first-appearance order (matches offsets)
     @assert all(t -> t >= 2, T_vec) "Wang-Ho within-transformation requires T_i >= 2 for all units. " *
         "Got minimum T_i = $(minimum(T_vec))."
     T_periods = T_vec
@@ -2079,7 +2084,8 @@ function sfmodel_panel_spec(; depvar, frontier, zvar,
                                  N, T_periods, T_max, offsets,
                                  noise, ineff, model,
                                  K, L, idx, frontier_sign,
-                                 varnames_vec, eqnames_vec, eq_indices_vec)
+                                 varnames_vec, eqnames_vec, eq_indices_vec,
+                                 firm_ids)
 end
 
 
@@ -2694,6 +2700,9 @@ function sfmodel_panel_fit(;
     _dicRES[:chunks] = method.chunks
     _dicRES[:distinct_Halton_length] = method.distinct_Halton_length
     _dicRES[:estimation_method] = method.method
+    _dicRES[:user_draws_supplied] = method.draws !== nothing
+    _dicRES[:firm_ids] = spec.firm_ids
+    _dicRES[:transformation] = method.transformation
 
     # Individual coefficient vectors (distribution-specific)
     idx = spec.idx
@@ -2738,6 +2747,9 @@ function sfmodel_panel_fit(;
         chunks = _dicRES[:chunks],
         distinct_Halton_length = _dicRES[:distinct_Halton_length],
         estimation_method = _dicRES[:estimation_method],
+        user_draws_supplied = _dicRES[:user_draws_supplied],
+        firm_ids = _dicRES[:firm_ids],
+        transformation = _dicRES[:transformation],
         frontier = _dicRES[:frontier],
         delta = _dicRES[:delta],
         ln_sigma_v_sq = _dicRES[:ln_sigma_v_sq],

@@ -38,9 +38,9 @@ function LL_T(::Type{Trun}, Y::Matrix, X::Matrix, Z::Matrix, q, W::Matrix, V::Ma
     γ  = rho[po.begv : po.endv]
 
     μ   = Z * δ1
-    σᵤ² = clamp.(exp.(W * δ2),       _MLE_CLAMP.exp_lo, _MLE_CLAMP.exp_hi)
+    σᵤ² = exp.(W * δ2)
     σᵤ  = sqrt.(σᵤ²)
-    σᵥ² = clamp.(exp.(V * γ),        _MLE_CLAMP.exp_lo, _MLE_CLAMP.exp_hi)
+    σᵥ² = exp.(V * γ)
     σ²  = σᵤ² + σᵥ²
     ϵ   = PorC*(Y - X * β)
     μₛ  = (σᵥ² .* μ - σᵤ² .* ϵ) ./ σ²
@@ -70,8 +70,8 @@ function LL_T(::Type{Half}, Y::Matrix, X::Matrix, z, q, W::Matrix, V::Matrix,
     δ2 = rho[po.begw : po.endw]
     γ  = rho[po.begv : po.endv]
 
-    σᵤ² = clamp.(exp.(W * δ2),       _MLE_CLAMP.exp_lo, _MLE_CLAMP.exp_hi)
-    σᵥ² = clamp.(exp.(V * γ),        _MLE_CLAMP.exp_lo, _MLE_CLAMP.exp_hi)
+    σᵤ² = exp.(W * δ2)
+    σᵥ² = exp.(V * γ)
     σ²  = σᵤ² + σᵥ²
     ϵ   = PorC*(Y - X * β)
     μₛ  = ( - σᵤ² .* ϵ) ./ σ²
@@ -103,9 +103,9 @@ function LL_T(::Type{Expo}, Y::Matrix, X::Matrix, z, q, W::Matrix, V::Matrix,
     δ2 = rho[po.begw : po.endw]
     γ  = rho[po.begv : po.endv]
 
-    λ²  = clamp.(exp.(W * δ2),       _MLE_CLAMP.exp_lo, _MLE_CLAMP.exp_hi)
+    λ²  = exp.(W * δ2)
     λ   = sqrt.(λ²)
-    σᵥ² = clamp.(exp.(V * γ),        _MLE_CLAMP.exp_lo, _MLE_CLAMP.exp_hi)
+    σᵥ² = exp.(V * γ)
     σᵥ  = sqrt.(σᵥ²)
 
     ϵ   = PorC*(Y - X * β)
@@ -134,11 +134,11 @@ function LL_T(::Type{Trun_Scale}, Y::Matrix, X::Matrix, Z::Matrix, Q::Matrix, W:
     γ  = rho[po.begv : po.endv]
 
  #  h   = exp(Z*δ1)
-    hscale = clamp.(exp.(Q*τ),                _MLE_CLAMP.exp_lo, _MLE_CLAMP.exp_hi)
+    hscale = exp.(Q*τ)
     μ   = (Z*δ1) .* hscale              # Q is _cons; μ is the after-mutiplied-by-scaling function
-    σᵤ² = clamp.(exp.(W * δ2) .* hscale.^2,  _MLE_CLAMP.exp_lo, _MLE_CLAMP.exp_hi)  # The notation of σᵤ² is different from the paper. W is _cons
+    σᵤ² = exp.(W * δ2) .* hscale.^2     # The notation of σᵤ² is different from the paper. W is _cons
     σᵤ  = sqrt.(σᵤ²)
-    σᵥ² = clamp.(exp.(V * γ),                _MLE_CLAMP.exp_lo, _MLE_CLAMP.exp_hi)
+    σᵥ² = exp.(V * γ)
     σ²  = σᵤ² + σᵥ²
     ϵ   = PorC*(Y - X * β)
     μₛ  = (σᵥ² .* μ - σᵤ² .* ϵ) ./ σ²
@@ -171,9 +171,9 @@ function LL_T(::Type{PFEWHH}, Ỹ::Union{Vector,Matrix}, X̃::Matrix, z, Q::Matr
 
 
     μ   = 0.0
-    σᵤ² = clamp(exp(δ2), _MLE_CLAMP.exp_lo, _MLE_CLAMP.exp_hi)
-    σᵥ² = clamp(exp(γ),  _MLE_CLAMP.exp_lo, _MLE_CLAMP.exp_hi)
-    h   = clamp.(exp.(Q*τ), _MLE_CLAMP.exp_lo, _MLE_CLAMP.exp_hi)
+    σᵤ² = exp(δ2)
+    σᵥ² = exp(γ)
+    h   = exp.(Q*τ)
     ϵ̃   = PorC*(Ỹ - X̃ * β)
 
     nofid = size(idt,1)
@@ -211,9 +211,9 @@ function LL_T(::Type{PFEWHT}, Ỹ::Union{Vector,Matrix}, X̃::Matrix, z, Q::Matr
     γ  = rho[po.begv]
 
     μ   = δ1
-    σᵤ² = clamp(exp(δ2), _MLE_CLAMP.exp_lo, _MLE_CLAMP.exp_hi)
-    σᵥ² = clamp(exp(γ),  _MLE_CLAMP.exp_lo, _MLE_CLAMP.exp_hi)
-    h   = clamp.(exp.(Q*τ), _MLE_CLAMP.exp_lo, _MLE_CLAMP.exp_hi)
+    σᵤ² = exp(δ2)
+    σᵥ² = exp(γ)
+    h   = exp.(Q*τ)
     ϵ̃   = PorC*(Ỹ - X̃ * β)
 
     nofid = size(idt,1)
@@ -253,9 +253,9 @@ function LL_T(::Type{PanDecay}, Y::Union{Vector,Matrix}, X::Matrix, Z::Matrix, Q
 
     nofid = size(idt,1)
 
-    σᵤ² = clamp(exp(δ2),   _MLE_CLAMP.exp_lo, _MLE_CLAMP.exp_hi)
+    σᵤ² = exp(δ2)
     σᵤ  = sqrt(σᵤ²)
-    σᵥ² = clamp(exp(γ),    _MLE_CLAMP.exp_lo, _MLE_CLAMP.exp_hi)
+    σᵥ² = exp(γ)
     σᵥ  = sqrt(σᵥ²)
     σₛ² = σᵤ² + σᵥ²
 
@@ -266,7 +266,7 @@ function LL_T(::Type{PanDecay}, Y::Union{Vector,Matrix}, X::Matrix, Z::Matrix, Q
             @views Tᵢ  = idt[i,2]
             @views ε   = PorC*(Y[ind] - X[ind, :] * β)
             @views μ   = (Z[ind, :] * δ1)[1]  # ok becuase time-invariant
-            @views Gₜ  = clamp.(exp.(Q[ind, :] * τ), _MLE_CLAMP.exp_lo, _MLE_CLAMP.exp_hi)
+            @views Gₜ  = exp.(Q[ind, :] * τ)
                    Gε  = Gₜ .* ε
 
                   Σε²  = sum(ε.^2)  #*  sensitive in this part, need precision
@@ -302,9 +302,9 @@ function LL_T(::Type{PanKumb90}, Y::Union{Vector,Matrix}, X::Matrix, Z::Matrix, 
 
   nofid = size(idt,1)
 
-  σᵤ² = clamp(exp(δ2),   _MLE_CLAMP.exp_lo, _MLE_CLAMP.exp_hi)
+  σᵤ² = exp(δ2)
   σᵤ  = sqrt(σᵤ²)
-  σᵥ² = clamp(exp(γ),    _MLE_CLAMP.exp_lo, _MLE_CLAMP.exp_hi)
+  σᵥ² = exp(γ)
   σᵥ  = sqrt(σᵥ²)
   σₛ² = σᵤ² + σᵥ²
 
@@ -315,7 +315,7 @@ function LL_T(::Type{PanKumb90}, Y::Union{Vector,Matrix}, X::Matrix, Z::Matrix, 
          @views Tᵢ  = idt[i,2]
          @views ε   = PorC*(Y[ind] - X[ind, :] * β)
          @views μ   = (Z[ind, :] * δ1)[1]  # ok becuase time-invariant
-         @views Gₜ  = 2 ./ (1 .+ clamp.(exp.(Q[ind, :] * τ), _MLE_CLAMP.exp_lo, _MLE_CLAMP.exp_hi))
+         @views Gₜ  = 2 ./ (1 .+ exp.(Q[ind, :] * τ))
                 Gε  = Gₜ .* ε
 
                Σε²  = sum(ε.^2)  #*  sensitive in this part, need precision
@@ -359,8 +359,8 @@ function LL_T(::Type{PFECSWH}, Ỹ::Union{Vector,Matrix}, X̃::Matrix, z, q, w, 
     PorC::Int64, nobs::Int64, po::NamedTuple, rho, idt::Matrix{Any}, ::Nothing)
 
     β   = rho[1:po.endx]
-    σᵤ² = clamp(exp(rho[po.begw]), _MLE_CLAMP.exp_lo, _MLE_CLAMP.exp_hi)
-    σᵥ² = clamp(exp(rho[po.begv]), _MLE_CLAMP.exp_lo, _MLE_CLAMP.exp_hi)
+    σᵤ² = exp(rho[po.begw])
+    σᵥ² = exp(rho[po.begv])
 
     σᵤ = sqrt(σᵤ²)
     σᵥ = sqrt(σᵥ²)
@@ -392,9 +392,9 @@ function LL_T(::Type{PTREH}, Y::Matrix, X::Matrix, z, Q::Matrix, w, v,
        PorC::Int64, nobs::Int64, po::NamedTuple, rho, idt::Matrix{Any}, ::Nothing)
 
         β   = rho[1:po.endx]
-        σₐ² = clamp(exp(rho[po.begq]), _MLE_CLAMP.exp_lo, _MLE_CLAMP.exp_hi)
-        σᵤ² = clamp(exp(rho[po.begw]), _MLE_CLAMP.exp_lo, _MLE_CLAMP.exp_hi)
-        σᵥ² = clamp(exp(rho[po.begv]), _MLE_CLAMP.exp_lo, _MLE_CLAMP.exp_hi)
+        σₐ² = exp(rho[po.begq])
+        σᵤ² = exp(rho[po.begw])
+        σᵥ² = exp(rho[po.begv])
         σᵤ  = sqrt(σᵤ²)
 
         ε1  = PorC*(Y - X * β)
@@ -445,9 +445,9 @@ function LL_T(::Type{PTRET}, Y::Matrix, X::Matrix, Z::Matrix, Q::Matrix, w, v,
     β   = rho[1:po.endx]
     δ   = rho[po.begz : po.endz]
 
-    σₐ² = clamp(exp(rho[po.begq]), _MLE_CLAMP.exp_lo, _MLE_CLAMP.exp_hi)
-    σᵤ² = clamp(exp(rho[po.begw]), _MLE_CLAMP.exp_lo, _MLE_CLAMP.exp_hi)
-    σᵥ² = clamp(exp(rho[po.begv]), _MLE_CLAMP.exp_lo, _MLE_CLAMP.exp_hi)
+    σₐ² = exp(rho[po.begq])
+    σᵤ² = exp(rho[po.begw])
+    σᵥ² = exp(rho[po.begv])
 
     σᵤ  = sqrt(σᵤ²)
 

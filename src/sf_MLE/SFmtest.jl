@@ -146,7 +146,7 @@ function sfmodel_MoMTest(arg::Vararg; data::DataFrame, ω::Union{Vector, Real, T
         β_ols  = xvar \ yvar  # OLS estiamte, uses a pivoted QR factorization;
         resid  = yvar - xvar*β_ols
         sse    = sum((resid).^2)  
-        ssd    = sqrt(sse/(size(resid,1)-size(xvar,2))) # sample standard deviation; σ² = (1/(N-K))* Σ ϵ^2
+        ssd    = sqrt(sse/size(resid,1)) # MLE standard deviation; σ² = (1/N)* Σ ϵ^2
         ll_ols = sum(normlogpdf.(0, ssd, resid)) # ols log-likelihood
         sk_ols = sum((resid).^3) / ((ssd^3)*(size(resid,1))) # skewnewss of ols residuals
         std_ols = sqrt.(diag((ssd^2)*inv(xvar'*xvar)))

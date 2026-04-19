@@ -166,6 +166,9 @@ struct SFModelSpec_MLE{T<:AbstractFloat}
     varnames::Vector{String}
     eqnames::Vector{String}
     eq_indices::Vector{Int}
+    # Display names (from DSL macros; survive across multiple sfmodel_spec calls)
+    display_frontier::Union{Nothing, Vector{Symbol}}
+    display_zvar::Union{Nothing, Vector{Symbol}}
 end
 
 

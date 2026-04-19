@@ -4496,6 +4496,7 @@ function sfmodel_MSLE_fit(;
     _dicRES[:multiRand] = method.multiRand
     _dicRES[:chunks] = method.chunks
     _dicRES[:distinct_Halton_length] = method.distinct_Halton_length
+    _dicRES[:user_draws_supplied] = method.draws !== nothing
     _dicRES[:estimation_method] = method.method
 
     # Add individual coefficient vectors based on model equations

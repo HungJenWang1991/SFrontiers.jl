@@ -126,12 +126,20 @@
     Efficiency Index</a></li>
     <li><a href="#marginal-effects" id="toc-marginal-effects">Marginal
     Effects</a></li>
+    <li><a href="#post-estimation-diagnostics"
+    id="toc-post-estimation-diagnostics">Post-Estimation
+    Diagnostics</a></li>
+    <li><a href="#prediction-on-new-data"
+    id="toc-prediction-on-new-data">Prediction on New Data</a></li>
     <li><a href="#saving-results" id="toc-saving-results">Saving
     Results</a></li>
     </ul></li>
     <li><a href="#api-reference" id="toc-api-reference">6. API
     Reference</a>
     <ul>
+    <li><a href="#part-a-model-building-and-fitting"
+    id="toc-part-a-model-building-and-fitting">Part A: Model building
+    and fitting</a></li>
     <li><a href="#sfmodel_spec" id="toc-sfmodel_spec">6.1
     sfmodel_spec()</a>
     <ul>
@@ -223,13 +231,84 @@
     <code>sfmodel_MixTable()</code> and
     <code>sfmodel_ChiSquareTable()</code></a>
     <ul>
-    <li><a href="#sfmodel_mixtabledof"
-    id="toc-sfmodel_mixtabledof"><code>sfmodel_MixTable(dof)</code></a></li>
-    <li><a href="#sfmodel_chisquaretabledof"
-    id="toc-sfmodel_chisquaretabledof"><code>sfmodel_ChiSquareTable(dof)</code></a></li>
+    <li><a href="#syntax-5" id="toc-syntax-5">Syntax</a></li>
+    <li><a href="#arguments-5" id="toc-arguments-5">Arguments</a></li>
+    <li><a href="#return-value-5" id="toc-return-value-5">Return
+    Value</a></li>
     <li><a href="#example-testing-for-inefficiency"
     id="toc-example-testing-for-inefficiency">Example: Testing for
     Inefficiency</a></li>
+    </ul></li>
+    <li><a href="#part-b-post-estimation-accessors"
+    id="toc-part-b-post-estimation-accessors">Part B: Post-estimation
+    accessors</a></li>
+    <li><a href="#standard-accessors-statsapi-interface"
+    id="toc-standard-accessors-statsapi-interface">6.7 Standard
+    Accessors (StatsAPI Interface)</a>
+    <ul>
+    <li><a href="#syntax-6" id="toc-syntax-6">Syntax</a></li>
+    <li><a href="#arguments-6" id="toc-arguments-6">Arguments</a></li>
+    <li><a href="#return-value-6" id="toc-return-value-6">Return
+    Value</a></li>
+    <li><a href="#example-1" id="toc-example-1">Example</a></li>
+    </ul></li>
+    <li><a href="#efficiency-indices" id="toc-efficiency-indices">6.8
+    Efficiency Indices</a>
+    <ul>
+    <li><a href="#syntax-7" id="toc-syntax-7">Syntax</a></li>
+    <li><a href="#fields" id="toc-fields">Fields</a></li>
+    <li><a href="#return-value-7" id="toc-return-value-7">Return
+    Value</a></li>
+    <li><a href="#example-2" id="toc-example-2">Example</a></li>
+    </ul></li>
+    <li><a href="#marginal-effects-1" id="toc-marginal-effects-1">6.9
+    Marginal Effects</a>
+    <ul>
+    <li><a href="#syntax-8" id="toc-syntax-8">Syntax</a></li>
+    <li><a href="#fields-1" id="toc-fields-1">Fields</a></li>
+    <li><a href="#return-value-8" id="toc-return-value-8">Return
+    Value</a></li>
+    <li><a href="#example-3" id="toc-example-3">Example</a></li>
+    </ul></li>
+    <li><a href="#diagnostic-functions"
+    id="toc-diagnostic-functions">6.10 Diagnostic Functions</a>
+    <ul>
+    <li><a href="#syntax-9" id="toc-syntax-9">Syntax</a></li>
+    <li><a href="#arguments-7" id="toc-arguments-7">Arguments</a></li>
+    <li><a href="#return-value-9" id="toc-return-value-9">Return
+    Value</a></li>
+    <li><a href="#example-4" id="toc-example-4">Example</a></li>
+    </ul></li>
+    <li><a href="#hypothesis-testing-1"
+    id="toc-hypothesis-testing-1">6.11 Hypothesis Testing</a>
+    <ul>
+    <li><a href="#syntax-10" id="toc-syntax-10">Syntax</a></li>
+    <li><a href="#arguments-8" id="toc-arguments-8">Arguments</a></li>
+    <li><a href="#return-value-10" id="toc-return-value-10">Return
+    Value</a></li>
+    <li><a href="#example-5" id="toc-example-5">Example</a></li>
+    </ul></li>
+    <li><a href="#plot-recipes" id="toc-plot-recipes">6.12 Plot
+    Recipes</a>
+    <ul>
+    <li><a href="#syntax-11" id="toc-syntax-11">Syntax</a></li>
+    <li><a href="#arguments-9" id="toc-arguments-9">Arguments</a></li>
+    <li><a href="#return-value-11" id="toc-return-value-11">Return
+    Value</a></li>
+    <li><a href="#example-6" id="toc-example-6">Example</a></li>
+    </ul></li>
+    <li><a href="#prediction-on-new-data-1"
+    id="toc-prediction-on-new-data-1">6.13 Prediction on New Data</a>
+    <ul>
+    <li><a href="#syntax-12" id="toc-syntax-12">Syntax</a></li>
+    <li><a href="#arguments-10" id="toc-arguments-10">Arguments</a></li>
+    <li><a href="#return-value-12" id="toc-return-value-12">Return
+    Value</a></li>
+    <li><a href="#model-coverage" id="toc-model-coverage">Model
+    Coverage</a></li>
+    <li><a href="#user-supplied-draws"
+    id="toc-user-supplied-draws">User-Supplied Draws</a></li>
+    <li><a href="#example-7" id="toc-example-7">Example</a></li>
     </ul></li>
     </ul></li>
     <li><a href="#supported-models" id="toc-supported-models">7.
@@ -263,24 +342,7 @@
     Distribution</a></li>
     </ul></li>
     </ul></li>
-    <li><a href="#working-with-results" id="toc-working-with-results">8.
-    Working with Results</a>
-    <ul>
-    <li><a href="#efficiency-indices"
-    id="toc-efficiency-indices">Efficiency Indices</a></li>
-    <li><a href="#marginal-effects-1"
-    id="toc-marginal-effects-1">Marginal Effects</a></li>
-    <li><a href="#variance-covariance-matrix"
-    id="toc-variance-covariance-matrix">Variance-Covariance
-    Matrix</a></li>
-    <li><a href="#extracting-specific-parameter-groups"
-    id="toc-extracting-specific-parameter-groups">Extracting Specific
-    Parameter Groups</a></li>
-    <li><a href="#log-transformed-parameters"
-    id="toc-log-transformed-parameters">Log-Transformed
-    Parameters</a></li>
-    </ul></li>
-    <li><a href="#special-topics" id="toc-special-topics">9. Special
+    <li><a href="#special-topics" id="toc-special-topics">8. Special
     Topics</a>
     <ul>
     <li><a href="#choosing-between-mle-mci-and-msle"
@@ -323,13 +385,13 @@
     id="toc-handling-convergence-issues">Handling Convergence
     Issues</a></li>
     </ul></li>
-    <li><a href="#panel-data-models" id="toc-panel-data-models">10.
-    Panel Data Models</a>
+    <li><a href="#panel-data-models" id="toc-panel-data-models">9. Panel
+    Data Models</a>
     <ul>
     <li><a href="#panel-model-types" id="toc-panel-model-types">Panel
     Model Types</a></li>
     <li><a href="#theoretical-background"
-    id="toc-theoretical-background">10.1 Theoretical Background</a>
+    id="toc-theoretical-background">9.1 Theoretical Background</a>
     <ul>
     <li><a href="#wang-and-ho-2010-true-fixed-effect-panel_tfe"
     id="toc-wang-and-ho-2010-true-fixed-effect-panel_tfe">Wang and Ho
@@ -342,7 +404,7 @@
     id="toc-true-random-effect-panel_tre">True Random-Effect
     (<code>panel_TRE</code>)</a></li>
     </ul></li>
-    <li><a href="#panel-quick-start" id="toc-panel-quick-start">10.2
+    <li><a href="#panel-quick-start" id="toc-panel-quick-start">9.2
     Panel Quick Start</a>
     <ul>
     <li><a href="#example-panel-tfe-with-msle-simulation-based"
@@ -359,9 +421,9 @@
     only)</a></li>
     </ul></li>
     <li><a href="#panel-vs.-cross-sectional-differences"
-    id="toc-panel-vs.-cross-sectional-differences">10.3 Panel
+    id="toc-panel-vs.-cross-sectional-differences">9.3 Panel
     vs. Cross-Sectional Differences</a></li>
-    <li><a href="#no-constant-columns" id="toc-no-constant-columns">10.4
+    <li><a href="#no-constant-columns" id="toc-no-constant-columns">9.4
     No Constant Columns</a></li>
     </ul></li>
     <li><a href="#citation" id="toc-citation">Citation</a></li>
@@ -387,15 +449,13 @@ Implementation</h2>
 <hr />
 <h2 id="what-is-it">What is it</h2>
 <p><strong>SFrontiers.jl</strong> is a Julia package for flexible
-estimation of stochastic frontier models. Instead of limiting users to a
-small set of models with closed-form likelihoods, it provides
-simulation-based methods that make it practical to work with a much
-wider range of distributional assumptions, including three choices for
-the noise component (v) and eight choices for the inefficiency component
-(u), as well as copula dependence and selected panel-data settings, all
-within a unified workflow. It also takes advantage of automatic
-differentiation and GPU acceleration for accurate and efficient
-estimation.</p>
+estimation of stochastic frontier models. It uses simulated maximum
+likelihood, automatic differentiation, and GPU acceleration to deliver
+accurate estimation with practical runtime. The package supports three
+distributions for the noise term (v), eight for the inefficiency term
+(u), copula-based dependence, and selected panel-data specifications,
+all within a unified workflow. Its estimates typically match closed-form
+MLE benchmarks to several decimal places.</p>
 <hr />
 <h2 id="table-of-contents">Table of Contents</h2>
 <ol type="1">
@@ -410,6 +470,8 @@ Reference Example</a></li>
 Example</a></li>
 <li><a href="#api-reference">API Reference</a>
 <ul>
+<li><em>Part A: Model building and fitting</em>
+<ul>
 <li>6.1 <a href="#sfmodel_spec">sfmodel_spec()</a></li>
 <li>6.2 <a href="#sfmodel_method">sfmodel_method()</a></li>
 <li>6.3 <a href="#sfmodel_init">sfmodel_init()</a></li>
@@ -419,28 +481,41 @@ Example</a></li>
 href="#sfmodel_mixtable-and-sfmodel_chisquaretable">sfmodel_MixTable()
 and sfmodel_ChiSquareTable()</a></li>
 </ul></li>
+<li><em>Part B: Post-estimation accessors</em>
+<ul>
+<li>6.7 <a href="#standard-accessors">Standard Accessors (StatsAPI
+Interface)</a></li>
+<li>6.8 <a href="#efficiency-indices">Efficiency Indices</a></li>
+<li>6.9 <a href="#api-marginal-effects">Marginal Effects</a></li>
+<li>6.10 <a href="#sec6-diagnostic-functions">Diagnostic
+Functions</a></li>
+<li>6.11 <a href="#sec6-hypothesis-testing">Hypothesis Testing</a></li>
+<li>6.12 <a href="#sec6-plot-recipes">Plot Recipes</a></li>
+<li>6.13 <a href="#sec6-prediction-on-new-data">Prediction on New
+Data</a></li>
+</ul></li>
+</ul></li>
 <li><a href="#supported-models">Supported Models</a>
 <ul>
 <li><a href="#distribution-selection-guidance">Distribution Selection
 Guidance</a></li>
 </ul></li>
-<li><a href="#working-with-results">Working with Results</a></li>
 <li><a href="#special-topics">Special Topics</a>
 <ul>
-<li>9.1 <a href="#choosing-between-mle-mci-and-msle">Choosing Between
+<li>8.1 <a href="#choosing-between-mle-mci-and-msle">Choosing Between
 MLE, MCI, and MSLE</a></li>
-<li>9.2 <a href="#gpu-computation">GPU Computation</a></li>
-<li>9.3 <a href="#copula-models">Copula Models</a></li>
-<li>9.4 <a href="#scaling-property-model-cross-sectional">Scaling
+<li>8.2 <a href="#gpu-computation">GPU Computation</a></li>
+<li>8.3 <a href="#copula-models">Copula Models</a></li>
+<li>8.4 <a href="#scaling-property-model-cross-sectional">Scaling
 Property Model (Cross-Sectional)</a></li>
-<li>9.5 <a href="#cost-frontier-models">Cost Frontier Models</a></li>
-<li>9.6 <a href="#choosing-the-number-of-halton-draws">Choosing the
+<li>8.5 <a href="#cost-frontier-models">Cost Frontier Models</a></li>
+<li>8.6 <a href="#choosing-the-number-of-halton-draws">Choosing the
 Number of Halton Draws</a></li>
-<li>9.7 <a
+<li>8.7 <a
 href="#observation-specific-halton-draws-multirand">Observation-Specific
 Halton Draws (multiRand)</a></li>
-<li>9.8 <a href="#custom-draw-sequences">Custom Draw Sequences</a></li>
-<li>9.9 <a href="#handling-convergence-issues">Handling Convergence
+<li>8.8 <a href="#custom-draw-sequences">Custom Draw Sequences</a></li>
+<li>8.9 <a href="#handling-convergence-issues">Handling Convergence
 Issues</a></li>
 </ul></li>
 <li><a href="#panel-data-models">Panel Data Models</a></li>
@@ -463,8 +538,8 @@ GPU computing for speed. Monte Carlo evidence in Wang and Cheng (2026)
 shows that the resulting estimators achieve bias and RMSE comparable to
 those of analytic maximum likelihood estimators where such benchmarks
 exist.</p>
-<p>For the theoretical background of the methods, see Wang and
-Cheng~(2026).</p>
+<p>For the theoretical background of the methods, see Wang and Cheng
+(2026).</p>
 <h3 id="key-features-of-the-package">Key features of the package:</h3>
 <ul>
 <li><p><strong>Three estimation methods:</strong> Maximum Simulated
@@ -477,7 +552,8 @@ simulation-based, using Halton base-2 sequence as the quasi Monte Carlo
 of MCI. The two names are retained here following conventions in the
 literature.</p></li>
 <li><p><strong>MLE</strong> uses closed-form log-likelihoods — no
-simulation draws are needed, making it fast and exact.</p></li>
+simulation draws are needed, making it fast and exact. Selected models
+only.</p></li>
 </ul></li>
 <li><p><strong>Distributional flexibility for cross-sectional
 models:</strong> For cross-sectional models
@@ -511,8 +587,7 @@ distributions via MCI/MSLE.</li>
 (2014) fixed-effect model. MLE only, half-normal only.</li>
 <li><code>datatype=:panel_TRE</code> — True random-effect model. MLE
 only, half-normal or truncated-normal.</li>
-</ul>
-<p>See <a href="#panel-data-models">Section 10</a> for details.</p></li>
+</ul></li>
 <li><p><strong>Copula dependence (cross-sectional only):</strong>
 Gaussian, Gumbel, Clayton, and 90°-rotated Clayton copula support for
 modeling dependence between noise <span class="math inline">\(v\)</span>
@@ -544,6 +619,10 @@ and quantities for post-estimation analysis. For instance, the
 inefficiency (JLMS) and efficiency (BC) index, the marginal effects of
 the determinants of inefficiency, the corresponding OLS loglikelihood
 values and the skewness of OLS residuals.</p></li>
+<li><p><strong>Post-estimation tools:</strong> Functions for exploring
+fitted models, evaluating model quality through numerical summaries and
+plots, and using fitted models to predict frontier values, JLMS/BC
+indices, and marginal effects for new data.</p></li>
 <li><p><strong>CPU and GPU execution:</strong> Simulation-based methods
 typically require a large number of Monte Carlo draws for accuracy,
 making computation costly on the CPU. GPU execution substantially
@@ -642,6 +721,11 @@ function overloads only if CUDA is already available. If CUDA is loaded
 after SFrontiers, GPU features will not be available and you will need
 to restart Julia and load them in the correct order.</p>
 </blockquote>
+<blockquote>
+<p><strong>Note 3:</strong> If you want to use the diagnostic plot
+recipes (e.g., <code>plot(result, :efficiency)</code>), you must also
+load Plots.jl by <code>using Plots</code>.</p>
+</blockquote>
 <hr />
 <p><a id="quick-start-and-reference-example"></a></p>
 <h2 id="quick-start-and-reference-example">4. Quick Start and Reference
@@ -718,10 +802,29 @@ result = sfmodel_fit(
     show_table = true      # print estimation table; the default
 )
 
-# Access results
-println(&quot;coefficients: &quot;, result.coeff)
-println(&quot;BC efficiency index: &quot;, result.bc)
-println(&quot;Marginal Effects of Z: &quot;, result.marginal)</code></pre>
+# Access results: two complementary styles
+
+# (a) Direct field access on the result object:
+println(&quot;coefficients:           &quot;, result.coeff)
+println(&quot;BC efficiency index:    &quot;, result.bc)        # E(exp(-u)|ε), per obs
+println(&quot;JLMS inefficiency idx:  &quot;, result.jlms)      # E(u|ε), per obs
+println(&quot;Marginal Effects of Z:  &quot;, result.marginal)
+
+# (b) StatsAPI-conformant accessor functions (work on `result`):
+coeftable(result)              # formatted coefficient table (estimates, SE, z, p, CIs)
+coef(result)                   # coefficient vector
+vcov(result)                   # variance-covariance matrix
+stderror(result)               # standard errors
+confint(result; level = 0.95)  # Wald confidence intervals
+loglikelihood(result)          # maximized log-likelihood
+aic(result); bic(result)       # information criteria
+nobs(result)                   # number of observations
+residuals(result)              # composed errors (also `:u`, `:v`, `:ols` via `type=`)
+fitted(result)                 # frontier fitted values x&#39;β̂
+
+# See Section 6 (API Reference) for further diagnostics
+# (efficiency_summary, residual_diagnostics, sf_vs_ols, lrtest),
+# plotting recipes, and prediction on new data.</code></pre>
 <p>For models with Normal noise and half-normal, truncated-normal, or
 Exponential inefficiency, analytic MLE is available and requires no
 simulation settings:</p>
@@ -1051,34 +1154,22 @@ class="math inline">\(E[\exp(-u_i) \mid \varepsilon_i]\)</span></td>
 </table>
 <h3 id="hypothesis-testing">Hypothesis Testing</h3>
 <p>We can test whether the data support the frontier specification
-against an OLS model using a likelihood ratio (LR) test. The null
-hypothesis is that inefficiency is absent (<span
-class="math inline">\(u_i = 0\)</span>).</p>
-<pre class="julia"><code>julia&gt; LR = -2 * (result.OLS_loglikelihood - result.loglikelihood)
-45.90297766691435</code></pre>
-<p>Because testing <span class="math inline">\(u_i = 0\)</span> is on
-the boundary of the parameter space, the appropriate distribution is the
-mixed <span class="math inline">\(\bar{\chi}^2\)</span>. Critical values
-are obtained with <code>sfmodel_MixTable(dof)</code>, where
-<code>dof</code> is the number of parameters involved in <span
-class="math inline">\(u_i\)</span> (here, 4 parameters in <span
-class="math inline">\(\mu\)</span> and 4 in <span
-class="math inline">\(\log \sigma_u^2\)</span>, and so the total is
-8):</p>
-<pre class="julia"><code>julia&gt; sfmodel_MixTable(8)
-
-  * Significance levels and critical values of the mixed χ² distribution
-┌─────┬────────┬────────┬────────┬────────┐
-│ dof │   0.10 │   0.05 │  0.025 │   0.01 │
-├─────┼────────┼────────┼────────┼────────┤
-│ 8.0 │ 12.737 │ 14.853 │ 16.856 │ 19.384 │
-└─────┴────────┴────────┴────────┴────────┘
-
-source: Table 1, Kodde and Palm (1986, Econometrica).</code></pre>
+against an OLS model using <code>sf_vs_ols(result; dof=...)</code>. For
+the rice-farmer model the result is:</p>
+<pre class="julia"><code>julia&gt; sf_vs_ols(result; dof = 8)   # 4 parameters in μ, 4 in log σ_u²
+Likelihood-ratio test (mixed χ̄² reference distribution)
+  LR statistic   : 45.902978
+  degrees of freedom: 8
+  p-value        : 2.4e-07
+  log-lik (R, U) : (-104.9699, -82.0184)
+  critical values: 10% = 12.737, 5% = 14.853, 2.5% = 16.856, 1% = 19.384</code></pre>
 <p>Since the LR statistic (<span class="math inline">\(45.903\)</span>)
 is much larger than the critical value at the 1% level (<span
 class="math inline">\(19.384\)</span>), we overwhelmingly reject the
 null hypothesis of an OLS model.</p>
+<p>See <a href="#sec6-hypothesis-testing">Section 6.11 ‘Hypothesis
+Testing’</a> for the full reference (<code>sf_vs_ols</code>, the general
+<code>lrtest</code>, and the <code>LRTestResult</code> struct).</p>
 <h3 id="inefficiency-and-efficiency-index">Inefficiency and Efficiency
 Index</h3>
 <p>The JLMS inefficiency index and the Battese–Coelli efficiency index
@@ -1098,18 +1189,23 @@ are computed automatically and stored in the result:</p>
  0.109994   0.899461
  0.175169   0.845739
  0.165553   0.853446</code></pre>
-<p>These can be visualized using standard plotting packages:</p>
+<p>The same indices can also be obtained on new data via
+<code>predict(result; frontier, depvar, zvar, what = :jlms | :bc | :all)</code>.
+See <a href="#sec6-prediction-on-new-data">Section 6.13 ‘Prediction on
+New Data’</a> for the full reference.</p>
+<p>A built-in plot recipe visualizes the JLMS and BC distributions on
+the rice-farmer fit:</p>
 <pre class="julia"><code>using Plots
-
-h1 = histogram(result.jlms, xlabel=&quot;JLMS&quot;, bins=100, label=false)
-h2 = histogram(result.bc, xlabel=&quot;BC&quot;, bins=50, label=false)
-plot(h1, h2, layout=(1, 2), legend=false)</code></pre>
+plot(result, :efficiency)       # JLMS + BC efficiency histograms side by side</code></pre>
 <figure>
 <img src="histPlot.svg"
 alt="Histograms of the JLMS inefficiency index and the BC efficiency index" />
 <figcaption aria-hidden="true">Histograms of the JLMS inefficiency index
 and the BC efficiency index</figcaption>
 </figure>
+<p>See <a href="#sec6-plot-recipes">Section 6.12 ‘Plot Recipes’</a> for
+the other recipe kinds (<code>:residuals</code>, <code>:marginal</code>,
+<code>:convergence</code>, and the default 2×2 diagnostic panel).</p>
 <h3 id="marginal-effects">Marginal Effects</h3>
 <p>The marginal effects of the inefficiency determinants on <span
 class="math inline">\(E(u_i)\)</span> at the observation level are
@@ -1129,10 +1225,15 @@ available as a DataFrame:</p>
 │ 270 │ 0.00160268  │ 0.00701424  │ -0.0449243  │
 │ 271 │ 0.00107203  │ 0.0046576   │ -0.0388295  │</code></pre>
 <p>The marginal effects can be plotted against covariates to reveal
-non-linear patterns:</p>
+non-linear patterns. Using the built-in recipe:</p>
 <pre class="julia"><code>using Plots
 
-scatter(df.age, result.marginal[:, :marg_age],
+plot(result, :marginal)         # grid of all z-variable marginal scatters
+plot(result, :marginal, df.age) # marginal effect vs a specific covariate</code></pre>
+<p>The built-in recipe automatically adds a dashed zero reference line.
+A hand-coded equivalent, useful when you want full control over
+styling:</p>
+<pre class="julia"><code>scatter(df.age, result.marginal[:, :marg_age],
         xlabel=&quot;age&quot;, ylabel=&quot;marginal effect of age on E(u)&quot;,
         label=false)
 hline!([0.0], label=false, linestyle=:dash)</code></pre>
@@ -1149,6 +1250,116 @@ allows this non-monotonic effect by parameterizing both <span
 class="math inline">\(\mu\)</span> and <span
 class="math inline">\(\sigma_u^2\)</span> by the same vector of
 inefficiency determinants.</p>
+<p>See <a href="#sec6-plot-recipes">Section 6.12 ‘Plot Recipes’</a> for
+the full reference of the <code>:marginal</code> recipe and the other
+recipe kinds.</p>
+<h3 id="post-estimation-diagnostics">Post-Estimation Diagnostics</h3>
+<p><code>efficiency_summary(result)</code> reports the cross-sectional
+distribution of the JLMS inefficiency index and the Battese–Coelli
+efficiency index:</p>
+<pre class="julia"><code>julia&gt; es = efficiency_summary(result)
+(n = 271,
+ mean_jlms = 0.334, std_jlms = 0.274, min_jlms = 0.071, max_jlms = 1.513,
+ median_jlms = 0.237,
+ quantiles_jlms = (q10 = 0.106, q20 = 0.130, q25 = 0.139, q30 = 0.166,
+                   q40 = 0.199, q50 = 0.237, q60 = 0.301, q70 = 0.369,
+                   q75 = 0.419, q80 = 0.480, q90 = 0.735),
+ mean_bc = 0.746, std_bc = 0.160, min_bc = 0.224, max_bc = 0.933,
+ median_bc = 0.797,
+ quantiles_bc = (q10 = 0.488, q20 = 0.629, q25 = 0.669, q30 = 0.702,
+                 q40 = 0.749, q50 = 0.797, q60 = 0.827, q70 = 0.853,
+                 q75 = 0.875, q80 = 0.882, q90 = 0.903))</code></pre>
+<p>The median Battese–Coelli efficiency is <span
+class="math inline">\(0.797\)</span>, meaning the typical farmer
+operates at about 80% of the production frontier. The dispersion is
+wide: the bottom decile sits at <span
+class="math inline">\(\text{BC}=0.488\)</span> (severe inefficiency,
+producing less than half of potential output), while the top decile
+reaches <span class="math inline">\(0.903\)</span>. The JLMS index is
+right-skewed (mean <span class="math inline">\(0.334\)</span>, median
+<span class="math inline">\(0.237\)</span>, max <span
+class="math inline">\(1.513\)</span>), reflecting a thin tail of highly
+inefficient farmers. This is consistent with the heteroscedastic
+specification that lets both <span class="math inline">\(\mu\)</span>
+and <span class="math inline">\(\sigma_u^2\)</span> vary with <span
+class="math inline">\(\mathbf{z}_i\)</span>.</p>
+<p><code>residual_diagnostics(result)</code> checks the sign and shape
+of the residual distribution:</p>
+<pre class="julia"><code>julia&gt; rd = residual_diagnostics(result)
+(skew_ols = -0.7035, skew_composed = -0.9147,
+ expected_skew_sign = -1,
+ skew_ols_sign_ok = true, skew_composed_sign_ok = true,
+ JarqueBera_stat = 32.6099, JarqueBera_pvalue = 8.30e-8)</code></pre>
+<p>Both the OLS and composed residuals are negatively skewed, matching
+the expected sign for a production frontier
+(<code>expected_skew_sign = -1</code>); both <code>*_sign_ok</code>
+flags confirm this. The Jarque–Bera test on OLS residuals rejects
+normality at any conventional level (<span class="math inline">\(p
+\approx 8 \times 10^{-8}\)</span>), corroborating the
+<code>sf_vs_ols</code> rejection above: the OLS residuals carry the
+signature of a one-sided inefficiency component pulling output below the
+frontier.</p>
+<p>The composed residuals <span class="math inline">\(\hat\varepsilon_i
+= y_i - x_i&#39;\hat\beta\)</span> and frontier fit <span
+class="math inline">\(x_i&#39;\hat\beta\)</span> are returned by
+<code>residuals(result)</code> and <code>fitted(result)</code>. Both
+accept a <code>type</code> keyword to extract alternative quantities
+such as <span class="math inline">\(\hat u_i\)</span>, <span
+class="math inline">\(\hat v_i\)</span>, or OLS residuals.</p>
+<p>See <a href="#sec6-diagnostic-functions">‘Diagnostic Functions’ in
+Section 6.10</a> for the full reference (<code>residuals</code>,
+<code>fitted</code>, <code>efficiency_summary</code>,
+<code>residual_diagnostics</code>), including all keyword options and
+the complete list of returned NamedTuple fields.</p>
+<p><a id="sec5-prediction-on-new-data"></a></p>
+<h3 id="prediction-on-new-data">Prediction on New Data</h3>
+<p>The fitted object can be applied to new observations through
+<code>predict(result; frontier, zvar, depvar, what)</code>. See <a
+href="#sec6-prediction-on-new-data">‘Prediction on New Data’ in Section
+6.13</a> for the full reference (signature, the
+<code>what</code>-keyword table, and supported model classes).</p>
+<p>Given any new observations <span
+class="math inline">\((X_{\text{new}}, Z_{\text{new}},
+y_{\text{new}})\)</span>, <code>predict()</code> reuses the estimated
+coefficients — no refitting — to return the same family of quantities
+available at training time: the frontier fit <span
+class="math inline">\(x_i&#39;\hat\beta\)</span>, composed residuals,
+response-scale fit, the JLMS inefficiency index <span
+class="math inline">\(E(u_i\mid\hat\varepsilon_i)\)</span>, the
+Battese–Coelli efficiency index <span
+class="math inline">\(E(e^{-u_i}\mid\hat\varepsilon_i)\)</span>, and
+marginal effects <span class="math inline">\(\partial E(u_i)/\partial
+z_{ij}\)</span>. The <code>what</code> keyword selects the target.</p>
+<p>This interface supports several post-estimation tasks:</p>
+<ul>
+<li><p><strong>Out-of-sample prediction and evaluation.</strong> Score
+firms outside the estimation sample, such as in train/test splits,
+cross-validation, or newly collected data, against the fitted frontier
+and obtain out-of-sample JLMS/BC scores.</p></li>
+<li><p><strong>Counterfactual analysis.</strong> Change inefficiency
+determinants <span class="math inline">\(Z\)</span> and recompute <span
+class="math inline">\(E(u\mid\varepsilon)\)</span> or <span
+class="math inline">\(E(e^{-u}\mid\varepsilon)\)</span> to see how
+predicted (in)efficiency changes.</p></li>
+<li><p><strong>Policy evaluation.</strong> Apply the fitted model to
+post-intervention data or a simulated <span
+class="math inline">\(Z\)</span> distribution to project changes in mean
+efficiency without refitting.</p></li>
+<li><p><strong>Forecasting.</strong> Fit on periods <span
+class="math inline">\(1,\dots,T-1\)</span> and predict frontier output
+and efficiency for period <span
+class="math inline">\(T\)</span>.</p></li>
+<li><p><strong>Sensitivity and marginal analysis.</strong> Use
+<code>what = :marginal</code> over a grid of <span
+class="math inline">\(Z\)</span> values to trace how marginal effects
+vary across the covariate space.</p></li>
+<li><p><strong>Scoring new entrants.</strong> Apply an existing fitted
+model to newly collected firms without re-estimating the model.</p></li>
+</ul>
+<p>The exact signature, data-requirement table, and currently-supported
+model classes are documented in <a
+href="#sec6-prediction-on-new-data">Section 6.13 ‘Prediction on New
+Data’</a>.</p>
 <h3 id="saving-results">Saving Results</h3>
 <p>The result can be saved for later analysis. Using the <a
 href="https://github.com/JuliaIO/JLD2.jl">JLD2</a> package for binary
@@ -1164,6 +1375,16 @@ CSV.write(&quot;marginal.csv&quot;, result.marginal)     # marginal effects (Dat
 <hr />
 <p><a id="api-reference"></a></p>
 <h2 id="api-reference">6. API Reference</h2>
+<p>The API is grouped in two sets. <strong>Part A — Model building and
+fitting</strong> (6.1–6.6) covers the functions used to specify and
+estimate a model. <strong>Part B — Post-estimation accessors</strong>
+(6.7–6.13) covers the methods that operate on the <code>SFResult</code>
+object returned by <code>sfmodel_fit()</code>, including StatsAPI
+accessors, diagnostic functions, hypothesis tests, plot recipes, and
+<code>predict()</code>.</p>
+<hr />
+<h3 id="part-a-model-building-and-fitting">Part A: Model building and
+fitting</h3>
 <p><a id="sfmodel_spec"></a></p>
 <h3 id="sfmodel_spec">6.1 sfmodel_spec()</h3>
 <p>The <code>sfmodel_spec()</code> function creates a model
@@ -1239,7 +1460,7 @@ only <code>:HalfNormal</code>, <code>:TruncatedNormal</code>,
 <code>:panel_TFE</code> (Wang and Ho 2010 true fixed-effect),
 <code>:panel_TFE_CSW</code> (Chen, Schmidt, and Wang 2014, MLE only), or
 <code>:panel_TRE</code> (true random-effect, MLE only). See <a
-href="#panel-data-models">Section 10</a>.</td>
+href="#panel-data-models">Section 9</a>.</td>
 <td>No</td>
 </tr>
 <tr class="even">
@@ -1288,7 +1509,7 @@ specification that are allowed to be heteroscedastic (e.g.,
 <code>:scaling</code> to activate the scaling property model. Not
 available with panel datatypes. See the Hetero Options column in <a
 href="#supported-models">Section 7</a> and <a
-href="#scaling-property-model-cross-sectional">Section 9.5</a>.</td>
+href="#scaling-property-model-cross-sectional">Section 8.5</a>.</td>
 <td>No</td>
 </tr>
 <tr class="even">
@@ -1394,7 +1615,7 @@ scaling function <span class="math inline">\(h(\mathbf{z}_i) =
 inefficiency distribution parameters remain scalar (homoscedastic). The
 <code>zvar</code> matrix must <strong>not</strong> contain a constant
 column (for identification; see <a
-href="#scaling-property-model-cross-sectional">Section 9.5</a>).</p>
+href="#scaling-property-model-cross-sectional">Section 8.5</a>).</p>
 <pre class="julia"><code># Scaling property model (using keyword form as an example)
 # Z_nocons must NOT contain a constant column
 
@@ -1496,7 +1717,7 @@ class="math inline">\(h(z_{it}) = \exp(z_{it}&#39;\delta)\)</span>. The
 <code>frontier</code> and <code>zvar</code> matrices must NOT include a
 constant column (except <code>panel_TRE</code>, where a constant in
 <code>frontier</code> is allowed). See <a
-href="#panel-data-models">Section 10</a> for details.</p>
+href="#panel-data-models">Section 9</a> for details.</p>
 </blockquote>
 <hr />
 <p><a id="sfmodel_method"></a></p>
@@ -2487,7 +2708,7 @@ E(u_i^*)\)</span>, using automatic differentiation. The coefficient
 <span class="math inline">\(\delta_j\)</span> directly gives the
 semi-elasticity <span class="math inline">\(\partial \ln E(u_i) /
 \partial z_{ij} = \delta_j\)</span>. See <a
-href="#scaling-property-model-cross-sectional">Section 9.5</a>.</p>
+href="#scaling-property-model-cross-sectional">Section 8.5</a>.</p>
 </blockquote>
 <p><strong>OLS Diagnostics</strong></p>
 <table>
@@ -2659,52 +2880,62 @@ if:</p>
 <h3 id="sfmodel_mixtable-and-sfmodel_chisquaretable">6.6
 <code>sfmodel_MixTable()</code> and
 <code>sfmodel_ChiSquareTable()</code></h3>
-<p>These utility functions print critical values for hypothesis
-testing.</p>
-<h4 id="sfmodel_mixtabledof"><code>sfmodel_MixTable(dof)</code></h4>
-<p>Prints the critical values of the <strong>mixed chi-squared
-distribution</strong> <span class="math inline">\(\bar{\chi}^2\)</span>
-for a given number of degrees of freedom (1 to 40). The mixed
-chi-squared distribution is a 50:50 mixture of <span
-class="math inline">\(\chi^2(p-1)\)</span> and <span
+<p>These two utilities print critical values used for manual
+likelihood-ratio (LR) testing. Use <code>sfmodel_MixTable</code> when
+the LR test places a parameter on the <strong>boundary</strong> of the
+parameter space — the canonical example in SF analysis being <span
+class="math inline">\(H_0: \sigma_u^2 = 0\)</span>, for which the
+reference distribution is the mixed <span
+class="math inline">\(\bar{\chi}^2\)</span> of Kodde and Palm (1986).
+Use <code>sfmodel_ChiSquareTable</code> for standard interior LR tests
+(e.g., <span class="math inline">\(H_0: \beta_2 = \beta_3 = 0\)</span>),
+where the usual <span class="math inline">\(\chi^2\)</span> reference
+applies.</p>
+<h4 id="syntax-5">Syntax</h4>
+<pre class="julia"><code>sfmodel_MixTable()             # Full table (dof 1 to 40)
+sfmodel_MixTable(dof)          # Row of critical values for a given dof
+
+sfmodel_ChiSquareTable(dof)    # Row of critical values for a given dof</code></pre>
+<h4 id="arguments-5">Arguments</h4>
+<table>
+<colgroup>
+<col style="width: 8%" />
+<col style="width: 4%" />
+<col style="width: 79%" />
+<col style="width: 8%" />
+</colgroup>
+<thead>
+<tr class="header">
+<th>Argument</th>
+<th>Type</th>
+<th>Description</th>
+<th>Required</th>
+</tr>
+</thead>
+<tbody>
+<tr class="odd">
+<td><code>dof</code></td>
+<td>Int</td>
+<td>Degrees of freedom. For <code>sfmodel_MixTable</code>, must be
+between 1 and 40. Omit <code>dof</code> in <code>sfmodel_MixTable</code>
+to print the full table.</td>
+<td>No</td>
+</tr>
+</tbody>
+</table>
+<h4 id="return-value-5">Return Value</h4>
+<p>A row (or, for <code>sfmodel_MixTable()</code> with no argument, a
+matrix) of critical values at the significance levels 0.10, 0.05, 0.025,
+and 0.01. The mixed table is reproduced from Table 1 of Kodde and Palm
+(1986, <em>Econometrica</em>).</p>
+<p>The LR statistic to compare against the returned critical values is
+<span class="math inline">\(-2(\ln L_R - \ln L_U)\)</span>. For
+<code>sfmodel_MixTable</code>, the reference distribution is a 50:50
+mixture of <span class="math inline">\(\chi^2(p-1)\)</span> and <span
 class="math inline">\(\chi^2(p)\)</span>, where <span
-class="math inline">\(p\)</span> is the number of restrictions.</p>
-<p><strong>When to use:</strong> The mixed chi-squared test is required
-for likelihood ratio (LR) tests where the null hypothesis places a
-parameter on the <strong>boundary</strong> of the parameter space. The
-classic example in stochastic frontier analysis is testing for the
-absence of inefficiency:</p>
-<p><span class="math display">\[
-H_0: \sigma_u^2 = 0 \quad \text{vs.} \quad H_1: \sigma_u^2 &gt; 0.
-\]</span></p>
-<p>Because <span class="math inline">\(\sigma_u^2 \ge 0\)</span>, the
-null value is on the boundary, and the standard <span
-class="math inline">\(\chi^2\)</span> distribution does not apply. The
-LR statistic <span class="math inline">\(-2(\ln L_R - \ln L_U)\)</span>
-should be compared against the mixed <span
-class="math inline">\(\bar{\chi}^2\)</span> critical values instead.</p>
-<p><strong>Syntax:</strong></p>
-<pre class="julia"><code>sfmodel_MixTable()       # Print the full table (dof 1 to 40)
-sfmodel_MixTable(3)      # Print critical values for dof = 3</code></pre>
-<p><strong>Return:</strong> A row (or matrix) of critical values at
-significance levels 0.10, 0.05, 0.025, and 0.01.</p>
-<p><strong>Source:</strong> Table 1, Kodde and Palm (1986,
-<em>Econometrica</em>).</p>
-<h4
-id="sfmodel_chisquaretabledof"><code>sfmodel_ChiSquareTable(dof)</code></h4>
-<p>Prints the critical values of the <strong>standard chi-squared
-distribution</strong> <span class="math inline">\(\chi^2\)</span> for a
-given number of degrees of freedom.</p>
-<p><strong>When to use:</strong> For standard LR tests where the null
-hypothesis does <strong>not</strong> place parameters on the boundary.
-For example, testing a subset of frontier coefficients:</p>
-<p><span class="math display">\[
-H_0: \beta_2 = \beta_3 = 0 \quad \text{(interior restriction)}.
-\]</span></p>
-<p><strong>Syntax:</strong></p>
-<pre class="julia"><code>sfmodel_ChiSquareTable(2)   # Critical values for dof = 2</code></pre>
-<p><strong>Return:</strong> A row of critical values at significance
-levels 0.10, 0.05, 0.025, and 0.01.</p>
+class="math inline">\(p\)</span> is the number of boundary restrictions.
+For <code>sfmodel_ChiSquareTable</code>, it is the standard <span
+class="math inline">\(\chi^2(p)\)</span>.</p>
 <h4 id="example-testing-for-inefficiency">Example: Testing for
 Inefficiency</h4>
 <pre class="julia"><code># Estimate unrestricted model (stochastic frontier)
@@ -2725,6 +2956,982 @@ LR = -2 * (ll_ols - ll_sf)
 sfmodel_MixTable(1)
 # At 5% level, critical value is 2.705
 # If LR &gt; 2.705, reject H0 (inefficiency is statistically significant)</code></pre>
+<blockquote>
+<p><strong>Easier alternative: <code>sf_vs_ols()</code>.</strong> The
+package provides a one-call wrapper that automates exactly this test.
+<code>sf_vs_ols(result; dof = ...)</code> reads the stored OLS
+log-likelihood from the fitted object, computes the LR statistic,
+selects the mixed <span class="math inline">\(\bar{\chi}^2\)</span>
+reference distribution, and returns an <code>LRTestResult</code>
+containing the statistic, p-value, and the critical values at the 10%,
+5%, 2.5%, and 1% levels. See <a href="#sec6-hypothesis-testing">Section
+6.11 ‘Hypothesis Testing’</a> for the full signature and return-field
+reference. The <code>sfmodel_MixTable</code> /
+<code>sfmodel_ChiSquareTable</code> utilities remain useful when you
+need the raw critical values for a <em>different</em> LR test (e.g.,
+restrictions on frontier coefficients or comparing two nested SF models
+by hand).</p>
+</blockquote>
+<hr />
+<h3 id="part-b-post-estimation-accessors">Part B: Post-estimation
+accessors</h3>
+<p>The remaining entries document the methods that operate on the
+<code>SFResult</code> object returned by <code>sfmodel_fit()</code>.
+They dispatch uniformly across all backends (MLE, MSLE, MCI, and panel)
+unless noted otherwise.</p>
+<p><a id="standard-accessors"></a></p>
+<h3 id="standard-accessors-statsapi-interface">6.7 Standard Accessors
+(StatsAPI Interface)</h3>
+<p>The object returned by <code>sfmodel_fit()</code> is a thin
+<code>SFResult</code> wrapper around the result NamedTuple. All existing
+field-access forms (<code>result.coeff</code>,
+<code>result.var_cov_mat</code>, <code>result.loglikelihood</code>,
+etc.) continue to work unchanged. In addition,
+<code>SFrontiers.jl</code> implements the standard
+<code>StatsAPI.jl</code> interface, so fitted models can be queried with
+the canonical Julia statistical accessors. These methods dispatch
+uniformly across all backends (MLE, MSLE, MCI, and panel).</p>
+<h4 id="syntax-6">Syntax</h4>
+<pre class="julia"><code># about coefficients
+coef(result);   vcov(result);   stderror(result);   confint(result; level = 0.95);   coeftable(result)
+
+# about model fit
+loglikelihood(result);   aic(result);   bic(result);   nobs(result);   dof(result);   dof_residual(result)
+
+# display
+summary(result);   show(result)</code></pre>
+<h4 id="arguments-6">Arguments</h4>
+<table>
+<colgroup>
+<col style="width: 6%" />
+<col style="width: 9%" />
+<col style="width: 77%" />
+<col style="width: 6%" />
+</colgroup>
+<thead>
+<tr class="header">
+<th>Argument</th>
+<th>Type</th>
+<th>Description</th>
+<th>Required</th>
+</tr>
+</thead>
+<tbody>
+<tr class="odd">
+<td><code>result</code></td>
+<td><code>SFResult</code></td>
+<td>A fitted model object returned by <code>sfmodel_fit()</code>.</td>
+<td>Yes</td>
+</tr>
+<tr class="even">
+<td><code>level</code></td>
+<td>Real</td>
+<td>Confidence level for <code>confint</code> (default
+<code>0.95</code>). Applies only to <code>confint</code>.</td>
+<td>No</td>
+</tr>
+</tbody>
+</table>
+<h4 id="return-value-6">Return Value</h4>
+<p>Each accessor returns the quantity in the third column below; the
+second column lists the equivalent raw field on the result NamedTuple
+for reference.</p>
+<table>
+<colgroup>
+<col style="width: 24%" />
+<col style="width: 18%" />
+<col style="width: 56%" />
+</colgroup>
+<thead>
+<tr class="header">
+<th>Accessor</th>
+<th>Field equivalent</th>
+<th>Returns</th>
+</tr>
+</thead>
+<tbody>
+<tr class="odd">
+<td><code>coef(r)</code></td>
+<td><code>r.coeff</code></td>
+<td>Full coefficient vector</td>
+</tr>
+<tr class="even">
+<td><code>vcov(r)</code></td>
+<td><code>r.var_cov_mat</code></td>
+<td>Variance–covariance matrix</td>
+</tr>
+<tr class="odd">
+<td><code>stderror(r)</code></td>
+<td><code>r.std_err</code></td>
+<td>Asymptotic standard errors</td>
+</tr>
+<tr class="even">
+<td><code>confint(r; level=...)</code></td>
+<td>—</td>
+<td><code>N × 2</code> matrix of Wald confidence intervals</td>
+</tr>
+<tr class="odd">
+<td><code>loglikelihood(r)</code></td>
+<td><code>r.loglikelihood</code></td>
+<td>Maximized log-likelihood</td>
+</tr>
+<tr class="even">
+<td><code>nobs(r)</code></td>
+<td><code>r.n_observations</code></td>
+<td>Number of observations</td>
+</tr>
+<tr class="odd">
+<td><code>dof(r)</code>, <code>dof_residual(r)</code></td>
+<td>—</td>
+<td>Free parameters; residual degrees of freedom (<span
+class="math inline">\(N - k\)</span>)</td>
+</tr>
+<tr class="even">
+<td><code>aic(r)</code>, <code>bic(r)</code></td>
+<td>—</td>
+<td>Akaike and Bayesian information criteria</td>
+</tr>
+<tr class="odd">
+<td><code>coeftable(r)</code></td>
+<td><code>r.table</code> (matrix)</td>
+<td>A <code>StatsBase.CoefTable</code> (printable, exportable)</td>
+</tr>
+<tr class="even">
+<td><code>summary(r)</code>, <code>show(r)</code></td>
+<td>—</td>
+<td>Compact REPL display; works on reloaded objects without re-fit</td>
+</tr>
+</tbody>
+</table>
+<h4 id="example-1">Example</h4>
+<pre class="julia"><code>result = sfmodel_fit(spec = myspec, method = mymeth)
+
+coef(result)                     # coefficient vector
+confint(result; level = 0.95)    # Wald CIs
+coeftable(result)                # StatsBase.CoefTable
+aic(result);  bic(result)        # information criteria</code></pre>
+<hr />
+<p><a id="efficiency-indices"></a></p>
+<h3 id="efficiency-indices">6.8 Efficiency Indices</h3>
+<p>Two observation-level indices summarise where each firm stands
+relative to the frontier: the JLMS inefficiency index <span
+class="math inline">\(E(u_i \mid \varepsilon_i)\)</span> (higher means
+more inefficient) and the Battese–Coelli (BC) efficiency index <span
+class="math inline">\(E(e^{-u_i} \mid \varepsilon_i)\)</span> (bounded
+in <span class="math inline">\([0,1]\)</span>; a BC value of <span
+class="math inline">\(0.85\)</span> means the firm produces <span
+class="math inline">\(85\%\)</span> of its potential output). Both are
+stored as fields on the fitted result and are populated automatically
+when the model is fit with <code>jlms_bc_index = true</code>.</p>
+<h4 id="syntax-7">Syntax</h4>
+<pre class="julia"><code>result.jlms        # JLMS inefficiency index
+result.bc          # Battese–Coelli efficiency index</code></pre>
+<h4 id="fields">Fields</h4>
+<table>
+<colgroup>
+<col style="width: 6%" />
+<col style="width: 15%" />
+<col style="width: 77%" />
+</colgroup>
+<thead>
+<tr class="header">
+<th>Field</th>
+<th>Type</th>
+<th>Description</th>
+</tr>
+</thead>
+<tbody>
+<tr class="odd">
+<td><code>jlms</code></td>
+<td><code>Vector{Float64}</code> (length <code>N</code>)</td>
+<td>JLMS index <span class="math inline">\(E(u_i \mid
+\varepsilon_i)\)</span>; higher indicates more inefficiency.</td>
+</tr>
+<tr class="even">
+<td><code>bc</code></td>
+<td><code>Vector{Float64}</code> (length <code>N</code>)</td>
+<td>Battese–Coelli efficiency <span class="math inline">\(E(e^{-u_i}
+\mid \varepsilon_i) \in [0,1]\)</span>.</td>
+</tr>
+</tbody>
+</table>
+<h4 id="return-value-7">Return Value</h4>
+<p>Observation-level <code>Vector{Float64}</code> of length <span
+class="math inline">\(N\)</span>. Both fields are present when
+<code>sfmodel_fit()</code> is called with
+<code>jlms_bc_index = true</code> (the default); they are
+<code>nothing</code> otherwise.</p>
+<h4 id="example-2">Example</h4>
+<pre class="julia"><code>result = sfmodel_fit(spec = myspec, method = mymeth, jlms_bc_index = true)
+
+mean_inefficiency = mean(result.jlms)
+mean_efficiency   = mean(result.bc)
+
+println(&quot;Firm 1 efficiency:   &quot;, result.bc[1])
+println(&quot;Firm 1 inefficiency: &quot;, result.jlms[1])</code></pre>
+<hr />
+<p><a id="api-marginal-effects"></a></p>
+<h3 id="marginal-effects-1">6.9 Marginal Effects</h3>
+<p>Marginal effects quantify how changes in the Z variables affect
+expected inefficiency <span class="math inline">\(E(u)\)</span>. A
+positive marginal effect means that increasing <span
+class="math inline">\(z_j\)</span> raises expected inefficiency.
+Marginal effects are populated on the fitted result when
+<code>zvar</code> is specified in <code>sfmodel_spec()</code> and
+<code>sfmodel_fit(..., marginal = true)</code> is used.</p>
+<h4 id="syntax-8">Syntax</h4>
+<pre class="julia"><code>result.marginal         # observation-level marginal effects (DataFrame)
+result.marginal_mean    # sample-mean marginal effects (NamedTuple)</code></pre>
+<h4 id="fields-1">Fields</h4>
+<table>
+<colgroup>
+<col style="width: 13%" />
+<col style="width: 9%" />
+<col style="width: 77%" />
+</colgroup>
+<thead>
+<tr class="header">
+<th>Field</th>
+<th>Type</th>
+<th>Description</th>
+</tr>
+</thead>
+<tbody>
+<tr class="odd">
+<td><code>marginal</code></td>
+<td><code>DataFrame</code></td>
+<td>One row per observation; columns <code>marg_&lt;name&gt;</code> give
+<span class="math inline">\(\partial E(u_i) / \partial
+z_{ij}\)</span>.</td>
+</tr>
+<tr class="even">
+<td><code>marginal_mean</code></td>
+<td><code>NamedTuple</code></td>
+<td>Sample averages of the observation-level effects, one entry per Z
+variable.</td>
+</tr>
+</tbody>
+</table>
+<h4 id="return-value-8">Return Value</h4>
+<p><code>result.marginal</code> is a DataFrame of size
+<code>N × L</code>, and <code>result.marginal_mean</code> is a
+NamedTuple with <code>L</code> entries, where <code>L</code> is the
+number of Z covariates. Both are <code>nothing</code> when
+<code>marginal = false</code> or when no <code>zvar</code> is
+specified.</p>
+<h4 id="example-3">Example</h4>
+<pre class="julia"><code>result = sfmodel_fit(spec = myspec, method = mymeth, marginal = true)
+
+println(result.marginal_mean)
+# (age = 0.023, school = -0.015, ...)
+
+marginal_df = result.marginal
+println(names(marginal_df))                       # [&quot;marg_age&quot;, &quot;marg_school&quot;, ...]
+println(&quot;Firm 1 marginal effect of age: &quot;,
+        marginal_df[1, :marg_age])</code></pre>
+<hr />
+<p><a id="sec6-diagnostic-functions"></a></p>
+<h3 id="diagnostic-functions">6.10 Diagnostic Functions</h3>
+<p>Beyond the StatsAPI accessors, the package provides a small family of
+post-estimation diagnostic methods that dispatch uniformly across all
+backends. Together they cover the four quantities most often needed
+after a fit: model residuals, fitted values, an efficiency-distribution
+summary, and a residual-skew/normality check.</p>
+<h4 id="syntax-9">Syntax</h4>
+<pre class="julia"><code>residuals(result; type = :composed)
+fitted(result;    type = :frontier)
+
+efficiency_summary(result)
+residual_diagnostics(result)</code></pre>
+<h4 id="arguments-7">Arguments</h4>
+<table>
+<colgroup>
+<col style="width: 4%" />
+<col style="width: 5%" />
+<col style="width: 86%" />
+<col style="width: 4%" />
+</colgroup>
+<thead>
+<tr class="header">
+<th>Argument</th>
+<th>Type</th>
+<th>Description</th>
+<th>Required</th>
+</tr>
+</thead>
+<tbody>
+<tr class="odd">
+<td><code>result</code></td>
+<td><code>SFResult</code></td>
+<td>A fitted model returned by <code>sfmodel_fit()</code>.</td>
+<td>Yes</td>
+</tr>
+<tr class="even">
+<td><code>type</code></td>
+<td>Symbol</td>
+<td>For <code>residuals</code>: one of <code>:composed</code> (default),
+<code>:u</code>, <code>:v</code>, <code>:ols</code>. For
+<code>fitted</code>: <code>:frontier</code> (default) or
+<code>:response</code>.</td>
+<td>No</td>
+</tr>
+</tbody>
+</table>
+<h4 id="return-value-9">Return Value</h4>
+<p><code>residuals</code> and <code>fitted</code> return an
+observation-level <code>Vector{Float64}</code> of length <span
+class="math inline">\(N\)</span>, with the quantity selected by
+<code>type</code>:</p>
+<table>
+<colgroup>
+<col style="width: 41%" />
+<col style="width: 58%" />
+</colgroup>
+<thead>
+<tr class="header">
+<th>Call</th>
+<th>Returned vector</th>
+</tr>
+</thead>
+<tbody>
+<tr class="odd">
+<td><code>residuals(result)</code> (default
+<code>type = :composed</code>)</td>
+<td><span class="math inline">\(\hat\varepsilon_i = y_i -
+x_i&#39;\hat\beta\)</span> (composed error)</td>
+</tr>
+<tr class="even">
+<td><code>residuals(result; type = :u)</code></td>
+<td><span class="math inline">\(\hat u_i\)</span>, the JLMS inefficiency
+estimate</td>
+</tr>
+<tr class="odd">
+<td><code>residuals(result; type = :v)</code></td>
+<td><span class="math inline">\(\hat v_i = \hat\varepsilon_i \mp \hat
+u_i\)</span> (implied noise estimate)</td>
+</tr>
+<tr class="even">
+<td><code>residuals(result; type = :ols)</code></td>
+<td>OLS residuals from the auxiliary OLS fit stored on the result</td>
+</tr>
+<tr class="odd">
+<td><code>fitted(result)</code> (default
+<code>type = :frontier</code>)</td>
+<td><span class="math inline">\(x_i&#39;\hat\beta\)</span> (frontier
+fit)</td>
+</tr>
+<tr class="even">
+<td><code>fitted(result; type = :response)</code></td>
+<td><span class="math inline">\(x_i&#39;\hat\beta \mp \hat u_i\)</span>
+(response-scale fit)</td>
+</tr>
+</tbody>
+</table>
+<p><code>efficiency_summary</code> returns a <code>NamedTuple</code> of
+summary statistics for the JLMS inefficiency and the Battese–Coelli
+efficiency indices:</p>
+<table>
+<colgroup>
+<col style="width: 38%" />
+<col style="width: 61%" />
+</colgroup>
+<thead>
+<tr class="header">
+<th>Field</th>
+<th>Meaning</th>
+</tr>
+</thead>
+<tbody>
+<tr class="odd">
+<td><code>n</code></td>
+<td>Number of observations</td>
+</tr>
+<tr class="even">
+<td><code>mean_jlms</code>, <code>std_jlms</code></td>
+<td>Mean and standard deviation of JLMS</td>
+</tr>
+<tr class="odd">
+<td><code>min_jlms</code>, <code>max_jlms</code>,
+<code>median_jlms</code></td>
+<td>Min, max, and median of JLMS</td>
+</tr>
+<tr class="even">
+<td><code>quantiles_jlms</code></td>
+<td>Deciles <code>q10</code>, <code>q20</code>, …, <code>q90</code> and
+quartiles <code>q25</code>, <code>q75</code></td>
+</tr>
+<tr class="odd">
+<td><code>mean_bc</code>, <code>std_bc</code></td>
+<td>Mean and standard deviation of BC</td>
+</tr>
+<tr class="even">
+<td><code>min_bc</code>, <code>max_bc</code>,
+<code>median_bc</code></td>
+<td>Min, max, and median of BC</td>
+</tr>
+<tr class="odd">
+<td><code>quantiles_bc</code></td>
+<td>Deciles and quartiles of BC</td>
+</tr>
+</tbody>
+</table>
+<p><code>residual_diagnostics</code> returns a <code>NamedTuple</code>
+of numeric checks on the composed and OLS residuals:</p>
+<table>
+<colgroup>
+<col style="width: 21%" />
+<col style="width: 78%" />
+</colgroup>
+<thead>
+<tr class="header">
+<th>Field</th>
+<th>Meaning</th>
+</tr>
+</thead>
+<tbody>
+<tr class="odd">
+<td><code>skew_ols</code></td>
+<td>Sample skewness of OLS residuals (matches
+<code>result.OLS_resid_skew</code>)</td>
+</tr>
+<tr class="even">
+<td><code>skew_composed</code></td>
+<td>Sample skewness of the composed SF residuals <span
+class="math inline">\(\hat\varepsilon\)</span></td>
+</tr>
+<tr class="odd">
+<td><code>expected_skew_sign</code></td>
+<td><span class="math inline">\(-1\)</span> for production, <span
+class="math inline">\(+1\)</span> for cost</td>
+</tr>
+<tr class="even">
+<td><code>skew_ols_sign_ok</code></td>
+<td><code>true</code> iff
+<code>sign(skew_ols) == expected_skew_sign</code></td>
+</tr>
+<tr class="odd">
+<td><code>skew_composed_sign_ok</code></td>
+<td><code>true</code> iff
+<code>sign(skew_composed) == expected_skew_sign</code></td>
+</tr>
+<tr class="even">
+<td><code>JarqueBera_stat</code></td>
+<td>Jarque–Bera statistic on OLS residuals: <span
+class="math inline">\(\mathrm{JB} = \tfrac{n}{6}(s^2 +
+\tfrac{1}{4}(k-3)^2)\)</span></td>
+</tr>
+<tr class="odd">
+<td><code>JarqueBera_pvalue</code></td>
+<td>Upper-tail p-value of <span
+class="math inline">\(\mathrm{JB}\)</span> under <span
+class="math inline">\(\chi^2_2\)</span></td>
+</tr>
+</tbody>
+</table>
+<p>Under the SF specification, <strong>rejection</strong> of normality
+(small <code>JarqueBera_pvalue</code>) is consistent with the OLS
+residuals containing a one-sided inefficiency component. The expected
+sign of the skewness is negative for production and positive for
+cost.</p>
+<h4 id="example-4">Example</h4>
+<pre class="julia"><code>eps  = residuals(result)              # composed residuals
+yhat = fitted(result)                 # frontier fit
+es   = efficiency_summary(result)
+rd   = residual_diagnostics(result)   # includes JB test + sign check</code></pre>
+<hr />
+<p><a id="sec6-hypothesis-testing"></a></p>
+<h3 id="hypothesis-testing-1">6.11 Hypothesis Testing</h3>
+<p>Two likelihood-ratio (LR) testing utilities are provided for fitted
+SF models. <code>sf_vs_ols</code> performs the boundary LR test of the
+stochastic frontier against its auxiliary OLS baseline (<span
+class="math inline">\(H_0: \sigma_u^2 = 0\)</span>), automatically
+selecting the mixed <span class="math inline">\(\bar{\chi}^2\)</span>
+reference distribution (Kodde and Palm 1986). <code>lrtest</code> is a
+general nested LR test for two fitted SF models, with an optional switch
+to the boundary reference. Both return a single
+<code>LRTestResult</code> struct with the statistic, p-value, and
+pre-computed critical values.</p>
+<h4 id="syntax-10">Syntax</h4>
+<pre class="julia"><code>sf_vs_ols(result; dof = nothing)
+lrtest(restricted, unrestricted; mixed = false, dof = nothing)</code></pre>
+<h4 id="arguments-8">Arguments</h4>
+<table>
+<colgroup>
+<col style="width: 7%" />
+<col style="width: 5%" />
+<col style="width: 83%" />
+<col style="width: 4%" />
+</colgroup>
+<thead>
+<tr class="header">
+<th>Argument</th>
+<th>Type</th>
+<th>Description</th>
+<th>Required</th>
+</tr>
+</thead>
+<tbody>
+<tr class="odd">
+<td><code>result</code></td>
+<td><code>SFResult</code></td>
+<td><code>sf_vs_ols</code> only. The fitted SF model; its stored
+<code>OLS_loglikelihood</code> supplies the restricted
+log-likelihood.</td>
+<td>Yes</td>
+</tr>
+<tr class="even">
+<td><code>restricted</code></td>
+<td><code>SFResult</code></td>
+<td><code>lrtest</code> only. Fitted restricted SF model.</td>
+<td>Yes</td>
+</tr>
+<tr class="odd">
+<td><code>unrestricted</code></td>
+<td><code>SFResult</code></td>
+<td><code>lrtest</code> only. Fitted unrestricted SF model, nested in
+the restricted one.</td>
+<td>Yes</td>
+</tr>
+<tr class="even">
+<td><code>dof</code></td>
+<td>Int</td>
+<td>Degrees of freedom for the reference distribution. For
+<code>sf_vs_ols</code>, the number of extra SF parameters over OLS; for
+<code>lrtest</code>, inferred from the two fits if omitted.</td>
+<td>No</td>
+</tr>
+<tr class="odd">
+<td><code>mixed</code></td>
+<td>Bool</td>
+<td><code>lrtest</code> only. <code>true</code> for the boundary <span
+class="math inline">\(\bar{\chi}^2\)</span> reference;
+<code>false</code> (default) for the standard <span
+class="math inline">\(\chi^2\)</span>.</td>
+<td>No</td>
+</tr>
+</tbody>
+</table>
+<h4 id="return-value-10">Return Value</h4>
+<p>An <code>LRTestResult</code> struct with the following fields:</p>
+<table>
+<colgroup>
+<col style="width: 18%" />
+<col style="width: 81%" />
+</colgroup>
+<thead>
+<tr class="header">
+<th>Field</th>
+<th>Meaning</th>
+</tr>
+</thead>
+<tbody>
+<tr class="odd">
+<td><code>LR</code></td>
+<td>Likelihood ratio statistic, <span class="math inline">\(-2(\ell_R -
+\ell_U)\)</span></td>
+</tr>
+<tr class="even">
+<td><code>dof</code></td>
+<td>Degrees of freedom used for the reference distribution</td>
+</tr>
+<tr class="odd">
+<td><code>pvalue</code></td>
+<td>Upper-tail p-value under the chosen reference distribution</td>
+</tr>
+<tr class="even">
+<td><code>mixed</code></td>
+<td><code>true</code> if the mixed <span
+class="math inline">\(\bar{\chi}^2\)</span> reference was used</td>
+</tr>
+<tr class="odd">
+<td><code>critical_values</code></td>
+<td>NamedTuple with fields <code>p10</code>, <code>p05</code>,
+<code>p025</code>, <code>p01</code></td>
+</tr>
+<tr class="even">
+<td><code>ll_restricted</code></td>
+<td>Restricted-model log-likelihood <span
+class="math inline">\(\ell_R\)</span></td>
+</tr>
+<tr class="odd">
+<td><code>ll_unrestricted</code></td>
+<td>Unrestricted-model log-likelihood <span
+class="math inline">\(\ell_U\)</span></td>
+</tr>
+</tbody>
+</table>
+<h4 id="example-5">Example</h4>
+<pre class="julia"><code>result_lr = sf_vs_ols(result; dof = 8)                          # SF vs OLS
+lrtest(result_restricted, result_unrestricted; mixed = false)   # general nested LR test</code></pre>
+<hr />
+<p><a id="sec6-plot-recipes"></a></p>
+<h3 id="plot-recipes">6.12 Plot Recipes</h3>
+<p>The package provides a set of built-in diagnostic plots that you can
+generate directly from a fitted model with
+<code>plot(result, ...)</code>. To use them, load <code>Plots.jl</code>
+alongside <code>SFrontiers.jl</code>; see <a
+href="#installation-and-dependencies">Section 3</a> Note 3.</p>
+<h4 id="syntax-11">Syntax</h4>
+<pre class="julia"><code>plot(result)
+plot(result, which::Symbol)
+plot(result, :marginal, z::AbstractVector)</code></pre>
+<h4 id="arguments-9">Arguments</h4>
+<table>
+<colgroup>
+<col style="width: 4%" />
+<col style="width: 13%" />
+<col style="width: 77%" />
+<col style="width: 4%" />
+</colgroup>
+<thead>
+<tr class="header">
+<th>Argument</th>
+<th>Type</th>
+<th>Description</th>
+<th>Required</th>
+</tr>
+</thead>
+<tbody>
+<tr class="odd">
+<td><code>result</code></td>
+<td><code>SFResult</code></td>
+<td>A fitted model object returned by <code>sfmodel_fit()</code>.</td>
+<td>Yes</td>
+</tr>
+<tr class="even">
+<td><code>which</code></td>
+<td>Symbol</td>
+<td>Selects the recipe: <code>:efficiency</code>,
+<code>:residuals</code>, <code>:marginal</code>, or
+<code>:convergence</code>. Omit to get the default 2×2 diagnostic
+panel.</td>
+<td>No</td>
+</tr>
+<tr class="odd">
+<td><code>z</code></td>
+<td><code>AbstractVector</code></td>
+<td>Only with <code>:marginal</code>. A covariate vector against which
+the marginal effect is plotted.</td>
+<td>No</td>
+</tr>
+</tbody>
+</table>
+<h4 id="return-value-11">Return Value</h4>
+<p>A <code>Plots.Plot</code> object that can be displayed, saved with
+<code>savefig</code>, or further composed. What each call produces:</p>
+<table>
+<colgroup>
+<col style="width: 24%" />
+<col style="width: 75%" />
+</colgroup>
+<thead>
+<tr class="header">
+<th>Call</th>
+<th>What is plotted</th>
+</tr>
+</thead>
+<tbody>
+<tr class="odd">
+<td><code>plot(result)</code></td>
+<td>Default 2×2 diagnostic panel (JLMS and BC histograms,
+residuals-vs-fitted, plus QQ or marginal effect)</td>
+</tr>
+<tr class="even">
+<td><code>plot(result, :efficiency)</code></td>
+<td>JLMS and BC efficiency histograms side by side</td>
+</tr>
+<tr class="odd">
+<td><code>plot(result, :residuals)</code></td>
+<td>Residuals-vs-fitted scatter, residual histogram, and QQ plot of
+<span class="math inline">\(\hat v\)</span></td>
+</tr>
+<tr class="even">
+<td><code>plot(result, :marginal)</code></td>
+<td>Grid of marginal-effect scatters, one per <code>zvar</code>
+covariate</td>
+</tr>
+<tr class="odd">
+<td><code>plot(result, :marginal, z)</code></td>
+<td>Marginal effect plotted against a single user-supplied covariate
+vector <code>z</code></td>
+</tr>
+<tr class="even">
+<td><code>plot(result, :convergence)</code></td>
+<td>Optimizer trace; requires <code>store_trace = true</code> to have
+been passed to <code>sfmodel_opt()</code> at fit time</td>
+</tr>
+</tbody>
+</table>
+<p>The QQ sub-panel of <code>:residuals</code> compares the
+<strong>imputed noise estimate</strong> <span class="math inline">\(\hat
+v_i = \hat\varepsilon_i \mp \hat u_i\)</span> against <span
+class="math inline">\(N(0, \hat\sigma_v^2)\)</span>, not the composed
+residual itself. This is because the model assumes normality of <span
+class="math inline">\(v\)</span>, not <span
+class="math inline">\(\varepsilon\)</span>. The composed residual is
+deliberately non-normal under the SF specification (its skewness is the
+basis of <code>sf_vs_ols</code>). Since <span class="math inline">\(\hat
+v\)</span> is a derived latent-variable quantity, the plot is a soft
+distributional-misspecification diagnostic rather than a formal
+normality test.</p>
+<p>If <code>using Plots</code> has not been called,
+<code>plot(result, ...)</code> raises
+<code>UndefVarError: plot not defined</code>, accompanied by an error
+hint instructing the user to load <code>Plots.jl</code>.</p>
+<h4 id="example-6">Example</h4>
+<pre class="julia"><code>using Plots
+
+plot(result)                     # 2×2 default diagnostic panel
+savefig(&quot;diag_panel.png&quot;)
+
+plot(result, :residuals)         # three-panel residual diagnostic
+plot(result, :marginal, df.age)  # marginal effect against age</code></pre>
+<hr />
+<p><a id="sec6-prediction-on-new-data"></a></p>
+<h3 id="prediction-on-new-data-1">6.13 Prediction on New Data</h3>
+<p>A fitted model can be applied to new observations through a single
+entry point, <code>predict()</code>. The <code>what</code> keyword
+selects the prediction target: the frontier value, the composed
+residual, the response-scale fit, the JLMS or BC efficiency index, the
+observation-level marginal effects, or all of the above in one call.
+Calling <code>predict()</code> on the original training data reproduces
+the cached <code>result.jlms</code> / <code>result.bc</code>
+<strong>bit-for-bit</strong>; calling it on new data yields the
+corresponding out-of-sample quantities.</p>
+<h4 id="syntax-12">Syntax</h4>
+<pre class="julia"><code>predict(result; frontier, zvar, depvar, id, what, draws)</code></pre>
+<h4 id="arguments-10">Arguments</h4>
+<table style="width:100%;">
+<colgroup>
+<col style="width: 4%" />
+<col style="width: 8%" />
+<col style="width: 80%" />
+<col style="width: 6%" />
+</colgroup>
+<thead>
+<tr class="header">
+<th>Argument</th>
+<th>Type</th>
+<th>Description</th>
+<th>Required</th>
+</tr>
+</thead>
+<tbody>
+<tr class="odd">
+<td><code>result</code></td>
+<td><code>SFResult</code></td>
+<td>A fitted model returned by <code>sfmodel_fit()</code>.</td>
+<td>Yes</td>
+</tr>
+<tr class="even">
+<td><code>what</code></td>
+<td>Symbol</td>
+<td>Prediction target: <code>:frontier</code>, <code>:residuals</code>,
+<code>:response</code>, <code>:jlms</code>, <code>:bc</code>,
+<code>:marginal</code>, or <code>:all</code>.</td>
+<td>Yes</td>
+</tr>
+<tr class="odd">
+<td><code>frontier</code></td>
+<td>Matrix</td>
+<td>Covariates <span class="math inline">\(X_{\text{new}}\)</span> for
+the frontier equation. Needed for every <code>what</code> except
+<code>:marginal</code>.</td>
+<td>Target-specific</td>
+</tr>
+<tr class="even">
+<td><code>zvar</code></td>
+<td>Matrix</td>
+<td>Covariates <span class="math inline">\(Z_{\text{new}}\)</span> for
+inefficiency determinants. Needed for <code>:response</code>,
+<code>:jlms</code>, <code>:bc</code>, <code>:marginal</code>,
+<code>:all</code>, and only when the fitted model uses
+<code>hetero</code> or <code>:scaling</code>.</td>
+<td>Target-specific</td>
+</tr>
+<tr class="odd">
+<td><code>depvar</code></td>
+<td>Vector</td>
+<td>Response values <span class="math inline">\(y_{\text{new}}\)</span>.
+Needed for <code>:residuals</code>, <code>:response</code>,
+<code>:jlms</code>, <code>:bc</code>, <code>:all</code> (the conditional
+expectations depend on <span class="math inline">\(\hat\varepsilon_i =
+y_i - x_i&#39;\hat\beta\)</span>).</td>
+<td>Target-specific</td>
+</tr>
+<tr class="even">
+<td><code>id</code></td>
+<td>Vector</td>
+<td>Firm identifier for each predict-time observation. Required for
+panel fits; ignored for cross-sectional fits.</td>
+<td>Panel only</td>
+</tr>
+<tr class="odd">
+<td><code>draws</code></td>
+<td>Matrix or Vector</td>
+<td>Fit-time Halton draws for simulation-based fits (MCI/MSLE). Required
+when the fit used user-supplied <code>draws=</code> in
+<code>sfmodel_method()</code>; optional otherwise (Halton fits
+reconstruct draws deterministically). Shape: <span
+class="math inline">\(N_{\text{train}} \times n_{\text{draws}}\)</span>
+for <code>multiRand=true</code>, <span class="math inline">\(1 \times
+n_{\text{draws}}\)</span> (or length-<span
+class="math inline">\(n_{\text{draws}}\)</span> vector) for
+<code>multiRand=false</code>.</td>
+<td>Backend-specific</td>
+</tr>
+</tbody>
+</table>
+<h4 id="return-value-12">Return Value</h4>
+<p>A <code>Vector{Float64}</code> for scalar targets, a
+<code>Matrix</code> / <code>DataFrame</code> for <code>:marginal</code>,
+or a <code>NamedTuple</code> bundling all targets for
+<code>what = :all</code>. The following table shows the per-target data
+requirements and the quantity returned:</p>
+<table>
+<colgroup>
+<col style="width: 9%" />
+<col style="width: 16%" />
+<col style="width: 17%" />
+<col style="width: 16%" />
+<col style="width: 8%" />
+<col style="width: 32%" />
+</colgroup>
+<thead>
+<tr class="header">
+<th><code>what</code></th>
+<th style="text-align: center;">Needs <span
+class="math inline">\(X_{\text{new}}\)</span></th>
+<th style="text-align: center;">Needs <span
+class="math inline">\(Z_{\text{new}}\)</span>†</th>
+<th style="text-align: center;">Needs <span
+class="math inline">\(y_{\text{new}}\)</span></th>
+<th style="text-align: center;">Needs <code>id</code>‡</th>
+<th>Output</th>
+</tr>
+</thead>
+<tbody>
+<tr class="odd">
+<td><code>:frontier</code></td>
+<td style="text-align: center;">✓</td>
+<td style="text-align: center;"></td>
+<td style="text-align: center;"></td>
+<td style="text-align: center;"></td>
+<td><span class="math inline">\(x_i&#39;\hat\beta\)</span></td>
+</tr>
+<tr class="even">
+<td><code>:residuals</code></td>
+<td style="text-align: center;">✓</td>
+<td style="text-align: center;"></td>
+<td style="text-align: center;">✓</td>
+<td style="text-align: center;"></td>
+<td><span class="math inline">\(y_i - x_i&#39;\hat\beta\)</span></td>
+</tr>
+<tr class="odd">
+<td><code>:response</code></td>
+<td style="text-align: center;">✓</td>
+<td style="text-align: center;">✓</td>
+<td style="text-align: center;">✓</td>
+<td style="text-align: center;">✓</td>
+<td><span class="math inline">\(x_i&#39;\hat\beta \mp \hat
+u_i\)</span></td>
+</tr>
+<tr class="even">
+<td><code>:jlms</code></td>
+<td style="text-align: center;">✓</td>
+<td style="text-align: center;">✓</td>
+<td style="text-align: center;">✓</td>
+<td style="text-align: center;">✓</td>
+<td><span
+class="math inline">\(E(u_i\mid\hat\varepsilon_i)\)</span></td>
+</tr>
+<tr class="odd">
+<td><code>:bc</code></td>
+<td style="text-align: center;">✓</td>
+<td style="text-align: center;">✓</td>
+<td style="text-align: center;">✓</td>
+<td style="text-align: center;">✓</td>
+<td><span
+class="math inline">\(E(e^{-u_i}\mid\hat\varepsilon_i)\)</span></td>
+</tr>
+<tr class="even">
+<td><code>:marginal</code></td>
+<td style="text-align: center;"></td>
+<td style="text-align: center;">✓</td>
+<td style="text-align: center;"></td>
+<td style="text-align: center;"></td>
+<td><span class="math inline">\(\partial E(u_i)/\partial
+z_{ij}\)</span></td>
+</tr>
+<tr class="odd">
+<td><code>:all</code></td>
+<td style="text-align: center;">✓</td>
+<td style="text-align: center;">✓</td>
+<td style="text-align: center;">✓</td>
+<td style="text-align: center;">✓</td>
+<td><code>NamedTuple</code> packaging all of the above</td>
+</tr>
+</tbody>
+</table>
+<p>† <span class="math inline">\(Z_{\text{new}}\)</span> is required
+only when the fitted model uses exogenous determinants
+(<code>hetero</code> or <code>:scaling</code>). Inefficiency and
+efficiency indices additionally require <span
+class="math inline">\(y_{\text{new}}\)</span> because they are
+conditional on <span class="math inline">\(\hat\varepsilon_i\)</span>. ‡
+<code>id</code> is required only for panel fits.</p>
+<h4 id="model-coverage">Model Coverage</h4>
+<p><code>predict()</code> works with every model the package fits. It
+inspects the fitted object and applies the right computation internally
+— you do not need to choose between methods or tune anything. On the
+training data (the same <code>X</code>, <code>Z</code>, <code>y</code>
+passed at fit time) <code>predict()</code> reproduces the cached
+<code>result.jlms</code> / <code>result.bc</code> to high precision; on
+new data it returns the corresponding out-of-sample quantities. Model
+combinations the package does not fit raise an informative error at call
+time.</p>
+<p>For panel fits (<code>:panel_TFE</code>, <code>:panel_TFE_CSW</code>,
+<code>:panel_TRE</code>) you must pass <code>id=</code> — a vector of
+firm identifiers, one per observation, with rows grouped contiguously by
+firm (the same convention used at fit time). <code>predict()</code> uses
+it to reconstruct the panel structure and align new-data firms to the
+training-time firms.</p>
+<!--
+#### Bit-Identity Contract
+
+For simulation-based backends (MCI, MSLE, and Panel TFE), `predict()` guarantees **bit-identity** with the cached `result.jlms` / `result.bc` under `rtol = 1e-10`:
+
+- **On the training data** (the exact $X, Z, y$ used at fit time): `predict()` reproduces the cached indices bit-for-bit.
+- **On a strict subset** of the training data (`X[1:k,:]`, `y[1:k]`, ...): the first $k$ rows of the fit-time Halton matrix are reused, so `predict()` bit-matches `result.jlms[1:k]` / `result.bc[1:k]`. For Panel TFE, "subset" means a subset of fit-time firms; each retained firm reuses its fit-time draws row (matched by `id`), so the obs-level output bit-matches the corresponding slice of `result.jlms` / `result.bc`.
+- **On extended data** where $N_{\text{new}} > N_{\text{train}}$ (cross-section only): rows past $N_{\text{train}}$ recycle via $\text{mod1}(i, N_{\text{train}})$. The first $N_{\text{train}}$ rows still bit-match, and obs $i > N_{\text{train}}$ share the same Halton row as obs $\text{mod1}(i, N_{\text{train}})$.
+- **With brand-new firms** (Panel TFE): fit-time firms reuse their draws row by `id` and bit-match their slice of `result.jlms` / `result.bc`; brand-new firms receive an independent `make_panel_halton_wrap(N_new_firms, D)` stream and produce finite, shape-correct output (no bit-match, since they were not in the training data).
+
+For closed-form paths — Normal + HN / TN (any backend), Normal + Exp under the MLE backend, and the two MLE-only panel datatypes (`:panel_TFE_CSW`, `:panel_TRE`) — `predict()` recomputes the analytic formula from `result.coeff` — this is the same formula the fit used to populate `result.jlms` / `result.bc`, so the outputs match up to floating-point roundoff.
+-->
+<h4 id="user-supplied-draws">User-Supplied Draws</h4>
+<p>If the fit used <code>sfmodel_method(..., draws = my_draws)</code>
+with a custom Halton matrix, the draws themselves are
+<strong>not</strong> stored on <code>result</code>. Pass the same matrix
+back to <code>predict()</code> via the <code>draws</code> keyword to
+reproduce <code>result.jlms</code> / <code>result.bc</code>; predict
+will error out informatively if <code>draws</code> is missing in that
+case. Halton fits (the default) can also pass <code>draws</code> to
+override the reconstructed matrix — useful for variance exploration.</p>
+<h4 id="example-7">Example</h4>
+<pre class="julia"><code># In-sample — bit-matches result.jlms and result.bc
+u_hat = predict(result; frontier = X, depvar = y, zvar = Z, what = :jlms)
+b_hat = predict(result; frontier = X, depvar = y, zvar = Z, what = :bc)
+
+# Out-of-sample
+out = predict(result; frontier = Xnew, depvar = ynew, zvar = Znew, what = :all)
+out.jlms; out.bc; out.frontier; out.residuals; out.response
+
+# User-supplied draws (for a fit that used custom draws=...)
+u_hat = predict(result; frontier = X, depvar = y, zvar = Z,
+                what = :jlms, draws = my_draws)</code></pre>
+<p>See <a href="#sec5-prediction-on-new-data">Section 5 ‘Prediction on
+New Data’</a> for a discussion of typical use-case scenarios (held-out
+scoring, counterfactual analysis, policy evaluation, forecasting).</p>
 <hr />
 <p><a id="supported-models"></a></p>
 <h2 id="supported-models">7. Supported Models</h2>
@@ -2917,7 +4124,7 @@ parameters remain scalar and a separate set of <span
 class="math inline">\(\boldsymbol{\delta}\)</span> coefficients is
 estimated. All 8 inefficiency distributions support the scaling property
 model. See <a href="#scaling-property-model-cross-sectional">Section
-9.5</a>.</p>
+8.5</a>.</p>
 <h3 id="copula-models">Copula Models</h3>
 <p><em>Cross-sectional models only.</em> A copula function models the
 dependence between the noise term <span class="math inline">\(v\)</span>
@@ -3217,101 +4424,8 @@ simulation-based estimation (MCI or MSLE) and are available for
 cross-sectional models only.</p>
 </blockquote>
 <hr />
-<p><a id="working-with-results"></a></p>
-<h2 id="working-with-results">8. Working with Results</h2>
-<h3 id="efficiency-indices">Efficiency Indices</h3>
-<ul>
-<li><strong>JLMS inefficiency index</strong> <span
-class="math inline">\(E(u_i \mid \varepsilon_i)\)</span>: The
-conditional expectation of inefficiency for each observation. Higher
-values indicate greater inefficiency.</li>
-<li><strong>Battese-Coelli (BC) efficiency index</strong> <span
-class="math inline">\(E(e^{-u_i} \mid \varepsilon_i)\)</span>: The
-efficiency ratio, bounded between 0 and 1. A BC value of 0.85 means the
-firm produces 85% of its potential output.</li>
-</ul>
-<pre class="julia"><code>result = sfmodel_fit(spec = myspec, method = mymeth, jlms_bc_index = true)
-
-# JLMS inefficiency index: E(u|epsilon)
-jlms = result.jlms
-mean_inefficiency = mean(jlms)
-
-# Battese-Coelli efficiency: E(exp(-u)|epsilon)
-bc = result.bc
-mean_efficiency = mean(bc)
-
-# Efficiency scores are observation-specific
-println(&quot;Firm 1 efficiency: &quot;, bc[1])
-println(&quot;Firm 1 inefficiency: &quot;, jlms[1])</code></pre>
-<h3 id="marginal-effects-1">Marginal Effects</h3>
-<p>Marginal effects measure how changes in Z variables affect expected
-inefficiency <span class="math inline">\(E(u)\)</span>. They are
-available when <code>zvar</code> is specified and
-<code>marginal = true</code> in <code>sfmodel_fit()</code>.</p>
-<ul>
-<li><strong>Observation-level marginal effects</strong>
-(<code>result.marginal</code>): A DataFrame with one row per
-observation, showing <span class="math inline">\(\partial E(u_i) /
-\partial z_{ij}\)</span> for each Z variable.</li>
-<li><strong>Mean marginal effects</strong>
-(<code>result.marginal_mean</code>): Sample averages of the
-observation-level effects.</li>
-<li><strong>Interpretation:</strong> A positive marginal effect means
-that increasing <span class="math inline">\(z_j\)</span> increases
-expected inefficiency.</li>
-</ul>
-<pre class="julia"><code>result = sfmodel_fit(spec = myspec, method = mymeth, marginal = true)
-
-# Mean marginal effects
-println(result.marginal_mean)
-# Output: (age = 0.023, school = -0.015, ...)
-
-# Observation-level marginal effects (DataFrame)
-marginal_df = result.marginal
-println(names(marginal_df))  # [&quot;marg_age&quot;, &quot;marg_school&quot;, ...]
-
-# Access specific firm&#39;s marginal effects
-println(&quot;Firm 1 marginal effect of age: &quot;, marginal_df[1, :marg_age])</code></pre>
-<h3 id="variance-covariance-matrix">Variance-Covariance Matrix</h3>
-<pre class="julia"><code># Full variance-covariance matrix
-vcov = result.var_cov_mat
-
-# Standard errors (square root of diagonal)
-se = result.std_err
-
-# Compute confidence interval for coefficient i
-coef_i = result.coeff[i]
-se_i = result.std_err[i]
-ci_lower = coef_i - 1.96 * se_i
-ci_upper = coef_i + 1.96 * se_i</code></pre>
-<h3 id="extracting-specific-parameter-groups">Extracting Specific
-Parameter Groups</h3>
-<pre class="julia"><code># Frontier coefficients
-beta = result.frontier
-
-# Inefficiency parameters (varies by model)
-if haskey(result.list, :mu)
-    mu_coef = result.mu
-end
-
-# Noise variance
-if haskey(result.list, :ln_sigma_v_sq)
-    sigma_v_sq = exp(result.ln_sigma_v_sq)
-end</code></pre>
-<h3 id="log-transformed-parameters">Log-Transformed Parameters</h3>
-<p>Many parameters are estimated on a log-transformed scale (e.g.,
-<code>ln_sigma_sq</code>, <code>ln_sigma_v_sq</code>,
-<code>ln_lambda</code>). To recover the original-scale value, take the
-exponential:</p>
-<pre class="julia"><code>sigma_u_sq = exp(result.ln_sigma_sq)    # σ_u²
-sigma_v_sq = exp(result.ln_sigma_v_sq)  # σ_v²</code></pre>
-<p>The auxiliary table printed by <code>sfmodel_fit()</code> (when
-<code>show_table = true</code>) already reports the original-scale
-values alongside the log-transformed estimates, and the corresponding
-standard errors are calculated using the delta method.</p>
-<hr />
 <p><a id="special-topics"></a></p>
-<h2 id="special-topics">9. Special Topics</h2>
+<h2 id="special-topics">8. Special Topics</h2>
 <h3 id="choosing-between-mle-mci-and-msle">Choosing Between MLE, MCI,
 and MSLE</h3>
 <p>The package offers three estimation methods. MLE uses analytic
@@ -4077,7 +5191,7 @@ for the more complex specification. |</p></li>
 </ol>
 <hr />
 <p><a id="panel-data-models"></a></p>
-<h2 id="panel-data-models">10. Panel Data Models</h2>
+<h2 id="panel-data-models">9. Panel Data Models</h2>
 <p>The module supports several panel stochastic frontier models for
 estimating <strong>firm-level inefficiency</strong> from balanced or
 unbalanced panel data. Panel estimation is accessed through the same
@@ -4125,7 +5239,7 @@ support all 8 inefficiency distributions. MLE support is limited to the
 distributions listed above. For <code>panel_TFE_CSW</code> and
 <code>panel_TRE</code>, only MLE is available.</p>
 <p><a id="theoretical-background"></a></p>
-<h3 id="theoretical-background">10.1 Theoretical Background</h3>
+<h3 id="theoretical-background">9.1 Theoretical Background</h3>
 <h4 id="wang-and-ho-2010-true-fixed-effect-panel_tfe">Wang and Ho (2010)
 True Fixed-Effect (<code>panel_TFE</code>)</h4>
 <p>The Wang and Ho (2010) model starts from:</p>
@@ -4224,7 +5338,7 @@ assumption fails.</li>
 firm effects and regressors is likely. TFE is consistent regardless of
 this correlation but less efficient.</li>
 </ul>
-<h3 id="panel-quick-start">10.2 Panel Quick Start</h3>
+<h3 id="panel-quick-start">9.2 Panel Quick Start</h3>
 <h4 id="example-panel-tfe-with-msle-simulation-based">Example: Panel TFE
 with MSLE (simulation-based)</h4>
 <pre class="julia"><code>using CUDA
@@ -4310,7 +5424,7 @@ result = sfmodel_fit(spec = spec_csw, method = meth)</code></pre>
 )
 meth = sfmodel_method(method = :MLE)
 result = sfmodel_fit(spec = spec_tre, method = meth)</code></pre>
-<h3 id="panel-vs.-cross-sectional-differences">10.3 Panel
+<h3 id="panel-vs.-cross-sectional-differences">9.3 Panel
 vs. Cross-Sectional Differences</h3>
 <table>
 <colgroup>
@@ -4353,8 +5467,8 @@ vs. Cross-Sectional Differences</h3>
 <td>Not supported</td>
 </tr>
 <tr class="even">
-<td>Heteroscedastic<code>hetero</code></td>
-<td>Yes (via Z), or<code>hetero=:scaling</code> for scaling property
+<td>Heteroscedastic <code>hetero</code></td>
+<td>Yes (via Z), or <code>hetero=:scaling</code> for scaling property
 model</td>
 <td>supported through scaling function</td>
 </tr>
@@ -4366,8 +5480,8 @@ init keyword: <code>scaling</code></td>
 <code>scaling</code></td>
 </tr>
 <tr class="even">
-<td>Constant in<code>frontier</code>/<code>zvar</code></td>
-<td>Required in<code>frontier</code>; required in <code>zvar</code>
+<td>Constant in <code>frontier</code>/<code>zvar</code></td>
+<td>Required in <code>frontier</code>; required in <code>zvar</code>
 unless <code>hetero=:scaling</code></td>
 <td><strong>Not allowed</strong> (within-demeaning eliminates)</td>
 </tr>
@@ -4389,7 +5503,7 @@ vector)</td>
 </tr>
 </tbody>
 </table>
-<h3 id="no-constant-columns">10.4 No Constant Columns</h3>
+<h3 id="no-constant-columns">9.4 No Constant Columns</h3>
 <p>In the Wang and Ho (2010) panel model (<code>panel_TFE</code>),
 within-group demeaning eliminates any constant terms. Therefore:</p>
 <ul>
@@ -4401,7 +5515,7 @@ typically required.</li>
 <li>The same applies to <code>panel_TFE_CSW</code>. For
 <code>panel_TRE</code>, a constant term <strong>is</strong> allowed in
 <code>frontier</code> (see <a href="#theoretical-background">Section
-10.1</a>).</li>
+9.1</a>).</li>
 </ul>
 <hr />
 <h2 id="citation">Citation</h2>

@@ -14,6 +14,18 @@ include(joinpath(@__DIR__, "load_MSLE.jl"))
 include(joinpath(@__DIR__, "load_MLE.jl"))
 include(joinpath(@__DIR__, "load_Panel.jl"))
 
+# StatsAPI-conformant accessor layer (SFResult wrapper + coef/vcov/...).
+include(joinpath(@__DIR__, "accessors.jl"))
+
+# Numeric diagnostics: residuals, fitted, lrtest, efficiency_summary, ...
+include(joinpath(@__DIR__, "diagnostics.jl"))
+
+# RecipesBase plotting recipes for SFResult (backend-agnostic).
+include(joinpath(@__DIR__, "plotrecipes.jl"))
+
+# Prediction on new data (`predict(r; frontier, zvar, depvar, what)`).
+include(joinpath(@__DIR__, "predict.jl"))
+
 # ============================================================================
 # Section 2: Wrapper types
 # ============================================================================
@@ -237,7 +249,8 @@ function sfmodel_spec(; depvar, frontier, zvar=nothing,
            ineff in (:HalfNormal, :TruncatedNormal, :Exponential)
             MLE_Backend.sfmodel_spec(;
                 depvar=depvar, frontier=frontier, zvar=zvar,
-                noise=:Normal, ineff=ineff, hetero=hetero, type=type)
+                noise=:Normal, ineff=ineff, hetero=hetero, type=type,
+                varnames=varnames, eqnames=eqnames, eq_indices=eq_indices)
         else
             nothing
         end
@@ -261,7 +274,8 @@ function sfmodel_spec(; depvar, frontier, zvar=nothing,
         mle_spec = if noise == :Normal && ineff in (:HalfNormal, :TruncatedNormal)
             MLE_Backend.sfmodel_spec(;
                 depvar=depvar, frontier=frontier, zvar=zvar,
-                ineff=ineff, panel=:TFE_WH2010, id=id, type=type)
+                ineff=ineff, panel=:TFE_WH2010, id=id, type=type,
+                varnames=varnames, eqnames=eqnames, eq_indices=eq_indices)
         else
             nothing
         end
@@ -280,7 +294,8 @@ function sfmodel_spec(; depvar, frontier, zvar=nothing,
 
         mle_spec = MLE_Backend.sfmodel_spec(;
             depvar=depvar, frontier=frontier,
-            ineff=:HalfNormal, panel=:TFE_CSW2014, id=id, type=type)
+            ineff=:HalfNormal, panel=:TFE_CSW2014, id=id, type=type,
+            varnames=varnames, eqnames=eqnames, eq_indices=eq_indices)
 
         T_el = eltype(mle_spec.depvar)
         return UnifiedSpec{T_el}(:panel_TFE_CSW, nothing, nothing, mle_spec, nothing,
@@ -298,7 +313,8 @@ function sfmodel_spec(; depvar, frontier, zvar=nothing,
 
         mle_spec = MLE_Backend.sfmodel_spec(;
             depvar=depvar, frontier=frontier, zvar=zvar,
-            ineff=ineff, panel=:TRE, id=id, type=type)
+            ineff=ineff, panel=:TRE, id=id, type=type,
+            varnames=varnames, eqnames=eqnames, eq_indices=eq_indices)
 
         T_el = eltype(mle_spec.depvar)
         return UnifiedSpec{T_el}(:panel_TRE, nothing, nothing, mle_spec, nothing,
@@ -489,7 +505,9 @@ function sfmodel_spec(args::DSLArg...;
             (depvar_data, frontier_data, zvar_data, _) = _dsl_extract_data()
             MLE_Backend.sfmodel_spec(;
                 depvar=depvar_data, frontier=frontier_data, zvar=zvar_data,
-                noise=:Normal, ineff=ineff, hetero=hetero, type=type)
+                noise=:Normal, ineff=ineff, hetero=hetero, type=type,
+                frontier_names=fr.names,
+                zvar_names=(!isnothing(zv) ? zv.names : nothing))
         else
             nothing
         end
@@ -504,11 +522,14 @@ function sfmodel_spec(args::DSLArg...;
         panel_spec = _build_panel_spec_dsl()
 
         # Build MLE spec when applicable
+        _dsl_fr_names = fr.names
+        _dsl_zv_names = !isnothing(zv) ? zv.names : nothing
         mle_spec = if noise == :Normal && ineff in (:HalfNormal, :TruncatedNormal)
             (depvar_data, frontier_data, zvar_data, id_data) = _dsl_extract_data()
             MLE_Backend.sfmodel_spec(;
                 depvar=depvar_data, frontier=frontier_data, zvar=zvar_data,
-                ineff=ineff, panel=:TFE_WH2010, id=id_data, type=type)
+                ineff=ineff, panel=:TFE_WH2010, id=id_data, type=type,
+                frontier_names=_dsl_fr_names, zvar_names=_dsl_zv_names)
         else
             nothing
         end
@@ -526,7 +547,8 @@ function sfmodel_spec(args::DSLArg...;
         (depvar_data, frontier_data, _, id_data) = _dsl_extract_data()
         mle_spec = MLE_Backend.sfmodel_spec(;
             depvar=depvar_data, frontier=frontier_data,
-            ineff=:HalfNormal, panel=:TFE_CSW2014, id=id_data, type=type)
+            ineff=:HalfNormal, panel=:TFE_CSW2014, id=id_data, type=type,
+            frontier_names=fr.names)
 
         T_el = eltype(mle_spec.depvar)
         return UnifiedSpec{T_el}(:panel_TFE_CSW, nothing, nothing, mle_spec, nothing,
@@ -543,7 +565,9 @@ function sfmodel_spec(args::DSLArg...;
         (depvar_data, frontier_data, zvar_data, id_data) = _dsl_extract_data()
         mle_spec = MLE_Backend.sfmodel_spec(;
             depvar=depvar_data, frontier=frontier_data, zvar=zvar_data,
-            ineff=ineff, panel=:TRE, id=id_data, type=type)
+            ineff=ineff, panel=:TRE, id=id_data, type=type,
+            frontier_names=fr.names,
+            zvar_names=(!isnothing(zv) ? zv.names : nothing))
 
         T_el = eltype(mle_spec.depvar)
         return UnifiedSpec{T_el}(:panel_TRE, nothing, nothing, mle_spec, nothing,
@@ -889,6 +913,19 @@ end
 # Reorder MLE result coefficients → MCI canonical order for TruncatedNormal+scaling.
 # MLE order: [frontier(K), μ(1), hscale(L), σᵤ²(1), σᵥ²(1)]
 # MCI order: [frontier(K), scaling(L), μ(1), σ²(1), σᵥ²(1)]
+# Attach the X, y, and frontier-sign used at fit time to the MLE result so
+# that diagnostics (residuals, fitted, ...) can operate uniformly across
+# backends. MLE backends store data references only as symbols.
+function _attach_mle_data(spec::UnifiedSpec, result)
+    src = spec.mci_spec !== nothing ? spec.mci_spec :
+          spec.panel_spec !== nothing ? spec.panel_spec :
+          nothing
+    src === nothing && return result
+    return merge(result, (_sf_depvar   = src.depvar,
+                          _sf_frontier = src.frontier,
+                          _sf_sign     = src.sign))
+end
+
 function _reorder_result_mle_to_mci(spec::UnifiedSpec, result)
     if spec.ineff == :TruncatedNormal && spec.hetero === :scaling
         K = spec.mci_spec.K
@@ -966,7 +1003,7 @@ function sfmodel_fit(;
             marginal = marginal,
             show_table = show_table,
             verbose = verbose)
-        return _reorder_result_mle_to_mci(spec, raw)
+        return _wrap_result(_attach_mle_data(spec, _reorder_result_mle_to_mci(spec, raw)), :MLE, spec)
 
     # --- Panel TFE with simulation methods (MCI/MSLE → Panel_Backend) ---
     elseif spec.datatype == :panel_TFE && !(method isa MLEMethodSpec)
@@ -979,15 +1016,17 @@ function sfmodel_fit(;
         end
         panel_opt    = _to_panel_opt(optim_options)
 
-        return Panel_Backend.sfmodel_panel_fit(;
-            spec          = spec.panel_spec,
-            method        = panel_method,
-            init          = init,
-            optim_options = panel_opt,
-            jlms_bc_index = jlms_bc_index,
-            marginal      = marginal,
-            show_table    = show_table,
-            verbose       = verbose)
+        return _wrap_result(
+            Panel_Backend.sfmodel_panel_fit(;
+                spec          = spec.panel_spec,
+                method        = panel_method,
+                init          = init,
+                optim_options = panel_opt,
+                jlms_bc_index = jlms_bc_index,
+                marginal      = marginal,
+                show_table    = show_table,
+                verbose       = verbose),
+            :Panel, spec)
 
     # --- Cross-sectional MCI ---
     elseif method isa MCI_Backend.SFMethodSpec
@@ -995,15 +1034,17 @@ function sfmodel_fit(;
             error("`method=:MCI` is not available for this model configuration.\n" *
                   "  Supported methods: " * join(string.(_get_supported_methods(spec)), ", "))
         end
-        return MCI_Backend.sfmodel_MCI_fit(;
-            spec = spec.mci_spec,
-            method = method,
-            init = init,
-            optim_options = optim_options,
-            jlms_bc_index = jlms_bc_index,
-            marginal = marginal,
-            show_table = show_table,
-            verbose = verbose)
+        return _wrap_result(
+            MCI_Backend.sfmodel_MCI_fit(;
+                spec = spec.mci_spec,
+                method = method,
+                init = init,
+                optim_options = optim_options,
+                jlms_bc_index = jlms_bc_index,
+                marginal = marginal,
+                show_table = show_table,
+                verbose = verbose),
+            :MCI, spec)
 
     # --- Cross-sectional MSLE ---
     elseif method isa MSLE_Backend.SFMethodSpec_MSLE
@@ -1011,15 +1052,17 @@ function sfmodel_fit(;
             error("`method=:MSLE` is not available for this model configuration.\n" *
                   "  Supported methods: " * join(string.(_get_supported_methods(spec)), ", "))
         end
-        return MSLE_Backend.sfmodel_MSLE_fit(;
-            spec = spec.msle_spec,
-            method = method,
-            init = init,
-            optim_options = optim_options,
-            jlms_bc_index = jlms_bc_index,
-            marginal = marginal,
-            show_table = show_table,
-            verbose = verbose)
+        return _wrap_result(
+            MSLE_Backend.sfmodel_MSLE_fit(;
+                spec = spec.msle_spec,
+                method = method,
+                init = init,
+                optim_options = optim_options,
+                jlms_bc_index = jlms_bc_index,
+                marginal = marginal,
+                show_table = show_table,
+                verbose = verbose),
+            :MSLE, spec)
 
     else
         error("Unrecognized method type: $(typeof(method))")
@@ -1155,7 +1198,7 @@ NamedTuple with fields: `converged`, `loglikelihood`, `coeff`, `std_err`, `vcov`
 `jlms`, `bc`, `redflag`, `table`, `optim_result`, `spec`, `method`.
 """
 function sfmodel_panel_fit(; kwargs...)
-    return Panel_Backend.sfmodel_panel_fit(; kwargs...)
+    return _wrap_result(Panel_Backend.sfmodel_panel_fit(; kwargs...), :Panel)
 end
 
 # ============================================================================
@@ -1167,6 +1210,14 @@ export sfmodel_panel_spec, sfmodel_panel_method, sfmodel_panel_init
 export sfmodel_panel_opt, sfmodel_panel_fit
 export sfmodel_MixTable, sfmodel_ChiSquareTable, sfmodel_CI, sfmodel_MoMTest
 export @useData, @depvar, @frontier, @zvar, @id
+export SFResult
+export lrtest, sf_vs_ols, efficiency_summary, residual_diagnostics, LRTestResult
+
+# Re-export StatsAPI functions extended for SFResult
+using StatsAPI: coef, vcov, stderror, loglikelihood, nobs, dof, dof_residual,
+                aic, bic, confint, coeftable, predict, residuals, fitted
+export coef, vcov, stderror, loglikelihood, nobs, dof, dof_residual,
+       aic, bic, confint, coeftable, predict, residuals, fitted
 
 # Re-export MLE utility functions applicable to all backends
 using .MLE_Backend: sfmodel_MixTable, sfmodel_ChiSquareTable, sfmodel_CI, sfmodel_MoMTest

@@ -249,7 +249,8 @@ function sfmodel_spec(;
         panel, idvar_vec,
         is_scaling, scaling_zvar_mat,
         N, K, L, modelid,
-        varnames, eqnames, eq_indices)
+        varnames, eqnames, eq_indices,
+        frontier_names, zvar_names)
 
     if message
         printstyled("A SFModelSpec_MLE from sfmodel_spec() is generated.\n"; color=:green)
@@ -876,6 +877,11 @@ function sfmodel_fit(;
 
    sfdat = _dicM[:sdf]
 
+   # Reset display names in _dicM from the spec to guard against stale global
+   # state when multiple specs are created before fitting (bug 8d).
+   _dicM[:_display_frontier] = spec.display_frontier
+   _dicM[:_display_zvar]     = spec.display_zvar
+
    if show_table
       printstyled("\n###------------------------------------###\n"; color=:yellow)
       printstyled("###  Estimating SF models using Julia  ###\n"; color=:yellow)
@@ -922,6 +928,14 @@ function sfmodel_fit(;
          # v equation names (σᵥ²) — always scalar, keep as-is
      end
 
+     # Fallback: use spec.varnames from keyword API (when DSL names not available)
+     if get(_dicM, :_display_frontier, nothing) === nothing &&
+        !isempty(spec.varnames) && length(spec.varnames) >= length(varlist) - 1
+         for j in 1:(length(varlist)-1)
+             varlist[j+1] = spec.varnames[j]
+         end
+     end
+
   #* ### print preliminary information ########
 
     if verbose
@@ -953,7 +967,7 @@ function sfmodel_fit(;
      beta0  = xvar \ yvar;  # OLS estimate, uses a pivoted QR factorization;
      resid  = yvar - xvar*beta0
      sse    = sum((resid).^2)
-     ssd    = sqrt(sse/(size(resid,1)-(num.nofx + noffixed ))) # sample standard deviation
+     ssd    = sqrt(sse/size(resid,1)) # MLE standard deviation; σ² = (1/N)* Σ ϵ^2
      ll_ols = sum(normlogpdf.(0, ssd, resid)) # ols log-likelihood
      sk_ols = sum((resid).^3) / ((ssd^3)*(size(resid,1))) # skewness of ols residuals
 
@@ -1134,6 +1148,16 @@ function sfmodel_fit(;
      # Override _dicM equation entries with common column names before
      # calling get_marg, so that addDataFrame correctly merges same-variable
      # effects across equations and margMinfo/margeff use real names.
+     # Save originals so _dicM is not permanently mutated (allows re-running
+     # sfmodel_fit without re-running sfmodel_spec).
+     _saved_dicM_keys = Dict{Symbol, Any}()
+     for key in (:μ, :σᵤ², :λ, :hscale)
+         v = get(_dicM, key, nothing)
+         if v !== nothing
+             _saved_dicM_keys[key] = copy(v)
+         end
+     end
+
      if get(_dicM, :_display_zvar, nothing) !== nothing
          # DSL path: use real column names
          dnames_zv = get(_dicM, :_display_zvar, Symbol[])
@@ -1169,6 +1193,10 @@ function sfmodel_fit(;
         margeff, margMinfo = nothing, ()
      end
 
+     # Restore _dicM keys so sfmodel_fit can be re-run without re-running sfmodel_spec.
+     for (key, val) in _saved_dicM_keys
+         _dicM[key] = val
+     end
 
      #* ------- Make Table ------------------
 
@@ -1370,6 +1398,7 @@ function sfmodel_fit(;
       _dicRES[:eqpo]             = eqvec2
 
       _dicRES[:redflag]          = redflag
+      _dicRES[:varnames]         = varlist[2:end]  # real variable names (strip header placeholder)
 
      #* ----- Delete optional keys that have value nothing,
 

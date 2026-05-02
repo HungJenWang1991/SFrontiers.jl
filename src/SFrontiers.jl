@@ -1211,7 +1211,7 @@ export sfmodel_panel_opt, sfmodel_panel_fit
 export sfmodel_MixTable, sfmodel_ChiSquareTable, sfmodel_CI, sfmodel_MoMTest
 export @useData, @depvar, @frontier, @zvar, @id
 export SFResult
-export lrtest, sf_vs_ols, efficiency_summary, residual_diagnostics, LRTestResult
+export lrtest, sf_vs_ols, efficiency_summary, residual_diagnostics, LRTestResult, EfficiencySummary
 
 # Re-export StatsAPI functions extended for SFResult
 using StatsAPI: coef, vcov, stderror, loglikelihood, nobs, dof, dof_residual,

@@ -91,8 +91,8 @@
     id="toc-load-the-packages-for-gpu-computing">Load the packages for
     GPU computing:</a></li>
     </ul></li>
-    <li><a href="#quick-start-and-reference-example"
-    id="toc-quick-start-and-reference-example">4. Quick Start and
+    <li><a href="#overview-and-quick-reference-example"
+    id="toc-overview-and-quick-reference-example">4. Overview and Quick
     Reference Example</a></li>
     <li><a href="#a-detailed-empirical-example"
     id="toc-a-detailed-empirical-example">5. A Detailed Empirical
@@ -134,12 +134,10 @@
     <li><a href="#saving-results" id="toc-saving-results">Saving
     Results</a></li>
     </ul></li>
-    <li><a href="#api-reference" id="toc-api-reference">6. API
-    Reference</a>
+    <li><a href="#api-reference-i-model-building-and-fitting"
+    id="toc-api-reference-i-model-building-and-fitting">6. API Reference
+    I: Model building and fitting</a>
     <ul>
-    <li><a href="#part-a-model-building-and-fitting"
-    id="toc-part-a-model-building-and-fitting">Part A: Model building
-    and fitting</a></li>
     <li><a href="#sfmodel_spec" id="toc-sfmodel_spec">6.1
     sfmodel_spec()</a>
     <ul>
@@ -239,11 +237,13 @@
     id="toc-example-testing-for-inefficiency">Example: Testing for
     Inefficiency</a></li>
     </ul></li>
-    <li><a href="#part-b-post-estimation-accessors"
-    id="toc-part-b-post-estimation-accessors">Part B: Post-estimation
-    accessors</a></li>
+    </ul></li>
+    <li><a href="#api-reference-ii-post-estimation-accessors"
+    id="toc-api-reference-ii-post-estimation-accessors">7. API Reference
+    II: Post-Estimation Accessors</a>
+    <ul>
     <li><a href="#standard-accessors-statsapi-interface"
-    id="toc-standard-accessors-statsapi-interface">6.7 Standard
+    id="toc-standard-accessors-statsapi-interface">7.1 Standard
     Accessors (StatsAPI Interface)</a>
     <ul>
     <li><a href="#syntax-6" id="toc-syntax-6">Syntax</a></li>
@@ -252,7 +252,7 @@
     Value</a></li>
     <li><a href="#example-1" id="toc-example-1">Example</a></li>
     </ul></li>
-    <li><a href="#efficiency-indices" id="toc-efficiency-indices">6.8
+    <li><a href="#efficiency-indices" id="toc-efficiency-indices">7.2
     Efficiency Indices</a>
     <ul>
     <li><a href="#syntax-7" id="toc-syntax-7">Syntax</a></li>
@@ -261,7 +261,7 @@
     Value</a></li>
     <li><a href="#example-2" id="toc-example-2">Example</a></li>
     </ul></li>
-    <li><a href="#marginal-effects-1" id="toc-marginal-effects-1">6.9
+    <li><a href="#marginal-effects-1" id="toc-marginal-effects-1">7.3
     Marginal Effects</a>
     <ul>
     <li><a href="#syntax-8" id="toc-syntax-8">Syntax</a></li>
@@ -271,7 +271,7 @@
     <li><a href="#example-3" id="toc-example-3">Example</a></li>
     </ul></li>
     <li><a href="#diagnostic-functions"
-    id="toc-diagnostic-functions">6.10 Diagnostic Functions</a>
+    id="toc-diagnostic-functions">7.4 Diagnostic Functions</a>
     <ul>
     <li><a href="#syntax-9" id="toc-syntax-9">Syntax</a></li>
     <li><a href="#arguments-7" id="toc-arguments-7">Arguments</a></li>
@@ -280,7 +280,7 @@
     <li><a href="#example-4" id="toc-example-4">Example</a></li>
     </ul></li>
     <li><a href="#hypothesis-testing-1"
-    id="toc-hypothesis-testing-1">6.11 Hypothesis Testing</a>
+    id="toc-hypothesis-testing-1">7.5 Hypothesis Testing</a>
     <ul>
     <li><a href="#syntax-10" id="toc-syntax-10">Syntax</a></li>
     <li><a href="#arguments-8" id="toc-arguments-8">Arguments</a></li>
@@ -288,7 +288,7 @@
     Value</a></li>
     <li><a href="#example-5" id="toc-example-5">Example</a></li>
     </ul></li>
-    <li><a href="#plot-recipes" id="toc-plot-recipes">6.12 Plot
+    <li><a href="#plot-recipes" id="toc-plot-recipes">7.6 Plot
     Recipes</a>
     <ul>
     <li><a href="#syntax-11" id="toc-syntax-11">Syntax</a></li>
@@ -298,7 +298,7 @@
     <li><a href="#example-6" id="toc-example-6">Example</a></li>
     </ul></li>
     <li><a href="#prediction-on-new-data-1"
-    id="toc-prediction-on-new-data-1">6.13 Prediction on New Data</a>
+    id="toc-prediction-on-new-data-1">7.7 Prediction on New Data</a>
     <ul>
     <li><a href="#syntax-12" id="toc-syntax-12">Syntax</a></li>
     <li><a href="#arguments-10" id="toc-arguments-10">Arguments</a></li>
@@ -311,7 +311,7 @@
     <li><a href="#example-7" id="toc-example-7">Example</a></li>
     </ul></li>
     </ul></li>
-    <li><a href="#supported-models" id="toc-supported-models">7.
+    <li><a href="#supported-models" id="toc-supported-models">8.
     Supported Models</a>
     <ul>
     <li><a href="#noise-distributions"
@@ -342,7 +342,7 @@
     Distribution</a></li>
     </ul></li>
     </ul></li>
-    <li><a href="#special-topics" id="toc-special-topics">8. Special
+    <li><a href="#special-topics" id="toc-special-topics">9. Special
     Topics</a>
     <ul>
     <li><a href="#choosing-between-mle-mci-and-msle"
@@ -385,13 +385,13 @@
     id="toc-handling-convergence-issues">Handling Convergence
     Issues</a></li>
     </ul></li>
-    <li><a href="#panel-data-models" id="toc-panel-data-models">9. Panel
-    Data Models</a>
+    <li><a href="#panel-data-models" id="toc-panel-data-models">10.
+    Panel Data Models</a>
     <ul>
     <li><a href="#panel-model-types" id="toc-panel-model-types">Panel
     Model Types</a></li>
     <li><a href="#theoretical-background"
-    id="toc-theoretical-background">9.1 Theoretical Background</a>
+    id="toc-theoretical-background">10.1 Theoretical Background</a>
     <ul>
     <li><a href="#wang-and-ho-2010-true-fixed-effect-panel_tfe"
     id="toc-wang-and-ho-2010-true-fixed-effect-panel_tfe">Wang and Ho
@@ -404,7 +404,7 @@
     id="toc-true-random-effect-panel_tre">True Random-Effect
     (<code>panel_TRE</code>)</a></li>
     </ul></li>
-    <li><a href="#panel-quick-start" id="toc-panel-quick-start">9.2
+    <li><a href="#panel-quick-start" id="toc-panel-quick-start">10.2
     Panel Quick Start</a>
     <ul>
     <li><a href="#example-panel-tfe-with-msle-simulation-based"
@@ -421,9 +421,9 @@
     only)</a></li>
     </ul></li>
     <li><a href="#panel-vs.-cross-sectional-differences"
-    id="toc-panel-vs.-cross-sectional-differences">9.3 Panel
+    id="toc-panel-vs.-cross-sectional-differences">10.3 Panel
     vs. Cross-Sectional Differences</a></li>
-    <li><a href="#no-constant-columns" id="toc-no-constant-columns">9.4
+    <li><a href="#no-constant-columns" id="toc-no-constant-columns">10.4
     No Constant Columns</a></li>
     </ul></li>
     <li><a href="#citation" id="toc-citation">Citation</a></li>
@@ -431,7 +431,7 @@
     </ul>
   </div>
   <div class="sidebar-footer">
-    <span class="version-badge">v1.1.1</span>
+    <span class="version-badge">v1.2.1</span>
     <span class="author-info">&copy; Hung-Jen Wang</span>
   </div>
 </aside>
@@ -464,13 +464,12 @@ MLE benchmarks to several decimal places.</p>
 Requirements</a></li>
 <li><a href="#installation-and-dependencies">Installation and
 Dependencies</a></li>
-<li><a href="#quick-start-and-reference-example">Quick Start and
+<li><a href="#overview-and-quick-reference-example">Overview and Quick
 Reference Example</a></li>
 <li><a href="#a-detailed-empirical-example">A Detailed Empirical
 Example</a></li>
-<li><a href="#api-reference">API Reference</a>
-<ul>
-<li><em>Part A: Model building and fitting</em>
+<li><a href="#api-reference">API Reference I: Model building and
+fitting</a>
 <ul>
 <li>6.1 <a href="#sfmodel_spec">sfmodel_spec()</a></li>
 <li>6.2 <a href="#sfmodel_method">sfmodel_method()</a></li>
@@ -481,19 +480,19 @@ Example</a></li>
 href="#sfmodel_mixtable-and-sfmodel_chisquaretable">sfmodel_MixTable()
 and sfmodel_ChiSquareTable()</a></li>
 </ul></li>
-<li><em>Part B: Post-estimation accessors</em>
+<li><a href="#api-reference-ii">API Reference II: Post-Estimation
+Accessors</a>
 <ul>
-<li>6.7 <a href="#standard-accessors">Standard Accessors (StatsAPI
+<li>7.1 <a href="#standard-accessors">Standard Accessors (StatsAPI
 Interface)</a></li>
-<li>6.8 <a href="#efficiency-indices">Efficiency Indices</a></li>
-<li>6.9 <a href="#api-marginal-effects">Marginal Effects</a></li>
-<li>6.10 <a href="#sec6-diagnostic-functions">Diagnostic
+<li>7.2 <a href="#efficiency-indices">Efficiency Indices</a></li>
+<li>7.3 <a href="#api-marginal-effects">Marginal Effects</a></li>
+<li>7.4 <a href="#sec6-diagnostic-functions">Diagnostic
 Functions</a></li>
-<li>6.11 <a href="#sec6-hypothesis-testing">Hypothesis Testing</a></li>
-<li>6.12 <a href="#sec6-plot-recipes">Plot Recipes</a></li>
-<li>6.13 <a href="#sec6-prediction-on-new-data">Prediction on New
+<li>7.5 <a href="#sec6-hypothesis-testing">Hypothesis Testing</a></li>
+<li>7.6 <a href="#sec6-plot-recipes">Plot Recipes</a></li>
+<li>7.7 <a href="#sec6-prediction-on-new-data">Prediction on New
 Data</a></li>
-</ul></li>
 </ul></li>
 <li><a href="#supported-models">Supported Models</a>
 <ul>
@@ -502,20 +501,20 @@ Guidance</a></li>
 </ul></li>
 <li><a href="#special-topics">Special Topics</a>
 <ul>
-<li>8.1 <a href="#choosing-between-mle-mci-and-msle">Choosing Between
+<li>9.1 <a href="#choosing-between-mle-mci-and-msle">Choosing Between
 MLE, MCI, and MSLE</a></li>
-<li>8.2 <a href="#gpu-computation">GPU Computation</a></li>
-<li>8.3 <a href="#copula-models">Copula Models</a></li>
-<li>8.4 <a href="#scaling-property-model-cross-sectional">Scaling
+<li>9.2 <a href="#gpu-computation">GPU Computation</a></li>
+<li>9.3 <a href="#copula-models">Copula Models</a></li>
+<li>9.4 <a href="#scaling-property-model-cross-sectional">Scaling
 Property Model (Cross-Sectional)</a></li>
-<li>8.5 <a href="#cost-frontier-models">Cost Frontier Models</a></li>
-<li>8.6 <a href="#choosing-the-number-of-halton-draws">Choosing the
+<li>9.5 <a href="#cost-frontier-models">Cost Frontier Models</a></li>
+<li>9.6 <a href="#choosing-the-number-of-halton-draws">Choosing the
 Number of Halton Draws</a></li>
-<li>8.7 <a
+<li>9.7 <a
 href="#observation-specific-halton-draws-multirand">Observation-Specific
 Halton Draws (multiRand)</a></li>
-<li>8.8 <a href="#custom-draw-sequences">Custom Draw Sequences</a></li>
-<li>8.9 <a href="#handling-convergence-issues">Handling Convergence
+<li>9.8 <a href="#custom-draw-sequences">Custom Draw Sequences</a></li>
+<li>9.9 <a href="#handling-convergence-issues">Handling Convergence
 Issues</a></li>
 </ul></li>
 <li><a href="#panel-data-models">Panel Data Models</a></li>
@@ -727,11 +726,12 @@ recipes (e.g., <code>plot(result, :efficiency)</code>), you must also
 load Plots.jl by <code>using Plots</code>.</p>
 </blockquote>
 <hr />
-<p><a id="quick-start-and-reference-example"></a></p>
-<h2 id="quick-start-and-reference-example">4. Quick Start and Reference
-Example</h2>
-<p>Here we show a complete five-step estimation example. Some steps are
-optional and can be skipped; more examples latter.</p>
+<p><a id="overview-and-quick-reference-example"></a></p>
+<h2 id="overview-and-quick-reference-example">4. Overview and Quick
+Reference Example</h2>
+<p>Here we show a complete five-step estimation and post-estimation
+example. Some steps are optional and can be skipped; more examples
+latter.</p>
 <pre class="julia"><code>using CUDA
 using SFrontiers
 using Optim
@@ -822,7 +822,7 @@ nobs(result)                   # number of observations
 residuals(result)              # composed errors (also `:u`, `:v`, `:ols` via `type=`)
 fitted(result)                 # frontier fitted values x&#39;β̂
 
-# See Section 6 (API Reference) for further diagnostics
+# See Sections 6–7 (API Reference) for further diagnostics
 # (efficiency_summary, residual_diagnostics, sf_vs_ols, lrtest),
 # plotting recipes, and prediction on new data.</code></pre>
 <p>For models with Normal noise and half-normal, truncated-normal, or
@@ -1167,7 +1167,7 @@ Likelihood-ratio test (mixed χ̄² reference distribution)
 is much larger than the critical value at the 1% level (<span
 class="math inline">\(19.384\)</span>), we overwhelmingly reject the
 null hypothesis of an OLS model.</p>
-<p>See <a href="#sec6-hypothesis-testing">Section 6.11 ‘Hypothesis
+<p>See <a href="#sec6-hypothesis-testing">Section 7.5 ‘Hypothesis
 Testing’</a> for the full reference (<code>sf_vs_ols</code>, the general
 <code>lrtest</code>, and the <code>LRTestResult</code> struct).</p>
 <h3 id="inefficiency-and-efficiency-index">Inefficiency and Efficiency
@@ -1191,7 +1191,7 @@ are computed automatically and stored in the result:</p>
  0.165553   0.853446</code></pre>
 <p>The same indices can also be obtained on new data via
 <code>predict(result; frontier, depvar, zvar, what = :jlms | :bc | :all)</code>.
-See <a href="#sec6-prediction-on-new-data">Section 6.13 ‘Prediction on
+See <a href="#sec6-prediction-on-new-data">Section 7.7 ‘Prediction on
 New Data’</a> for the full reference.</p>
 <p>A built-in plot recipe visualizes the JLMS and BC distributions on
 the rice-farmer fit:</p>
@@ -1203,7 +1203,7 @@ alt="Histograms of the JLMS inefficiency index and the BC efficiency index" />
 <figcaption aria-hidden="true">Histograms of the JLMS inefficiency index
 and the BC efficiency index</figcaption>
 </figure>
-<p>See <a href="#sec6-plot-recipes">Section 6.12 ‘Plot Recipes’</a> for
+<p>See <a href="#sec6-plot-recipes">Section 7.6 ‘Plot Recipes’</a> for
 the other recipe kinds (<code>:residuals</code>, <code>:marginal</code>,
 <code>:convergence</code>, and the default 2×2 diagnostic panel).</p>
 <h3 id="marginal-effects">Marginal Effects</h3>
@@ -1250,7 +1250,7 @@ allows this non-monotonic effect by parameterizing both <span
 class="math inline">\(\mu\)</span> and <span
 class="math inline">\(\sigma_u^2\)</span> by the same vector of
 inefficiency determinants.</p>
-<p>See <a href="#sec6-plot-recipes">Section 6.12 ‘Plot Recipes’</a> for
+<p>See <a href="#sec6-plot-recipes">Section 7.6 ‘Plot Recipes’</a> for
 the full reference of the <code>:marginal</code> recipe and the other
 recipe kinds.</p>
 <h3 id="post-estimation-diagnostics">Post-Estimation Diagnostics</h3>
@@ -1258,17 +1258,21 @@ recipe kinds.</p>
 distribution of the JLMS inefficiency index and the Battese–Coelli
 efficiency index:</p>
 <pre class="julia"><code>julia&gt; es = efficiency_summary(result)
-(n = 271,
- mean_jlms = 0.334, std_jlms = 0.274, min_jlms = 0.071, max_jlms = 1.513,
- median_jlms = 0.237,
- quantiles_jlms = (q10 = 0.106, q20 = 0.130, q25 = 0.139, q30 = 0.166,
-                   q40 = 0.199, q50 = 0.237, q60 = 0.301, q70 = 0.369,
-                   q75 = 0.419, q80 = 0.480, q90 = 0.735),
- mean_bc = 0.746, std_bc = 0.160, min_bc = 0.224, max_bc = 0.933,
- median_bc = 0.797,
- quantiles_bc = (q10 = 0.488, q20 = 0.629, q25 = 0.669, q30 = 0.702,
-                 q40 = 0.749, q50 = 0.797, q60 = 0.827, q70 = 0.853,
-                 q75 = 0.875, q80 = 0.882, q90 = 0.903))</code></pre>
+EfficiencySummary  (n = 271)
+  JLMS:  mean = 0.3342  std = 0.2737  min = 0.0709  max = 1.5125  median = 0.2374
+         q10 = 0.1063  q25 = 0.1386  q50 = 0.2374  q75 = 0.4188  q90 = 0.7354
+  BC:    mean = 0.7462  std = 0.1604  min = 0.2244  max = 0.9334  median = 0.7973
+         q10 = 0.4876  q25 = 0.6686  q50 = 0.7973  q75 = 0.8754  q90 = 0.9025
+  Fields: e.g., &lt;name&gt;.mean_jlms, &lt;name&gt;.quantiles_bc.q25; full list via propertynames(&lt;name&gt;).</code></pre>
+<p>The display groups summary statistics under “JLMS” and “BC” headings
+for readability, but the underlying struct is <strong>flat</strong>:
+top-level fields use <code>_jlms</code> / <code>_bc</code> suffixes
+(e.g., <code>es.mean_jlms</code>, <code>es.median_bc</code>), and the
+eleven-quantile vectors live inside two <code>NamedTuple</code> fields,
+<code>es.quantiles_jlms</code> and <code>es.quantiles_bc</code>. So
+<code>es.quantiles_bc.q25 == 0.6686</code>, while <code>es.JLMS</code>
+and <code>es.JLMS.q10</code> are not valid — the visual grouping is for
+display only.</p>
 <p>The median Battese–Coelli efficiency is <span
 class="math inline">\(0.797\)</span>, meaning the typical farmer
 operates at about 80% of the production frontier. The dispersion is
@@ -1307,17 +1311,17 @@ accept a <code>type</code> keyword to extract alternative quantities
 such as <span class="math inline">\(\hat u_i\)</span>, <span
 class="math inline">\(\hat v_i\)</span>, or OLS residuals.</p>
 <p>See <a href="#sec6-diagnostic-functions">‘Diagnostic Functions’ in
-Section 6.10</a> for the full reference (<code>residuals</code>,
+Section 7.4</a> for the full reference (<code>residuals</code>,
 <code>fitted</code>, <code>efficiency_summary</code>,
 <code>residual_diagnostics</code>), including all keyword options and
-the complete list of returned NamedTuple fields.</p>
+the complete list of fields on the returned structs.</p>
 <p><a id="sec5-prediction-on-new-data"></a></p>
 <h3 id="prediction-on-new-data">Prediction on New Data</h3>
 <p>The fitted object can be applied to new observations through
 <code>predict(result; frontier, zvar, depvar, what)</code>. See <a
 href="#sec6-prediction-on-new-data">‘Prediction on New Data’ in Section
-6.13</a> for the full reference (signature, the
-<code>what</code>-keyword table, and supported model classes).</p>
+7.7</a> for the full reference (signature, the <code>what</code>-keyword
+table, and supported model classes).</p>
 <p>Given any new observations <span
 class="math inline">\((X_{\text{new}}, Z_{\text{new}},
 y_{\text{new}})\)</span>, <code>predict()</code> reuses the estimated
@@ -1327,9 +1331,10 @@ class="math inline">\(x_i&#39;\hat\beta\)</span>, composed residuals,
 response-scale fit, the JLMS inefficiency index <span
 class="math inline">\(E(u_i\mid\hat\varepsilon_i)\)</span>, the
 Battese–Coelli efficiency index <span
-class="math inline">\(E(e^{-u_i}\mid\hat\varepsilon_i)\)</span>, and
-marginal effects <span class="math inline">\(\partial E(u_i)/\partial
-z_{ij}\)</span>. The <code>what</code> keyword selects the target.</p>
+class="math inline">\(E(e^{-u_i}\mid\hat\varepsilon_i)\)</span>, and the
+observation-level marginal effects <span class="math inline">\(\partial
+E(u_i)/\partial \mathbf{z}_i\)</span>. The <code>what</code> keyword
+selects the target.</p>
 <p>This interface supports several post-estimation tasks:</p>
 <ul>
 <li><p><strong>Out-of-sample prediction and evaluation.</strong> Score
@@ -1358,7 +1363,7 @@ model to newly collected firms without re-estimating the model.</p></li>
 </ul>
 <p>The exact signature, data-requirement table, and currently-supported
 model classes are documented in <a
-href="#sec6-prediction-on-new-data">Section 6.13 ‘Prediction on New
+href="#sec6-prediction-on-new-data">Section 7.7 ‘Prediction on New
 Data’</a>.</p>
 <h3 id="saving-results">Saving Results</h3>
 <p>The result can be saved for later analysis. Using the <a
@@ -1374,17 +1379,16 @@ result_loaded = load_object(&quot;model1.jld2&quot;)     # load it back</code></
 CSV.write(&quot;marginal.csv&quot;, result.marginal)     # marginal effects (DataFrame)</code></pre>
 <hr />
 <p><a id="api-reference"></a></p>
-<h2 id="api-reference">6. API Reference</h2>
-<p>The API is grouped in two sets. <strong>Part A — Model building and
-fitting</strong> (6.1–6.6) covers the functions used to specify and
-estimate a model. <strong>Part B — Post-estimation accessors</strong>
-(6.7–6.13) covers the methods that operate on the <code>SFResult</code>
-object returned by <code>sfmodel_fit()</code>, including StatsAPI
-accessors, diagnostic functions, hypothesis tests, plot recipes, and
-<code>predict()</code>.</p>
-<hr />
-<h3 id="part-a-model-building-and-fitting">Part A: Model building and
-fitting</h3>
+<h2 id="api-reference-i-model-building-and-fitting">6. API Reference I:
+Model building and fitting</h2>
+<p>This section documents the functions used to specify and estimate a
+model: <code>sfmodel_spec()</code>, <code>sfmodel_method()</code>,
+<code>sfmodel_init()</code>, <code>sfmodel_opt()</code>,
+<code>sfmodel_fit()</code>, and the critical-value utilities
+<code>sfmodel_MixTable()</code> / <code>sfmodel_ChiSquareTable()</code>.
+Methods that operate on the fitted result object are documented in <a
+href="#api-reference-ii">Section 7 (API Reference II: Post-Estimation
+Accessors)</a>.</p>
 <p><a id="sfmodel_spec"></a></p>
 <h3 id="sfmodel_spec">6.1 sfmodel_spec()</h3>
 <p>The <code>sfmodel_spec()</code> function creates a model
@@ -1436,7 +1440,7 @@ column</strong> (within-demeaning eliminates it).</td>
 class="math inline">\(v\)</span>. Cross-sectional: <code>:Normal</code>,
 <code>:StudentT</code>, <code>:Laplace</code>. Panel:
 <code>:Normal</code> only. See <a href="#supported-models">Section
-7</a>.</td>
+8</a>.</td>
 <td>Yes</td>
 </tr>
 <tr class="even">
@@ -1447,7 +1451,7 @@ class="math inline">\(u\)</span>. Supported options:
 <code>:HalfNormal</code>, <code>:TruncatedNormal</code>,
 <code>:Exponential</code>, <code>:Weibull</code>,
 <code>:Lognormal</code>, <code>:Lomax</code>, <code>:Rayleigh</code>,
-and <code>:Gamma</code>. See <a href="#supported-models">Section 7</a>.
+and <code>:Gamma</code>. See <a href="#supported-models">Section 8</a>.
 Note: <code>:Gamma</code> is MCI only; <code>method=:MLE</code> supports
 only <code>:HalfNormal</code>, <code>:TruncatedNormal</code>,
 <code>:Exponential</code>.</td>
@@ -1460,7 +1464,7 @@ only <code>:HalfNormal</code>, <code>:TruncatedNormal</code>,
 <code>:panel_TFE</code> (Wang and Ho 2010 true fixed-effect),
 <code>:panel_TFE_CSW</code> (Chen, Schmidt, and Wang 2014, MLE only), or
 <code>:panel_TRE</code> (true random-effect, MLE only). See <a
-href="#panel-data-models">Section 9</a>.</td>
+href="#panel-data-models">Section 10</a>.</td>
 <td>No</td>
 </tr>
 <tr class="even">
@@ -1508,8 +1512,8 @@ specification that are allowed to be heteroscedastic (e.g.,
 <code>[:mu, :sigma_sq]</code>), <strong>or</strong> the symbol
 <code>:scaling</code> to activate the scaling property model. Not
 available with panel datatypes. See the Hetero Options column in <a
-href="#supported-models">Section 7</a> and <a
-href="#scaling-property-model-cross-sectional">Section 8.5</a>.</td>
+href="#supported-models">Section 8</a> and <a
+href="#scaling-property-model-cross-sectional">Section 9.5</a>.</td>
 <td>No</td>
 </tr>
 <tr class="even">
@@ -1585,7 +1589,7 @@ spec2 = sfmodel_spec(
     zvar = Z,
     noise = :Normal,
     ineff = :TruncatedNormal,
-    hetero = [:mu],  # or [:sigma_sq], [:mu, :sigma_sq]. See the Hetero Options column in Section 7
+    hetero = [:mu],  # or [:sigma_sq], [:mu, :sigma_sq]. See the Hetero Options column in Section 8
     varnames = [&quot;constant&quot;, &quot;land&quot;, &quot;Iland&quot;, &quot;labor&quot;, &quot;bull&quot;, &quot;cost&quot;, &quot;year&quot;,  # frontier
                 &quot;constant&quot;, &quot;age&quot;, &quot;schooling&quot;, &quot;year&quot;,                        # mu
                 &quot;constant&quot;,                                                    # ln_sigma_u_sq
@@ -1615,7 +1619,7 @@ scaling function <span class="math inline">\(h(\mathbf{z}_i) =
 inefficiency distribution parameters remain scalar (homoscedastic). The
 <code>zvar</code> matrix must <strong>not</strong> contain a constant
 column (for identification; see <a
-href="#scaling-property-model-cross-sectional">Section 8.5</a>).</p>
+href="#scaling-property-model-cross-sectional">Section 9.5</a>).</p>
 <pre class="julia"><code># Scaling property model (using keyword form as an example)
 # Z_nocons must NOT contain a constant column
 
@@ -1717,7 +1721,7 @@ class="math inline">\(h(z_{it}) = \exp(z_{it}&#39;\delta)\)</span>. The
 <code>frontier</code> and <code>zvar</code> matrices must NOT include a
 constant column (except <code>panel_TRE</code>, where a constant in
 <code>frontier</code> is allowed). See <a
-href="#panel-data-models">Section 9</a> for details.</p>
+href="#panel-data-models">Section 10</a> for details.</p>
 </blockquote>
 <hr />
 <p><a id="sfmodel_method"></a></p>
@@ -2701,14 +2705,15 @@ each observation</td>
 </tbody>
 </table>
 <blockquote>
-<p>For the scaling property model (<code>hetero = :scaling</code>),
-marginal effects are computed via <span class="math inline">\(\partial
-E(u_i) / \partial z_{ij} = \delta_j \cdot h(\mathbf{z}_i) \cdot
-E(u_i^*)\)</span>, using automatic differentiation. The coefficient
-<span class="math inline">\(\delta_j\)</span> directly gives the
+<p>For the scaling property model (<code>hetero = :scaling</code>), the
+observation-level marginal effects are computed via <span
+class="math inline">\(\partial E(u_i) / \partial \mathbf{z}_i =
+\boldsymbol{\delta} \cdot h(\mathbf{z}_i) \cdot E(u_i^*)\)</span>, using
+automatic differentiation. The coefficient vector <span
+class="math inline">\(\boldsymbol{\delta}\)</span> directly gives the
 semi-elasticity <span class="math inline">\(\partial \ln E(u_i) /
-\partial z_{ij} = \delta_j\)</span>. See <a
-href="#scaling-property-model-cross-sectional">Section 8.5</a>.</p>
+\partial \mathbf{z}_i = \boldsymbol{\delta}\)</span>. See <a
+href="#scaling-property-model-cross-sectional">Section 9.5</a>.</p>
 </blockquote>
 <p><strong>OLS Diagnostics</strong></p>
 <table>
@@ -2869,13 +2874,30 @@ scale</li>
 indices, marginal effects)</li>
 </ol>
 <h4 id="convergence-warnings">Convergence Warnings</h4>
-<p>The function monitors convergence and sets <code>redflag = 1</code>
-if:</p>
+<p><code>Optim.jl</code> declares convergence as soon as
+<strong>any</strong> of its stopping criteria is met — a small gradient
+norm (<code>g_abstol</code>), a small change in the log-likelihood
+(<code>f_abstol</code>), or a small change in the parameter vector
+(<code>x_abstol</code>). Because of this,
+<code>result.converged = true</code> does not by itself guarantee that
+the gradient at the reported optimum is small: the optimizer may have
+stopped because the objective or the parameters stopped moving, while
+the gradient remained sizeable.</p>
+<p><code>SFrontiers.jl</code> therefore returns an additional warning
+flag, <code>redflag</code>, that re-examines the quality of the result
+after <code>Optim</code> returns. <code>redflag = 1</code> whenever any
+of the following holds, regardless of what <code>converged</code>
+reports:</p>
 <ul>
-<li>Gradient norm exceeds 0.1 or is NaN</li>
+<li>Gradient norm exceeds 0.1 (or is <code>NaN</code>)</li>
 <li>Iteration limit was reached</li>
-<li>Variance-covariance matrix has non-positive diagonal elements</li>
+<li>Variance–covariance matrix has non-positive diagonal elements</li>
 </ul>
+<p>Treat <code>redflag = 1</code> as a signal to inspect
+<code>gradient_norm</code> and re-run with different initial values,
+more iterations, or a different solver (see <a
+href="#handling-convergence-issues">Handling Convergence
+Issues</a>).</p>
 <p><a id="sfmodel_mixtable-and-sfmodel_chisquaretable"></a></p>
 <h3 id="sfmodel_mixtable-and-sfmodel_chisquaretable">6.6
 <code>sfmodel_MixTable()</code> and
@@ -2965,7 +2987,7 @@ selects the mixed <span class="math inline">\(\bar{\chi}^2\)</span>
 reference distribution, and returns an <code>LRTestResult</code>
 containing the statistic, p-value, and the critical values at the 10%,
 5%, 2.5%, and 1% levels. See <a href="#sec6-hypothesis-testing">Section
-6.11 ‘Hypothesis Testing’</a> for the full signature and return-field
+7.5 ‘Hypothesis Testing’</a> for the full signature and return-field
 reference. The <code>sfmodel_MixTable</code> /
 <code>sfmodel_ChiSquareTable</code> utilities remain useful when you
 need the raw critical values for a <em>different</em> LR test (e.g.,
@@ -2973,14 +2995,15 @@ restrictions on frontier coefficients or comparing two nested SF models
 by hand).</p>
 </blockquote>
 <hr />
-<h3 id="part-b-post-estimation-accessors">Part B: Post-estimation
-accessors</h3>
-<p>The remaining entries document the methods that operate on the
+<p><a id="api-reference-ii"></a></p>
+<h2 id="api-reference-ii-post-estimation-accessors">7. API Reference II:
+Post-Estimation Accessors</h2>
+<p>This section documents the methods that operate on the
 <code>SFResult</code> object returned by <code>sfmodel_fit()</code>.
 They dispatch uniformly across all backends (MLE, MSLE, MCI, and panel)
 unless noted otherwise.</p>
 <p><a id="standard-accessors"></a></p>
-<h3 id="standard-accessors-statsapi-interface">6.7 Standard Accessors
+<h3 id="standard-accessors-statsapi-interface">7.1 Standard Accessors
 (StatsAPI Interface)</h3>
 <p>The object returned by <code>sfmodel_fit()</code> is a thin
 <code>SFResult</code> wrapper around the result NamedTuple. All existing
@@ -3112,7 +3135,7 @@ coeftable(result)                # StatsBase.CoefTable
 aic(result);  bic(result)        # information criteria</code></pre>
 <hr />
 <p><a id="efficiency-indices"></a></p>
-<h3 id="efficiency-indices">6.8 Efficiency Indices</h3>
+<h3 id="efficiency-indices">7.2 Efficiency Indices</h3>
 <p>Two observation-level indices summarise where each firm stands
 relative to the frontier: the JLMS inefficiency index <span
 class="math inline">\(E(u_i \mid \varepsilon_i)\)</span> (higher means
@@ -3171,7 +3194,7 @@ println(&quot;Firm 1 efficiency:   &quot;, result.bc[1])
 println(&quot;Firm 1 inefficiency: &quot;, result.jlms[1])</code></pre>
 <hr />
 <p><a id="api-marginal-effects"></a></p>
-<h3 id="marginal-effects-1">6.9 Marginal Effects</h3>
+<h3 id="marginal-effects-1">7.3 Marginal Effects</h3>
 <p>Marginal effects quantify how changes in the Z variables affect
 expected inefficiency <span class="math inline">\(E(u)\)</span>. A
 positive marginal effect means that increasing <span
@@ -3201,8 +3224,8 @@ result.marginal_mean    # sample-mean marginal effects (NamedTuple)</code></pre>
 <td><code>marginal</code></td>
 <td><code>DataFrame</code></td>
 <td>One row per observation; columns <code>marg_&lt;name&gt;</code> give
-<span class="math inline">\(\partial E(u_i) / \partial
-z_{ij}\)</span>.</td>
+the observation-level <span class="math inline">\(\partial E(u_i) /
+\partial \mathbf{z}_i\)</span>, one column per Z variable.</td>
 </tr>
 <tr class="even">
 <td><code>marginal_mean</code></td>
@@ -3231,7 +3254,7 @@ println(&quot;Firm 1 marginal effect of age: &quot;,
         marginal_df[1, :marg_age])</code></pre>
 <hr />
 <p><a id="sec6-diagnostic-functions"></a></p>
-<h3 id="diagnostic-functions">6.10 Diagnostic Functions</h3>
+<h3 id="diagnostic-functions">7.4 Diagnostic Functions</h3>
 <p>Beyond the StatsAPI accessors, the package provides a small family of
 post-estimation diagnostic methods that dispatch uniformly across all
 backends. Together they cover the four quantities most often needed
@@ -3327,9 +3350,9 @@ fit)</td>
 </tr>
 </tbody>
 </table>
-<p><code>efficiency_summary</code> returns a <code>NamedTuple</code> of
-summary statistics for the JLMS inefficiency and the Battese–Coelli
-efficiency indices:</p>
+<p><code>efficiency_summary</code> returns an
+<code>EfficiencySummary</code> struct holding summary statistics for the
+JLMS inefficiency and the Battese–Coelli efficiency indices:</p>
 <table>
 <colgroup>
 <col style="width: 38%" />
@@ -3440,7 +3463,7 @@ es   = efficiency_summary(result)
 rd   = residual_diagnostics(result)   # includes JB test + sign check</code></pre>
 <hr />
 <p><a id="sec6-hypothesis-testing"></a></p>
-<h3 id="hypothesis-testing-1">6.11 Hypothesis Testing</h3>
+<h3 id="hypothesis-testing-1">7.5 Hypothesis Testing</h3>
 <p>Two likelihood-ratio (LR) testing utilities are provided for fitted
 SF models. <code>sf_vs_ols</code> performs the boundary LR test of the
 stochastic frontier against its auxiliary OLS baseline (<span
@@ -3565,7 +3588,7 @@ class="math inline">\(\ell_U\)</span></td>
 lrtest(result_restricted, result_unrestricted; mixed = false)   # general nested LR test</code></pre>
 <hr />
 <p><a id="sec6-plot-recipes"></a></p>
-<h3 id="plot-recipes">6.12 Plot Recipes</h3>
+<h3 id="plot-recipes">7.6 Plot Recipes</h3>
 <p>The package provides a set of built-in diagnostic plots that you can
 generate directly from a fitted model with
 <code>plot(result, ...)</code>. To use them, load <code>Plots.jl</code>
@@ -3688,7 +3711,7 @@ plot(result, :residuals)         # three-panel residual diagnostic
 plot(result, :marginal, df.age)  # marginal effect against age</code></pre>
 <hr />
 <p><a id="sec6-prediction-on-new-data"></a></p>
-<h3 id="prediction-on-new-data-1">6.13 Prediction on New Data</h3>
+<h3 id="prediction-on-new-data-1">7.7 Prediction on New Data</h3>
 <p>A fitted model can be applied to new observations through a single
 entry point, <code>predict()</code>. The <code>what</code> keyword
 selects the prediction target: the frontier value, the composed
@@ -3861,7 +3884,7 @@ class="math inline">\(E(e^{-u_i}\mid\hat\varepsilon_i)\)</span></td>
 <td style="text-align: center;"></td>
 <td style="text-align: center;"></td>
 <td><span class="math inline">\(\partial E(u_i)/\partial
-z_{ij}\)</span></td>
+\mathbf{z}_i\)</span></td>
 </tr>
 <tr class="odd">
 <td><code>:all</code></td>
@@ -3934,7 +3957,7 @@ New Data’</a> for a discussion of typical use-case scenarios (held-out
 scoring, counterfactual analysis, policy evaluation, forecasting).</p>
 <hr />
 <p><a id="supported-models"></a></p>
-<h2 id="supported-models">7. Supported Models</h2>
+<h2 id="supported-models">8. Supported Models</h2>
 <h3 id="noise-distributions">Noise Distributions</h3>
 <p>Each table below has five columns: <strong>Symbol</strong> is the
 keyword used in <code>sfmodel_spec()</code> (e.g.,
@@ -4124,7 +4147,7 @@ parameters remain scalar and a separate set of <span
 class="math inline">\(\boldsymbol{\delta}\)</span> coefficients is
 estimated. All 8 inefficiency distributions support the scaling property
 model. See <a href="#scaling-property-model-cross-sectional">Section
-8.5</a>.</p>
+9.5</a>.</p>
 <h3 id="copula-models">Copula Models</h3>
 <p><em>Cross-sectional models only.</em> A copula function models the
 dependence between the noise term <span class="math inline">\(v\)</span>
@@ -4425,7 +4448,7 @@ cross-sectional models only.</p>
 </blockquote>
 <hr />
 <p><a id="special-topics"></a></p>
-<h2 id="special-topics">8. Special Topics</h2>
+<h2 id="special-topics">9. Special Topics</h2>
 <h3 id="choosing-between-mle-mci-and-msle">Choosing Between MLE, MCI,
 and MSLE</h3>
 <p>The package offers three estimation methods. MLE uses analytic
@@ -4712,9 +4735,9 @@ class="math inline">\(E(e^{-u_i} \mid \varepsilon_i) = E(e^{-h_i u_i^*}
 class="math inline">\(h_i\)</span> must remain inside the
 exponential.</li>
 <li><strong>Semi-elasticity</strong>: <span
-class="math inline">\(\partial \ln E(u_i) / \partial z_{ij} =
-\delta_j\)</span>, providing direct interpretation of the scaling
-coefficients.</li>
+class="math inline">\(\partial \ln E(u_i) / \partial \mathbf{z}_i =
+\boldsymbol{\delta}\)</span>, providing direct interpretation of the
+scaling coefficients.</li>
 </ol>
 <p><strong>Unconditional mean</strong> <span
 class="math inline">\(E(u_i) = h(\mathbf{z}_i) \cdot E(u_i^*)\)</span>,
@@ -5191,7 +5214,7 @@ for the more complex specification. |</p></li>
 </ol>
 <hr />
 <p><a id="panel-data-models"></a></p>
-<h2 id="panel-data-models">9. Panel Data Models</h2>
+<h2 id="panel-data-models">10. Panel Data Models</h2>
 <p>The module supports several panel stochastic frontier models for
 estimating <strong>firm-level inefficiency</strong> from balanced or
 unbalanced panel data. Panel estimation is accessed through the same
@@ -5239,7 +5262,7 @@ support all 8 inefficiency distributions. MLE support is limited to the
 distributions listed above. For <code>panel_TFE_CSW</code> and
 <code>panel_TRE</code>, only MLE is available.</p>
 <p><a id="theoretical-background"></a></p>
-<h3 id="theoretical-background">9.1 Theoretical Background</h3>
+<h3 id="theoretical-background">10.1 Theoretical Background</h3>
 <h4 id="wang-and-ho-2010-true-fixed-effect-panel_tfe">Wang and Ho (2010)
 True Fixed-Effect (<code>panel_TFE</code>)</h4>
 <p>The Wang and Ho (2010) model starts from:</p>
@@ -5338,7 +5361,7 @@ assumption fails.</li>
 firm effects and regressors is likely. TFE is consistent regardless of
 this correlation but less efficient.</li>
 </ul>
-<h3 id="panel-quick-start">9.2 Panel Quick Start</h3>
+<h3 id="panel-quick-start">10.2 Panel Quick Start</h3>
 <h4 id="example-panel-tfe-with-msle-simulation-based">Example: Panel TFE
 with MSLE (simulation-based)</h4>
 <pre class="julia"><code>using CUDA
@@ -5424,7 +5447,7 @@ result = sfmodel_fit(spec = spec_csw, method = meth)</code></pre>
 )
 meth = sfmodel_method(method = :MLE)
 result = sfmodel_fit(spec = spec_tre, method = meth)</code></pre>
-<h3 id="panel-vs.-cross-sectional-differences">9.3 Panel
+<h3 id="panel-vs.-cross-sectional-differences">10.3 Panel
 vs. Cross-Sectional Differences</h3>
 <table>
 <colgroup>
@@ -5503,7 +5526,7 @@ vector)</td>
 </tr>
 </tbody>
 </table>
-<h3 id="no-constant-columns">9.4 No Constant Columns</h3>
+<h3 id="no-constant-columns">10.4 No Constant Columns</h3>
 <p>In the Wang and Ho (2010) panel model (<code>panel_TFE</code>),
 within-group demeaning eliminates any constant terms. Therefore:</p>
 <ul>
@@ -5515,7 +5538,7 @@ typically required.</li>
 <li>The same applies to <code>panel_TFE_CSW</code>. For
 <code>panel_TRE</code>, a constant term <strong>is</strong> allowed in
 <code>frontier</code> (see <a href="#theoretical-background">Section
-9.1</a>).</li>
+10.1</a>).</li>
 </ul>
 <hr />
 <h2 id="citation">Citation</h2>

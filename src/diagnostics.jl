@@ -263,28 +263,82 @@ end
 # ------------------------------------------------------------------
 
 """
-    efficiency_summary(r::SFResult) -> NamedTuple
+    EfficiencySummary
+
+Result of [`efficiency_summary`](@ref). Holds location/spread summaries and
+quantiles (deciles + quartiles) of the observation-level JLMS inefficiency
+index and the Battese–Coelli efficiency index.
+
+Fields: `n`, `mean_jlms`, `std_jlms`, `min_jlms`, `max_jlms`, `median_jlms`,
+`quantiles_jlms`, `mean_bc`, `std_bc`, `min_bc`, `max_bc`, `median_bc`,
+`quantiles_bc`. The two `quantiles_*` fields are `NamedTuple`s with
+`q10, q20, q25, q30, q40, q50, q60, q70, q75, q80, q90`.
+"""
+struct EfficiencySummary
+    n::Int
+    mean_jlms::Float64
+    std_jlms::Float64
+    min_jlms::Float64
+    max_jlms::Float64
+    median_jlms::Float64
+    quantiles_jlms::NamedTuple
+    mean_bc::Float64
+    std_bc::Float64
+    min_bc::Float64
+    max_bc::Float64
+    median_bc::Float64
+    quantiles_bc::NamedTuple
+end
+
+function Base.show(io::IO, ::MIME"text/plain", es::EfficiencySummary)
+    println(io, "EfficiencySummary  (n = ", es.n, ")")
+    println(io, "  JLMS:  mean = ", round(es.mean_jlms;   digits = 4),
+                "  std = ",         round(es.std_jlms;    digits = 4),
+                "  min = ",         round(es.min_jlms;    digits = 4),
+                "  max = ",         round(es.max_jlms;    digits = 4),
+                "  median = ",      round(es.median_jlms; digits = 4))
+    qj = es.quantiles_jlms
+    println(io, "         q10 = ", round(qj.q10; digits = 4),
+                "  q25 = ",         round(qj.q25; digits = 4),
+                "  q50 = ",         round(qj.q50; digits = 4),
+                "  q75 = ",         round(qj.q75; digits = 4),
+                "  q90 = ",         round(qj.q90; digits = 4))
+    println(io, "  BC:    mean = ", round(es.mean_bc;   digits = 4),
+                "  std = ",         round(es.std_bc;    digits = 4),
+                "  min = ",         round(es.min_bc;    digits = 4),
+                "  max = ",         round(es.max_bc;    digits = 4),
+                "  median = ",      round(es.median_bc; digits = 4))
+    qb = es.quantiles_bc
+    println(io, "         q10 = ", round(qb.q10; digits = 4),
+                "  q25 = ",         round(qb.q25; digits = 4),
+                "  q50 = ",         round(qb.q50; digits = 4),
+                "  q75 = ",         round(qb.q75; digits = 4),
+                "  q90 = ",         round(qb.q90; digits = 4))
+    println(io, "  Fields: e.g., <name>.mean_jlms, <name>.quantiles_bc.q25; ",
+                "full list via propertynames(<name>).")
+end
+
+"""
+    efficiency_summary(r::SFResult) -> EfficiencySummary
 
 Location/spread summaries and quantiles (deciles + quartiles) of the
 observation-level JLMS inefficiency index and the Battese–Coelli
-efficiency index.
+efficiency index. The result is an [`EfficiencySummary`](@ref) struct
+that pretty-prints a two-block (JLMS / BC) summary at four-decimal
+precision and exposes its fields by dot access; the full eleven-quantile
+vectors are accessible as `result.quantiles_jlms` and `result.quantiles_bc`.
 """
 function efficiency_summary(r::SFResult)
     j = collect(r.jlms)
     b = collect(r.bc)
     probs = [0.1, 0.2, 0.25, 0.3, 0.4, 0.5, 0.6, 0.7, 0.75, 0.8, 0.9]
-    return (
-        n              = length(j),
-        mean_jlms      = mean(j),  std_jlms = std(j),
-        min_jlms       = minimum(j), max_jlms = maximum(j),
-        median_jlms    = median(j),
-        quantiles_jlms = NamedTuple{Tuple(Symbol.("q", Int.(100 .* probs)))}(
-                             Tuple(quantile(j, probs))),
-        mean_bc        = mean(b),  std_bc   = std(b),
-        min_bc         = minimum(b), max_bc = maximum(b),
-        median_bc      = median(b),
-        quantiles_bc   = NamedTuple{Tuple(Symbol.("q", Int.(100 .* probs)))}(
-                             Tuple(quantile(b, probs))),
+    qkeys = Tuple(Symbol.("q", Int.(100 .* probs)))
+    qj    = NamedTuple{qkeys}(Tuple(quantile(j, probs)))
+    qb    = NamedTuple{qkeys}(Tuple(quantile(b, probs)))
+    return EfficiencySummary(
+        length(j),
+        mean(j), std(j), minimum(j), maximum(j), median(j), qj,
+        mean(b), std(b), minimum(b), maximum(b), median(b), qb,
     )
 end
 

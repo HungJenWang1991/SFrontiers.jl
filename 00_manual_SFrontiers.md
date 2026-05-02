@@ -22,37 +22,36 @@ marp: false
 1. [Introduction](#introduction)
 2. [Hardware and Software Requirements](#hardware-and-software-requirements)
 3. [Installation and Dependencies](#installation-and-dependencies)
-4. [Quick Start and Reference Example](#quick-start-and-reference-example)
+4. [Overview and Quick Reference Example](#overview-and-quick-reference-example)
 5. [A Detailed Empirical Example](#a-detailed-empirical-example)
-6. [API Reference](#api-reference)
-   - *Part A: Model building and fitting*
+6. [API Reference I: Model building and fitting](#api-reference)
      - 6.1 [sfmodel_spec()](#sfmodel_spec)
      - 6.2 [sfmodel_method()](#sfmodel_method)
      - 6.3 [sfmodel_init()](#sfmodel_init)
      - 6.4 [sfmodel_opt()](#sfmodel_opt)
      - 6.5 [sfmodel_fit()](#sfmodel_fit)
      - 6.6 [sfmodel_MixTable() and sfmodel_ChiSquareTable()](#sfmodel_mixtable-and-sfmodel_chisquaretable)
-   - *Part B: Post-estimation accessors*
-     - 6.7 [Standard Accessors (StatsAPI Interface)](#standard-accessors)
-     - 6.8 [Efficiency Indices](#efficiency-indices)
-     - 6.9 [Marginal Effects](#api-marginal-effects)
-     - 6.10 [Diagnostic Functions](#sec6-diagnostic-functions)
-     - 6.11 [Hypothesis Testing](#sec6-hypothesis-testing)
-     - 6.12 [Plot Recipes](#sec6-plot-recipes)
-     - 6.13 [Prediction on New Data](#sec6-prediction-on-new-data)
-7. [Supported Models](#supported-models)
+7. [API Reference II: Post-Estimation Accessors](#api-reference-ii)
+     - 7.1 [Standard Accessors (StatsAPI Interface)](#standard-accessors)
+     - 7.2 [Efficiency Indices](#efficiency-indices)
+     - 7.3 [Marginal Effects](#api-marginal-effects)
+     - 7.4 [Diagnostic Functions](#sec6-diagnostic-functions)
+     - 7.5 [Hypothesis Testing](#sec6-hypothesis-testing)
+     - 7.6 [Plot Recipes](#sec6-plot-recipes)
+     - 7.7 [Prediction on New Data](#sec6-prediction-on-new-data)
+8. [Supported Models](#supported-models)
    - [Distribution Selection Guidance](#distribution-selection-guidance)
-8. [Special Topics](#special-topics)
-    - 8.1 [Choosing Between MLE, MCI, and MSLE](#choosing-between-mle-mci-and-msle)
-    - 8.2 [GPU Computation](#gpu-computation)
-    - 8.3 [Copula Models](#copula-models)
-    - 8.4 [Scaling Property Model (Cross-Sectional)](#scaling-property-model-cross-sectional)
-    - 8.5 [Cost Frontier Models](#cost-frontier-models)
-    - 8.6 [Choosing the Number of Halton Draws](#choosing-the-number-of-halton-draws)
-    - 8.7 [Observation-Specific Halton Draws (multiRand)](#observation-specific-halton-draws-multirand)
-    - 8.8 [Custom Draw Sequences](#custom-draw-sequences)
-    - 8.9 [Handling Convergence Issues](#handling-convergence-issues)
-9. [Panel Data Models](#panel-data-models)
+9. [Special Topics](#special-topics)
+    - 9.1 [Choosing Between MLE, MCI, and MSLE](#choosing-between-mle-mci-and-msle)
+    - 9.2 [GPU Computation](#gpu-computation)
+    - 9.3 [Copula Models](#copula-models)
+    - 9.4 [Scaling Property Model (Cross-Sectional)](#scaling-property-model-cross-sectional)
+    - 9.5 [Cost Frontier Models](#cost-frontier-models)
+    - 9.6 [Choosing the Number of Halton Draws](#choosing-the-number-of-halton-draws)
+    - 9.7 [Observation-Specific Halton Draws (multiRand)](#observation-specific-halton-draws-multirand)
+    - 9.8 [Custom Draw Sequences](#custom-draw-sequences)
+    - 9.9 [Handling Convergence Issues](#handling-convergence-issues)
+10. [Panel Data Models](#panel-data-models)
 
 ---
 
@@ -170,11 +169,11 @@ using Optim
 
 ---
 
-<a id="quick-start-and-reference-example"></a>
+<a id="overview-and-quick-reference-example"></a>
 
-## 4. Quick Start and Reference Example
+## 4. Overview and Quick Reference Example
 
-Here we show a complete five-step estimation example. Some steps are optional and can be skipped; more examples latter.
+Here we show a complete five-step estimation and post-estimation example. Some steps are optional and can be skipped; more examples latter.
 
 ```julia
 using CUDA
@@ -267,7 +266,7 @@ nobs(result)                   # number of observations
 residuals(result)              # composed errors (also `:u`, `:v`, `:ols` via `type=`)
 fitted(result)                 # frontier fitted values x'β̂
 
-# See Section 6 (API Reference) for further diagnostics
+# See Sections 6–7 (API Reference) for further diagnostics
 # (efficiency_summary, residual_diagnostics, sf_vs_ols, lrtest),
 # plotting recipes, and prediction on new data.
 ```
@@ -565,7 +564,7 @@ Likelihood-ratio test (mixed χ̄² reference distribution)
 
 Since the LR statistic ($45.903$) is much larger than the critical value at the 1% level ($19.384$), we overwhelmingly reject the null hypothesis of an OLS model.
 
-See [Section 6.11 'Hypothesis Testing'](#sec6-hypothesis-testing) for the full reference (`sf_vs_ols`, the general `lrtest`, and the `LRTestResult` struct).
+See [Section 7.5 'Hypothesis Testing'](#sec6-hypothesis-testing) for the full reference (`sf_vs_ols`, the general `lrtest`, and the `LRTestResult` struct).
 
 
 ### Inefficiency and Efficiency Index
@@ -590,7 +589,7 @@ julia> [result.jlms  result.bc]
  0.165553   0.853446
 ```
 
-The same indices can also be obtained on new data via `predict(result; frontier, depvar, zvar, what = :jlms | :bc | :all)`. See [Section 6.13 'Prediction on New Data'](#sec6-prediction-on-new-data) for the full reference.
+The same indices can also be obtained on new data via `predict(result; frontier, depvar, zvar, what = :jlms | :bc | :all)`. See [Section 7.7 'Prediction on New Data'](#sec6-prediction-on-new-data) for the full reference.
 
 A built-in plot recipe visualizes the JLMS and BC distributions on the rice-farmer fit:
 
@@ -601,7 +600,7 @@ plot(result, :efficiency)       # JLMS + BC efficiency histograms side by side
 
 ![Histograms of the JLMS inefficiency index and the BC efficiency index](histPlot.svg)
 
-See [Section 6.12 'Plot Recipes'](#sec6-plot-recipes) for the other recipe kinds (`:residuals`, `:marginal`, `:convergence`, and the default 2×2 diagnostic panel).
+See [Section 7.6 'Plot Recipes'](#sec6-plot-recipes) for the other recipe kinds (`:residuals`, `:marginal`, `:convergence`, and the default 2×2 diagnostic panel).
 
 ### Marginal Effects
 
@@ -646,7 +645,7 @@ hline!([0.0], label=false, linestyle=:dash)
 
 The plot reveals a non-monotonic effect: production inefficiency decreased with age in the early years of the farmer's life (perhaps due to experience accumulation), but increased with age in later years (perhaps due to deteriorating physical health). Wang's (2002) model allows this non-monotonic effect by parameterizing both $\mu$ and $\sigma_u^2$ by the same vector of inefficiency determinants.
 
-See [Section 6.12 'Plot Recipes'](#sec6-plot-recipes) for the full reference of the `:marginal` recipe and the other recipe kinds.
+See [Section 7.6 'Plot Recipes'](#sec6-plot-recipes) for the full reference of the `:marginal` recipe and the other recipe kinds.
 
 
 
@@ -658,18 +657,15 @@ See [Section 6.12 'Plot Recipes'](#sec6-plot-recipes) for the full reference of 
 
 ```julia
 julia> es = efficiency_summary(result)
-(n = 271,
- mean_jlms = 0.334, std_jlms = 0.274, min_jlms = 0.071, max_jlms = 1.513,
- median_jlms = 0.237,
- quantiles_jlms = (q10 = 0.106, q20 = 0.130, q25 = 0.139, q30 = 0.166,
-                   q40 = 0.199, q50 = 0.237, q60 = 0.301, q70 = 0.369,
-                   q75 = 0.419, q80 = 0.480, q90 = 0.735),
- mean_bc = 0.746, std_bc = 0.160, min_bc = 0.224, max_bc = 0.933,
- median_bc = 0.797,
- quantiles_bc = (q10 = 0.488, q20 = 0.629, q25 = 0.669, q30 = 0.702,
-                 q40 = 0.749, q50 = 0.797, q60 = 0.827, q70 = 0.853,
-                 q75 = 0.875, q80 = 0.882, q90 = 0.903))
+EfficiencySummary  (n = 271)
+  JLMS:  mean = 0.3342  std = 0.2737  min = 0.0709  max = 1.5125  median = 0.2374
+         q10 = 0.1063  q25 = 0.1386  q50 = 0.2374  q75 = 0.4188  q90 = 0.7354
+  BC:    mean = 0.7462  std = 0.1604  min = 0.2244  max = 0.9334  median = 0.7973
+         q10 = 0.4876  q25 = 0.6686  q50 = 0.7973  q75 = 0.8754  q90 = 0.9025
+  Fields: e.g., <name>.mean_jlms, <name>.quantiles_bc.q25; full list via propertynames(<name>).
 ```
+
+The display groups summary statistics under "JLMS" and "BC" headings for readability, but the underlying struct is **flat**: top-level fields use `_jlms` / `_bc` suffixes (e.g., `es.mean_jlms`, `es.median_bc`), and the eleven-quantile vectors live inside two `NamedTuple` fields, `es.quantiles_jlms` and `es.quantiles_bc`. So `es.quantiles_bc.q25 == 0.6686`, while `es.JLMS` and `es.JLMS.q10` are not valid — the visual grouping is for display only.
 
 The median Battese–Coelli efficiency is $0.797$, meaning the typical farmer operates at about 80% of the production frontier. The dispersion is wide: the bottom decile sits at $\text{BC}=0.488$ (severe inefficiency, producing less than half of potential output), while the top decile reaches $0.903$. The JLMS index is right-skewed (mean $0.334$, median $0.237$, max $1.513$), reflecting a thin tail of highly inefficient farmers. This is consistent with the heteroscedastic specification that lets both $\mu$ and $\sigma_u^2$ vary with $\mathbf{z}_i$.
 
@@ -689,16 +685,16 @@ Both the OLS and composed residuals are negatively skewed, matching the expected
 The composed residuals $\hat\varepsilon_i = y_i - x_i'\hat\beta$ and frontier fit $x_i'\hat\beta$ are returned by `residuals(result)` and `fitted(result)`. Both accept a `type` keyword to extract alternative quantities such as $\hat u_i$, $\hat v_i$, or OLS residuals.
 
 
-See ['Diagnostic Functions' in Section 6.10](#sec6-diagnostic-functions) for the full reference (`residuals`, `fitted`, `efficiency_summary`, `residual_diagnostics`), including all keyword options and the complete list of returned NamedTuple fields.
+See ['Diagnostic Functions' in Section 7.4](#sec6-diagnostic-functions) for the full reference (`residuals`, `fitted`, `efficiency_summary`, `residual_diagnostics`), including all keyword options and the complete list of fields on the returned structs.
 
 
 <a id="sec5-prediction-on-new-data"></a>
 
 ### Prediction on New Data
 
-The fitted object can be applied to new observations through `predict(result; frontier, zvar, depvar, what)`. See ['Prediction on New Data' in Section 6.13](#sec6-prediction-on-new-data) for the full reference (signature, the `what`-keyword table, and supported model classes).
+The fitted object can be applied to new observations through `predict(result; frontier, zvar, depvar, what)`. See ['Prediction on New Data' in Section 7.7](#sec6-prediction-on-new-data) for the full reference (signature, the `what`-keyword table, and supported model classes).
 
-Given any new observations $(X_{\text{new}}, Z_{\text{new}}, y_{\text{new}})$, `predict()` reuses the estimated coefficients — no refitting — to return the same family of quantities available at training time: the frontier fit $x_i'\hat\beta$, composed residuals, response-scale fit, the JLMS inefficiency index $E(u_i\mid\hat\varepsilon_i)$, the Battese–Coelli efficiency index $E(e^{-u_i}\mid\hat\varepsilon_i)$, and marginal effects $\partial E(u_i)/\partial z_{ij}$. The `what` keyword selects the target.
+Given any new observations $(X_{\text{new}}, Z_{\text{new}}, y_{\text{new}})$, `predict()` reuses the estimated coefficients — no refitting — to return the same family of quantities available at training time: the frontier fit $x_i'\hat\beta$, composed residuals, response-scale fit, the JLMS inefficiency index $E(u_i\mid\hat\varepsilon_i)$, the Battese–Coelli efficiency index $E(e^{-u_i}\mid\hat\varepsilon_i)$, and the observation-level marginal effects $\partial E(u_i)/\partial \mathbf{z}_i$. The `what` keyword selects the target.
 
 
 This interface supports several post-estimation tasks:
@@ -716,7 +712,7 @@ This interface supports several post-estimation tasks:
 * **Scoring new entrants.** Apply an existing fitted model to newly collected firms without re-estimating the model.
 
 
-The exact signature, data-requirement table, and currently-supported model classes are documented in [Section 6.13 'Prediction on New Data'](#sec6-prediction-on-new-data).
+The exact signature, data-requirement table, and currently-supported model classes are documented in [Section 7.7 'Prediction on New Data'](#sec6-prediction-on-new-data).
 
 ### Saving Results
 
@@ -741,13 +737,9 @@ CSV.write("marginal.csv", result.marginal)     # marginal effects (DataFrame)
 
 <a id="api-reference"></a>
 
-## 6. API Reference
+## 6. API Reference I: Model building and fitting
 
-The API is grouped in two sets. **Part A — Model building and fitting** (6.1–6.6) covers the functions used to specify and estimate a model. **Part B — Post-estimation accessors** (6.7–6.13) covers the methods that operate on the `SFResult` object returned by `sfmodel_fit()`, including StatsAPI accessors, diagnostic functions, hypothesis tests, plot recipes, and `predict()`.
-
----
-
-### Part A: Model building and fitting
+This section documents the functions used to specify and estimate a model: `sfmodel_spec()`, `sfmodel_method()`, `sfmodel_init()`, `sfmodel_opt()`, `sfmodel_fit()`, and the critical-value utilities `sfmodel_MixTable()` / `sfmodel_ChiSquareTable()`. Methods that operate on the fitted result object are documented in [Section 7 (API Reference II: Post-Estimation Accessors)](#api-reference-ii).
 
 <a id="sfmodel_spec"></a>
 
@@ -766,13 +758,13 @@ The `sfmodel_spec()` function creates a model specification object that encapsul
 | ------------ | ------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | -------- |
 | `depvar`     | Vector                   | Dependent variable. Cross-sectional: $N$ observations. Panel: $N \times T$ stacked by firm.                                                                                                                                                                                                                                                                                                                                                                                                                          | Yes      |
 | `frontier`   | Matrix                   | Covariate matrix for the frontier equation, dimension$N\times K$. Accepts a `Matrix` or a list form `[v1, v2, ...]` that is internally assembled into a matrix. Cross-sectional: include a column of ones (`1`) for intercept. **Panel: do NOT include a constant column** (within-demeaning eliminates it).                                                                                                                                                                                                        | Yes      |
-| `noise`      | Symbol                   | Distribution of the noise term$v$. Cross-sectional: `:Normal`, `:StudentT`, `:Laplace`. Panel: `:Normal` only. See [Section 7](#supported-models).                                                                                                                                                                                                                                                                                                                                                                  | Yes      |
-| `ineff`      | Symbol                   | Distribution of the inefficiency term$u$. Supported options: `:HalfNormal`, `:TruncatedNormal`, `:Exponential`, `:Weibull`, `:Lognormal`, `:Lomax`, `:Rayleigh`, and `:Gamma`. See [Section 7](#supported-models). Note: `:Gamma` is MCI only; `method=:MLE` supports only `:HalfNormal`, `:TruncatedNormal`, `:Exponential`.                                                                                                                                                                                       | Yes      |
-| `datatype`   | Symbol                   | Data type.`:cross_sectional` (default), `:panel_TFE` (Wang and Ho 2010 true fixed-effect), `:panel_TFE_CSW` (Chen, Schmidt, and Wang 2014, MLE only), or `:panel_TRE` (true random-effect, MLE only). See [Section 9](#panel-data-models).                                                                                                                                                                                                                                                                         | No       |
+| `noise`      | Symbol                   | Distribution of the noise term$v$. Cross-sectional: `:Normal`, `:StudentT`, `:Laplace`. Panel: `:Normal` only. See [Section 8](#supported-models).                                                                                                                                                                                                                                                                                                                                                                  | Yes      |
+| `ineff`      | Symbol                   | Distribution of the inefficiency term$u$. Supported options: `:HalfNormal`, `:TruncatedNormal`, `:Exponential`, `:Weibull`, `:Lognormal`, `:Lomax`, `:Rayleigh`, and `:Gamma`. See [Section 8](#supported-models). Note: `:Gamma` is MCI only; `method=:MLE` supports only `:HalfNormal`, `:TruncatedNormal`, `:Exponential`.                                                                                                                                                                                       | Yes      |
+| `datatype`   | Symbol                   | Data type.`:cross_sectional` (default), `:panel_TFE` (Wang and Ho 2010 true fixed-effect), `:panel_TFE_CSW` (Chen, Schmidt, and Wang 2014, MLE only), or `:panel_TRE` (true random-effect, MLE only). See [Section 10](#panel-data-models).                                                                                                                                                                                                                                                                         | No       |
 | `type`       | Symbol                   | Frontier type. Use`:production` or `:prod` for production frontier ($\varepsilon_i = v_i - u_i$), and `:cost` for cost frontier ($\varepsilon_i = v_i + u_i$).                                                                                                                                                                                                                                                                                                                                                      | No       |
 | `zvar`       | Matrix                   | Covariate matrix. <br>**Cross-sectional:** for heteroscedasticity equations, dimension $N\times L$; include a column of ones if an intercept is required. When `hetero=:scaling`, the `zvar` matrix supplies the $\mathbf{z}_i$ variables for the scaling function $h(\mathbf{z}_i)=\exp(\mathbf{z}_i'\boldsymbol{\delta})$; *do NOT include a constant column* (for identification).<br>**Panel:** for scaling function $h(z)=\exp(z'\delta)$, dimension $NT \times L$; *do NOT include a constant column*. Optional for both. | No       |
 | `copula`     | Symbol                   | *Cross-sectional only.* Copula for dependence between $v$ and $u$. Options: `:None` (default), `:Gaussian`, `:Clayton`, `:Clayton90`, `:Gumbel`. Not available with panel datatypes.                                                                                                                                                                                                                                                                                                                                | No       |
-| `hetero`     | Vector{Symbol} or Symbol | *Cross-sectional only.* Parameters of the distributional specification that are allowed to be heteroscedastic (e.g., `[:mu, :sigma_sq]`), **or** the symbol `:scaling` to activate the scaling property model. Not available with panel datatypes. See the Hetero Options column in [Section 7](#supported-models) and [Section 8.5](#scaling-property-model-cross-sectional).                                                                                                                                                            | No       |
+| `hetero`     | Vector{Symbol} or Symbol | *Cross-sectional only.* Parameters of the distributional specification that are allowed to be heteroscedastic (e.g., `[:mu, :sigma_sq]`), **or** the symbol `:scaling` to activate the scaling property model. Not available with panel datatypes. See the Hetero Options column in [Section 8](#supported-models) and [Section 9.5](#scaling-property-model-cross-sectional).                                                                                                                                                            | No       |
 | `id`         | Vector                   | *Panel only.* Unit identifier column. Required for all panel datatypes. Data must be grouped by unit (contiguous rows for each firm). For balanced panels, create an id column: e.g., `id = repeat(1:N, inner=T)`.                                                                                                                                                                                                                                                                                                  | No       |
 | `varnames`   | Vector{String}           | Variable names used in output tables. If`nothing` (default), names are generated automatically.                                                                                                                                                                                                                                                                                                                                                                                                                     | No       |
 | `eqnames`    | Vector{String}           | Equation block names (e.g.,`["frontier", "mu", "ln_sigma_u_sq"]`). If `nothing` (default), names are generated from `ineff`.                                                                                                                                                                                                                                                                                                                                                                                        | No       |
@@ -817,7 +809,7 @@ spec2 = sfmodel_spec(
     zvar = Z,
     noise = :Normal,
     ineff = :TruncatedNormal,
-    hetero = [:mu],  # or [:sigma_sq], [:mu, :sigma_sq]. See the Hetero Options column in Section 7
+    hetero = [:mu],  # or [:sigma_sq], [:mu, :sigma_sq]. See the Hetero Options column in Section 8
     varnames = ["constant", "land", "Iland", "labor", "bull", "cost", "year",  # frontier
                 "constant", "age", "schooling", "year",                        # mu
                 "constant",                                                    # ln_sigma_u_sq
@@ -843,7 +835,7 @@ spec3 = sfmodel_spec(
 
 #### Example: Scaling Property Model
 
-The scaling property model uses `hetero = :scaling`. In this specification, `zvar` provides the environmental variables $\mathbf{z}_i$ for the scaling function $h(\mathbf{z}_i) = \exp(\mathbf{z}_i'\boldsymbol{\delta})$, and the inefficiency distribution parameters remain scalar (homoscedastic). The `zvar` matrix must **not** contain a constant column (for identification; see [Section 8.5](#scaling-property-model-cross-sectional)).
+The scaling property model uses `hetero = :scaling`. In this specification, `zvar` provides the environmental variables $\mathbf{z}_i$ for the scaling function $h(\mathbf{z}_i) = \exp(\mathbf{z}_i'\boldsymbol{\delta})$, and the inefficiency distribution parameters remain scalar (homoscedastic). The `zvar` matrix must **not** contain a constant column (for identification; see [Section 9.5](#scaling-property-model-cross-sectional)).
 
 ```julia
 # Scaling property model (using keyword form as an example)
@@ -932,7 +924,7 @@ spec = sfmodel_spec(
 > **Notes:** 
 >  - Panel models do not support `copula`. 
 >  - For `hetero`, it is only permissible in `panel_TFE` and has to be `hetero=:scaling` which is the default and may be omitted. That is, heterogeneity enters the model through the scaling function $h(z_{it}) = \exp(z_{it}'\delta)$. The `hetero` is not available with other panel data models. 
->  - The `frontier` and `zvar` matrices must NOT include a constant column (except `panel_TRE`, where a constant in `frontier` is allowed). See [Section 9](#panel-data-models) for details.
+>  - The `frontier` and `zvar` matrices must NOT include a constant column (except `panel_TRE`, where a constant in `frontier` is allowed). See [Section 10](#panel-data-models) for details.
 
 ---
 
@@ -1344,7 +1336,7 @@ Returns a `NamedTuple` with comprehensive results:
 | `marginal`      | DataFrame  | Observation-level marginal effects on E(u) |
 | `marginal_mean` | NamedTuple | Mean marginal effects                      |
 
-> For the scaling property model (`hetero = :scaling`), marginal effects are computed via $\partial E(u_i) / \partial z_{ij} = \delta_j \cdot h(\mathbf{z}_i) \cdot E(u_i^*)$, using automatic differentiation. The coefficient $\delta_j$ directly gives the semi-elasticity $\partial \ln E(u_i) / \partial z_{ij} = \delta_j$. See [Section 8.5](#scaling-property-model-cross-sectional).
+> For the scaling property model (`hetero = :scaling`), the observation-level marginal effects are computed via $\partial E(u_i) / \partial \mathbf{z}_i = \boldsymbol{\delta} \cdot h(\mathbf{z}_i) \cdot E(u_i^*)$, using automatic differentiation. The coefficient vector $\boldsymbol{\delta}$ directly gives the semi-elasticity $\partial \ln E(u_i) / \partial \mathbf{z}_i = \boldsymbol{\delta}$. See [Section 9.5](#scaling-property-model-cross-sectional).
 
 **OLS Diagnostics**
 
@@ -1440,11 +1432,15 @@ When `show_table = true`, the function prints:
 
 #### Convergence Warnings
 
-The function monitors convergence and sets `redflag = 1` if:
+`Optim.jl` declares convergence as soon as **any** of its stopping criteria is met — a small gradient norm (`g_abstol`), a small change in the log-likelihood (`f_abstol`), or a small change in the parameter vector (`x_abstol`). Because of this, `result.converged = true` does not by itself guarantee that the gradient at the reported optimum is small: the optimizer may have stopped because the objective or the parameters stopped moving, while the gradient remained sizeable.
 
-- Gradient norm exceeds 0.1 or is NaN
+`SFrontiers.jl` therefore returns an additional warning flag, `redflag`, that re-examines the quality of the result after `Optim` returns. `redflag = 1` whenever any of the following holds, regardless of what `converged` reports:
+
+- Gradient norm exceeds 0.1 (or is `NaN`)
 - Iteration limit was reached
-- Variance-covariance matrix has non-positive diagonal elements
+- Variance–covariance matrix has non-positive diagonal elements
+
+Treat `redflag = 1` as a signal to inspect `gradient_norm` and re-run with different initial values, more iterations, or a different solver (see [Handling Convergence Issues](#handling-convergence-issues)).
 
 <a id="sfmodel_mixtable-and-sfmodel_chisquaretable"></a>
 
@@ -1496,18 +1492,20 @@ sfmodel_MixTable(1)
 # If LR > 2.705, reject H0 (inefficiency is statistically significant)
 ```
 
-> **Easier alternative: `sf_vs_ols()`.** The package provides a one-call wrapper that automates exactly this test. `sf_vs_ols(result; dof = ...)` reads the stored OLS log-likelihood from the fitted object, computes the LR statistic, selects the mixed $\bar{\chi}^2$ reference distribution, and returns an `LRTestResult` containing the statistic, p-value, and the critical values at the 10%, 5%, 2.5%, and 1% levels. See [Section 6.11 'Hypothesis Testing'](#sec6-hypothesis-testing) for the full signature and return-field reference. The `sfmodel_MixTable` / `sfmodel_ChiSquareTable` utilities remain useful when you need the raw critical values for a *different* LR test (e.g., restrictions on frontier coefficients or comparing two nested SF models by hand).
+> **Easier alternative: `sf_vs_ols()`.** The package provides a one-call wrapper that automates exactly this test. `sf_vs_ols(result; dof = ...)` reads the stored OLS log-likelihood from the fitted object, computes the LR statistic, selects the mixed $\bar{\chi}^2$ reference distribution, and returns an `LRTestResult` containing the statistic, p-value, and the critical values at the 10%, 5%, 2.5%, and 1% levels. See [Section 7.5 'Hypothesis Testing'](#sec6-hypothesis-testing) for the full signature and return-field reference. The `sfmodel_MixTable` / `sfmodel_ChiSquareTable` utilities remain useful when you need the raw critical values for a *different* LR test (e.g., restrictions on frontier coefficients or comparing two nested SF models by hand).
 
 ---
 
 
-### Part B: Post-estimation accessors
+<a id="api-reference-ii"></a>
 
-The remaining entries document the methods that operate on the `SFResult` object returned by `sfmodel_fit()`. They dispatch uniformly across all backends (MLE, MSLE, MCI, and panel) unless noted otherwise.
+## 7. API Reference II: Post-Estimation Accessors
+
+This section documents the methods that operate on the `SFResult` object returned by `sfmodel_fit()`. They dispatch uniformly across all backends (MLE, MSLE, MCI, and panel) unless noted otherwise.
 
 <a id="standard-accessors"></a>
 
-### 6.7 Standard Accessors (StatsAPI Interface)
+### 7.1 Standard Accessors (StatsAPI Interface)
 
 The object returned by `sfmodel_fit()` is a thin `SFResult` wrapper around the result NamedTuple. All existing field-access forms (`result.coeff`, `result.var_cov_mat`, `result.loglikelihood`, etc.) continue to work unchanged. In addition, `SFrontiers.jl` implements the standard `StatsAPI.jl` interface, so fitted models can be queried with the canonical Julia statistical accessors. These methods dispatch uniformly across all backends (MLE, MSLE, MCI, and panel).
 
@@ -1563,7 +1561,7 @@ aic(result);  bic(result)        # information criteria
 
 <a id="efficiency-indices"></a>
 
-### 6.8 Efficiency Indices
+### 7.2 Efficiency Indices
 
 Two observation-level indices summarise where each firm stands relative to the frontier: the JLMS inefficiency index $E(u_i \mid \varepsilon_i)$ (higher means more inefficient) and the Battese–Coelli (BC) efficiency index $E(e^{-u_i} \mid \varepsilon_i)$ (bounded in $[0,1]$; a BC value of $0.85$ means the firm produces $85\%$ of its potential output). Both are stored as fields on the fitted result and are populated automatically when the model is fit with `jlms_bc_index = true`.
 
@@ -1601,7 +1599,7 @@ println("Firm 1 inefficiency: ", result.jlms[1])
 
 <a id="api-marginal-effects"></a>
 
-### 6.9 Marginal Effects
+### 7.3 Marginal Effects
 
 Marginal effects quantify how changes in the Z variables affect expected inefficiency $E(u)$. A positive marginal effect means that increasing $z_j$ raises expected inefficiency. Marginal effects are populated on the fitted result when `zvar` is specified in `sfmodel_spec()` and `sfmodel_fit(..., marginal = true)` is used.
 
@@ -1616,7 +1614,7 @@ result.marginal_mean    # sample-mean marginal effects (NamedTuple)
 
 | Field            | Type         | Description                                                                                    |
 | ---------------- | ------------ | ---------------------------------------------------------------------------------------------- |
-| `marginal`       | `DataFrame`  | One row per observation; columns `marg_<name>` give $\partial E(u_i) / \partial z_{ij}$.       |
+| `marginal`       | `DataFrame`  | One row per observation; columns `marg_<name>` give the observation-level $\partial E(u_i) / \partial \mathbf{z}_i$, one column per Z variable. |
 | `marginal_mean`  | `NamedTuple` | Sample averages of the observation-level effects, one entry per Z variable.                    |
 
 #### Return Value
@@ -1641,7 +1639,7 @@ println("Firm 1 marginal effect of age: ",
 
 <a id="sec6-diagnostic-functions"></a>
 
-### 6.10 Diagnostic Functions
+### 7.4 Diagnostic Functions
 
 Beyond the StatsAPI accessors, the package provides a small family of post-estimation diagnostic methods that dispatch uniformly across all backends. Together they cover the four quantities most often needed after a fit: model residuals, fitted values, an efficiency-distribution summary, and a residual-skew/normality check.
 
@@ -1675,7 +1673,7 @@ residual_diagnostics(result)
 | `fitted(result)` (default `type = :frontier`)     | $x_i'\hat\beta$ (frontier fit)                                        |
 | `fitted(result; type = :response)`                | $x_i'\hat\beta \mp \hat u_i$ (response-scale fit)                     |
 
-`efficiency_summary` returns a `NamedTuple` of summary statistics for the JLMS inefficiency and the Battese–Coelli efficiency indices:
+`efficiency_summary` returns an `EfficiencySummary` struct holding summary statistics for the JLMS inefficiency and the Battese–Coelli efficiency indices:
 
 | Field                                  | Meaning                                                       |
 | -------------------------------------- | ------------------------------------------------------------- |
@@ -1714,7 +1712,7 @@ rd   = residual_diagnostics(result)   # includes JB test + sign check
 
 <a id="sec6-hypothesis-testing"></a>
 
-### 6.11 Hypothesis Testing
+### 7.5 Hypothesis Testing
 
 Two likelihood-ratio (LR) testing utilities are provided for fitted SF models. `sf_vs_ols` performs the boundary LR test of the stochastic frontier against its auxiliary OLS baseline ($H_0: \sigma_u^2 = 0$), automatically selecting the mixed $\bar{\chi}^2$ reference distribution (Kodde and Palm 1986). `lrtest` is a general nested LR test for two fitted SF models, with an optional switch to the boundary reference. Both return a single `LRTestResult` struct with the statistic, p-value, and pre-computed critical values.
 
@@ -1760,7 +1758,7 @@ lrtest(result_restricted, result_unrestricted; mixed = false)   # general nested
 
 <a id="sec6-plot-recipes"></a>
 
-### 6.12 Plot Recipes
+### 7.6 Plot Recipes
 
 The package provides a set of built-in diagnostic plots that you can generate directly from a fitted model with `plot(result, ...)`. To use them, load `Plots.jl` alongside `SFrontiers.jl`; see [Section 3](#installation-and-dependencies) Note 3.
 
@@ -1813,7 +1811,7 @@ plot(result, :marginal, df.age)  # marginal effect against age
 
 <a id="sec6-prediction-on-new-data"></a>
 
-### 6.13 Prediction on New Data
+### 7.7 Prediction on New Data
 
 A fitted model can be applied to new observations through a single entry point, `predict()`. The `what` keyword selects the prediction target: the frontier value, the composed residual, the response-scale fit, the JLMS or BC efficiency index, the observation-level marginal effects, or all of the above in one call. Calling `predict()` on the original training data reproduces the cached `result.jlms` / `result.bc` **bit-for-bit**; calling it on new data yields the corresponding out-of-sample quantities.
 
@@ -1846,7 +1844,7 @@ A `Vector{Float64}` for scalar targets, a `Matrix` / `DataFrame` for `:marginal`
 | `:response`   | ✓                      | ✓                       | ✓                      | ✓           | $x_i'\hat\beta \mp \hat u_i$                 |
 | `:jlms`       | ✓                      | ✓                       | ✓                      | ✓           | $E(u_i\mid\hat\varepsilon_i)$                |
 | `:bc`         | ✓                      | ✓                       | ✓                      | ✓           | $E(e^{-u_i}\mid\hat\varepsilon_i)$           |
-| `:marginal`   |                        | ✓                       |                        |             | $\partial E(u_i)/\partial z_{ij}$            |
+| `:marginal`   |                        | ✓                       |                        |             | $\partial E(u_i)/\partial \mathbf{z}_i$      |
 | `:all`        | ✓                      | ✓                       | ✓                      | ✓           | `NamedTuple` packaging all of the above      |
 
 † $Z_{\text{new}}$ is required only when the fitted model uses exogenous determinants (`hetero` or `:scaling`). Inefficiency and efficiency indices additionally require $y_{\text{new}}$ because they are conditional on $\hat\varepsilon_i$.
@@ -1897,7 +1895,7 @@ See [Section 5 'Prediction on New Data'](#sec5-prediction-on-new-data) for a dis
 
 <a id="supported-models"></a>
 
-## 7. Supported Models
+## 8. Supported Models
 
 ### Noise Distributions
 
@@ -1923,7 +1921,7 @@ Each table below has five columns: **Symbol** is the keyword used in `sfmodel_sp
 | `:Rayleigh`        | $u \sim \text{Rayleigh}(\sigma)$                        | `ln_sigma_sq` $= \log(\sigma^2)$                                   | cross, panel | MCI, MSLE      | `:sigma_sq` for $\sigma^2$                        |
 | `:Gamma`           | $u \sim \text{Gamma}(k, \theta)$                        | `ln_k` $= \log(k)$ (shape)<br>`ln_theta` $= \log(\theta)$ (scale)  | cross, panel | MCI            | `:k` for $k$<br>`:theta` for $\theta$             |
 
-**Note of Scaling property model alternative**: Instead of making individual distribution parameters heteroscedastic (via `hetero = [:mu]`, etc.), you can use `hetero = :scaling` to model heterogeneity through a single multiplicative scaling function $u_i = h(\mathbf{z}_i) \cdot u_i^*$. Under scaling, all distribution parameters remain scalar and a separate set of $\boldsymbol{\delta}$ coefficients is estimated. All 8 inefficiency distributions support the scaling property model. See [Section 8.5](#scaling-property-model-cross-sectional).
+**Note of Scaling property model alternative**: Instead of making individual distribution parameters heteroscedastic (via `hetero = [:mu]`, etc.), you can use `hetero = :scaling` to model heterogeneity through a single multiplicative scaling function $u_i = h(\mathbf{z}_i) \cdot u_i^*$. Under scaling, all distribution parameters remain scalar and a separate set of $\boldsymbol{\delta}$ coefficients is estimated. All 8 inefficiency distributions support the scaling property model. See [Section 9.5](#scaling-property-model-cross-sectional).
 
 ### Copula Models
 
@@ -2064,7 +2062,7 @@ The choice of inefficiency distribution affects the shape of the estimated ineff
 
 <a id="special-topics"></a>
 
-## 8. Special Topics
+## 9. Special Topics
 
 ### Choosing Between MLE, MCI, and MSLE
 
@@ -2200,7 +2198,7 @@ where $u_i^*$ follows a homoscedastic (scalar-parameter) base distribution and $
 1. **Jacobian cancellation**: The change of variable $u_i = h_i u_i^*$ produces a Jacobian $h_i$ that cancels with the $1/h_i$ from the density transformation $f_u(u_i) = \frac{1}{h_i} f_{u^*}(u_i/h_i)$, leaving $f_{u^*}(u_i^*)$ directly in all integrals.
 2. **JLMS factorization**: $E(u_i \mid \varepsilon_i) = h_i \cdot E(u_i^* \mid \varepsilon_i)$.
 3. **BC non-factorization**: $E(e^{-u_i} \mid \varepsilon_i) = E(e^{-h_i u_i^*} \mid \varepsilon_i)$; the $h_i$ must remain inside the exponential.
-4. **Semi-elasticity**: $\partial \ln E(u_i) / \partial z_{ij} = \delta_j$, providing direct interpretation of the scaling coefficients.
+4. **Semi-elasticity**: $\partial \ln E(u_i) / \partial \mathbf{z}_i = \boldsymbol{\delta}$, providing direct interpretation of the scaling coefficients.
 
 **Unconditional mean** $E(u_i) = h(\mathbf{z}_i) \cdot E(u_i^*)$, where $E(u_i^*)$ depends on the base distribution:
 
@@ -2502,7 +2500,7 @@ If estimation fails to converge:
 
 <a id="panel-data-models"></a>
 
-## 9. Panel Data Models
+## 10. Panel Data Models
 
 The module supports several panel stochastic frontier models for estimating **firm-level inefficiency** from balanced or unbalanced panel data. Panel estimation is accessed through the same unified API by setting the `datatype` argument in `sfmodel_spec()`.
 
@@ -2519,7 +2517,7 @@ For `panel_TFE`, the simulation-based methods (MCI, MSLE) support all 8 ineffici
 
 <a id="theoretical-background"></a>
 
-### 9.1 Theoretical Background
+### 10.1 Theoretical Background
 
 #### Wang and Ho (2010) True Fixed-Effect (`panel_TFE`)
 
@@ -2578,7 +2576,7 @@ The choice between TRE and TFE mirrors the classic random-effects vs. fixed-effe
 - Use **TRE** when firm-specific effects are believed to be uncorrelated with the regressors. TRE is more efficient (uses both within- and between-variation) but inconsistent if the uncorrelatedness assumption fails.
 - Use **TFE** (Wang-Ho or CSW) when correlation between firm effects and regressors is likely. TFE is consistent regardless of this correlation but less efficient.
 
-### 9.2 Panel Quick Start
+### 10.2 Panel Quick Start
 
 #### Example: Panel TFE with MSLE (simulation-based)
 
@@ -2678,7 +2676,7 @@ meth = sfmodel_method(method = :MLE)
 result = sfmodel_fit(spec = spec_tre, method = meth)
 ```
 
-### 9.3 Panel vs. Cross-Sectional Differences
+### 10.3 Panel vs. Cross-Sectional Differences
 
 
 | Feature                      | Cross-Sectional                                                    | Panel (TFE / TFE_CSW / TRE)                                 |
@@ -2698,14 +2696,14 @@ result = sfmodel_fit(spec = spec_tre, method = meth)
 
 
 
-### 9.4 No Constant Columns
+### 10.4 No Constant Columns
 
 In the Wang and Ho (2010) panel model (`panel_TFE`), within-group demeaning eliminates any constant terms. Therefore:
 
 - **Do NOT include a column of ones** in `frontier` or `zvar`.
 - The model will raise an error if a constant column is detected.
 - This differs from cross-sectional models, where constants are typically required.
-- The same applies to `panel_TFE_CSW`. For `panel_TRE`, a constant term **is** allowed in `frontier` (see [Section 9.1](#theoretical-background)).
+- The same applies to `panel_TFE_CSW`. For `panel_TRE`, a constant term **is** allowed in `frontier` (see [Section 10.1](#theoretical-background)).
 
 
 

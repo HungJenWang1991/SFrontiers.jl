@@ -2709,17 +2709,33 @@ In the Wang and Ho (2010) panel model (`panel_TFE`), within-group demeaning elim
 
 ---
 
-## Citation
+## References
+
+- Battese, G.E. and Coelli, T.J. (1988). "Prediction of firm-level technical efficiencies with a generalized frontier production function and panel data," *Journal of Econometrics*, 38(3), 387-399.
+
+- Battese, G.E. and Coelli, T.J. (1995). "A model for technical inefficiency effects in a stochastic frontier production function for panel data," *Empirical Economics*, 20(2), 325-332.
 
 - Chen, Y.-Y., Schmidt, P. and Wang, H.-J. (2014). "Consistent estimation of the fixed effects stochastic frontier model," *Journal of Econometrics*, 181(2), 65-76.
 
 - Chen, Y.-Y. and Wang, H.-J. (2026) "Tradeoff between Efficiency and Resilience: Evidence from Power Plants and Rice Farmers," *manuscript*, National Taiwan University.
+
+- Greene, W. (2005). "Reconsidering heterogeneity in panel data estimators of the stochastic frontier model," *Journal of Econometrics*, 126(2), 269-303.
+
+- Jondrow, J., Lovell, C.A.K., Materov, I.S., and Schmidt, P. (1982). "On the estimation of technical inefficiency in the stochastic frontier production function model," *Journal of Econometrics*, 19(2-3), 233-238.
+
+- Kodde, D.A. and Palm, F.C. (1986). "Wald criteria for jointly testing equality and inequality restrictions," *Econometrica*, 54(5), 1243-1248.
 
 - Wang, H.-J. (2002) "Heteroscedasticity and Non-Monotonic Efficiency Effects of a Stochastic Frontier Model," *Journal of Productivity Analysis*, 18, pp.241-253.
 
 - Wang, H.-J. and Cheng, E.-T. (2026) "SFrontiers.jl: A Simulation-Based Likelihood Estimation Framework for Stochastic Frontier Models with Distributional Flexibility," *manuscript*, National Taiwan University.
 
 - Wang, H.-J. and Ho, C.-W. (2010). "Estimating fixed-effect panel stochastic frontier models by model transformation," *Journal of Econometrics*, 157(2), 286-296.
+
+---
+
+## Citation
+
+- Wang, H.-J. and Cheng, E.-T. (2026) "SFrontiers.jl: A Simulation-Based Likelihood Estimation Framework for Stochastic Frontier Models with Distributional Flexibility," *manuscript*, National Taiwan University.
 
 
 

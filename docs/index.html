@@ -11,7 +11,7 @@
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
   <link href="https://fonts.googleapis.com/css2?family=Lato:ital,wght@0,300;0,400;0,700;0,900;1,400&display=swap" rel="stylesheet" />
-  <script
+  <script defer=""
   src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-chtml-full.js"
   type="text/javascript"></script>
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/styles/github.min.css" />
@@ -426,6 +426,7 @@
     <li><a href="#no-constant-columns" id="toc-no-constant-columns">10.4
     No Constant Columns</a></li>
     </ul></li>
+    <li><a href="#references" id="toc-references">References</a></li>
     <li><a href="#citation" id="toc-citation">Citation</a></li>
     </ul></li>
     </ul>
@@ -1094,59 +1095,59 @@ fields provide programmatic access to all outputs:</p>
 <col style="width: 71%" />
 </colgroup>
 <thead>
-<tr class="header">
+<tr>
 <th>Field</th>
 <th>Description</th>
 </tr>
 </thead>
 <tbody>
-<tr class="odd">
+<tr>
 <td><code>result.coeff</code></td>
 <td>Full estimated parameter vector</td>
 </tr>
-<tr class="even">
+<tr>
 <td><code>result.std_err</code></td>
 <td>Asymptotic standard errors</td>
 </tr>
-<tr class="odd">
+<tr>
 <td><code>result.var_cov_mat</code></td>
 <td>Variance–covariance matrix</td>
 </tr>
-<tr class="even">
+<tr>
 <td><code>result.table</code></td>
 <td>Formatted coefficient table</td>
 </tr>
-<tr class="odd">
+<tr>
 <td><code>result.jlms</code></td>
 <td>JLMS inefficiency index<span class="math inline">\(E[u_i \mid
 \varepsilon_i]\)</span></td>
 </tr>
-<tr class="even">
+<tr>
 <td><code>result.bc</code></td>
 <td>Battese–Coelli efficiency index<span
 class="math inline">\(E[\exp(-u_i) \mid \varepsilon_i]\)</span></td>
 </tr>
-<tr class="odd">
+<tr>
 <td><code>result.marginal</code></td>
 <td>Observation-level marginal effects (DataFrame)</td>
 </tr>
-<tr class="even">
+<tr>
 <td><code>result.marginal_mean</code></td>
 <td>Sample mean of marginal effects</td>
 </tr>
-<tr class="odd">
+<tr>
 <td><code>result.loglikelihood</code></td>
 <td>Log-likelihood of the estimated model</td>
 </tr>
-<tr class="even">
+<tr>
 <td><code>result.OLS_loglikelihood</code></td>
 <td>Log-likelihood of the OLS model</td>
 </tr>
-<tr class="odd">
+<tr>
 <td><code>result.OLS_resid_skew</code></td>
 <td>Skewness of OLS residuals</td>
 </tr>
-<tr class="even">
+<tr>
 <td><code>result.converged</code></td>
 <td>Whether the optimizer converged</td>
 </tr>
@@ -1406,7 +1407,7 @@ the choice of estimation method.</p>
 <col style="width: 1%" />
 </colgroup>
 <thead>
-<tr class="header">
+<tr>
 <th>Argument</th>
 <th>Type</th>
 <th>Description</th>
@@ -1414,7 +1415,7 @@ the choice of estimation method.</p>
 </tr>
 </thead>
 <tbody>
-<tr class="odd">
+<tr>
 <td><code>depvar</code></td>
 <td>Vector</td>
 <td>Dependent variable. Cross-sectional: <span
@@ -1422,7 +1423,7 @@ class="math inline">\(N\)</span> observations. Panel: <span
 class="math inline">\(N \times T\)</span> stacked by firm.</td>
 <td>Yes</td>
 </tr>
-<tr class="even">
+<tr>
 <td><code>frontier</code></td>
 <td>Matrix</td>
 <td>Covariate matrix for the frontier equation, dimension<span
@@ -1433,7 +1434,7 @@ into a matrix. Cross-sectional: include a column of ones
 column</strong> (within-demeaning eliminates it).</td>
 <td>Yes</td>
 </tr>
-<tr class="odd">
+<tr>
 <td><code>noise</code></td>
 <td>Symbol</td>
 <td>Distribution of the noise term<span
@@ -1443,7 +1444,7 @@ class="math inline">\(v\)</span>. Cross-sectional: <code>:Normal</code>,
 8</a>.</td>
 <td>Yes</td>
 </tr>
-<tr class="even">
+<tr>
 <td><code>ineff</code></td>
 <td>Symbol</td>
 <td>Distribution of the inefficiency term<span
@@ -1457,7 +1458,7 @@ only <code>:HalfNormal</code>, <code>:TruncatedNormal</code>,
 <code>:Exponential</code>.</td>
 <td>Yes</td>
 </tr>
-<tr class="odd">
+<tr>
 <td><code>datatype</code></td>
 <td>Symbol</td>
 <td>Data type.<code>:cross_sectional</code> (default),
@@ -1467,7 +1468,7 @@ only <code>:HalfNormal</code>, <code>:TruncatedNormal</code>,
 href="#panel-data-models">Section 10</a>.</td>
 <td>No</td>
 </tr>
-<tr class="even">
+<tr>
 <td><code>type</code></td>
 <td>Symbol</td>
 <td>Frontier type. Use<code>:production</code> or <code>:prod</code> for
@@ -1476,7 +1477,7 @@ u_i\)</span>), and <code>:cost</code> for cost frontier (<span
 class="math inline">\(\varepsilon_i = v_i + u_i\)</span>).</td>
 <td>No</td>
 </tr>
-<tr class="odd">
+<tr>
 <td><code>zvar</code></td>
 <td>Matrix</td>
 <td>Covariate matrix. <br><strong>Cross-sectional:</strong> for
@@ -1494,7 +1495,7 @@ class="math inline">\(NT \times L\)</span>; <em>do NOT include a
 constant column</em>. Optional for both.</td>
 <td>No</td>
 </tr>
-<tr class="even">
+<tr>
 <td><code>copula</code></td>
 <td>Symbol</td>
 <td><em>Cross-sectional only.</em> Copula for dependence between <span
@@ -1504,7 +1505,7 @@ class="math inline">\(u\)</span>. Options: <code>:None</code> (default),
 <code>:Gumbel</code>. Not available with panel datatypes.</td>
 <td>No</td>
 </tr>
-<tr class="odd">
+<tr>
 <td><code>hetero</code></td>
 <td>Vector{Symbol} or Symbol</td>
 <td><em>Cross-sectional only.</em> Parameters of the distributional
@@ -1516,7 +1517,7 @@ href="#supported-models">Section 8</a> and <a
 href="#scaling-property-model-cross-sectional">Section 9.5</a>.</td>
 <td>No</td>
 </tr>
-<tr class="even">
+<tr>
 <td><code>id</code></td>
 <td>Vector</td>
 <td><em>Panel only.</em> Unit identifier column. Required for all panel
@@ -1525,14 +1526,14 @@ For balanced panels, create an id column: e.g.,
 <code>id = repeat(1:N, inner=T)</code>.</td>
 <td>No</td>
 </tr>
-<tr class="odd">
+<tr>
 <td><code>varnames</code></td>
 <td>Vector{String}</td>
 <td>Variable names used in output tables. If<code>nothing</code>
 (default), names are generated automatically.</td>
 <td>No</td>
 </tr>
-<tr class="even">
+<tr>
 <td><code>eqnames</code></td>
 <td>Vector{String}</td>
 <td>Equation block names
@@ -1541,7 +1542,7 @@ For balanced panels, create an id column: e.g.,
 <code>ineff</code>.</td>
 <td>No</td>
 </tr>
-<tr class="odd">
+<tr>
 <td><code>eq_indices</code></td>
 <td>Vector{Int}</td>
 <td>Equation boundary indices. If<code>nothing</code> (default),
@@ -1742,7 +1743,7 @@ simulation settings.</p>
 <col style="width: 2%" />
 </colgroup>
 <thead>
-<tr class="header">
+<tr>
 <th>Argument</th>
 <th>Type</th>
 <th>Description</th>
@@ -1750,7 +1751,7 @@ simulation settings.</p>
 </tr>
 </thead>
 <tbody>
-<tr class="odd">
+<tr>
 <td><code>method</code></td>
 <td>Symbol</td>
 <td>Estimation method. Use<code>:MSLE</code> for Maximum Simulated
@@ -1760,7 +1761,7 @@ for a limited subset of models). MLE does not use any simulation
 arguments below.</td>
 <td>Yes</td>
 </tr>
-<tr class="even">
+<tr>
 <td><code>transformation</code></td>
 <td>Symbol/Nothing</td>
 <td><strong>MCI only.</strong> Transformation rule for mapping uniform
@@ -1770,7 +1771,7 @@ draws to inefficiency values. Options: <code>:expo_rule</code>,
 warning if <code>method=:MSLE</code>.</td>
 <td>No</td>
 </tr>
-<tr class="odd">
+<tr>
 <td><code>n_draws</code></td>
 <td>Int</td>
 <td>Number of Halton draws per observation. Default: 1024 for both MCI
@@ -1780,7 +1781,7 @@ class="math inline">\(\leq\)</span>
 <code>distinct_Halton_length</code>.</td>
 <td>No</td>
 </tr>
-<tr class="even">
+<tr>
 <td><code>draws</code></td>
 <td>Matrix</td>
 <td>Draws for Monte Carlo integration as a<strong>1 x S row
@@ -1790,7 +1791,7 @@ vector to matrix. If <code>nothing</code> (default), Halton draws are
 auto-generated with correct shape.</td>
 <td>No</td>
 </tr>
-<tr class="odd">
+<tr>
 <td><code>multiRand</code></td>
 <td>Bool</td>
 <td>Whether each observation gets different Halton
@@ -1802,14 +1803,14 @@ class="math inline">\(\leq\)</span>
 <code>distinct_Halton_length</code>.</td>
 <td>No</td>
 </tr>
-<tr class="even">
+<tr>
 <td><code>GPU</code></td>
 <td>Bool</td>
 <td>Whether to use GPU computing.<code>false</code> (default) uses CPU,
 and <code>true</code> uses GPU (requires <code>using CUDA</code>).</td>
 <td>No</td>
 </tr>
-<tr class="odd">
+<tr>
 <td><code>chunks</code></td>
 <td>Int</td>
 <td>Number of chunks for splitting data in MCI/MSLE estimation (default:
@@ -1817,7 +1818,7 @@ and <code>true</code> uses GPU (requires <code>using CUDA</code>).</td>
 GPU memory management. Not used by MLE.</td>
 <td>No</td>
 </tr>
-<tr class="even">
+<tr>
 <td><code>distinct_Halton_length</code></td>
 <td>Int</td>
 <td>Maximum length of the distinct Halton sequence generated
@@ -1839,7 +1840,7 @@ particularly essential for GPU computing (<code>GPU=true</code>).</p>
 <blockquote>
 <table>
 <thead>
-<tr class="header">
+<tr>
 <th></th>
 <th style="text-align: center;"><code>:MSLE</code></th>
 <th style="text-align: center;"><code>:MCI</code></th>
@@ -1847,13 +1848,13 @@ particularly essential for GPU computing (<code>GPU=true</code>).</p>
 </tr>
 </thead>
 <tbody>
-<tr class="odd">
+<tr>
 <td>CPU</td>
 <td style="text-align: center;">✓</td>
 <td style="text-align: center;">✓</td>
 <td style="text-align: center;">—</td>
 </tr>
-<tr class="even">
+<tr>
 <td>GPU</td>
 <td style="text-align: center;">✓✓</td>
 <td style="text-align: center;">✓✓</td>
@@ -1888,7 +1889,7 @@ distribution-specific default is used.</p>
 <blockquote>
 <table>
 <thead>
-<tr class="header">
+<tr>
 <th></th>
 <th style="text-align: center;"><code>:MSLE</code></th>
 <th style="text-align: center;"><code>:MCI</code></th>
@@ -1896,13 +1897,13 @@ distribution-specific default is used.</p>
 </tr>
 </thead>
 <tbody>
-<tr class="odd">
+<tr>
 <td>CPU</td>
 <td style="text-align: center;">—</td>
 <td style="text-align: center;">✓</td>
 <td style="text-align: center;">—</td>
 </tr>
-<tr class="even">
+<tr>
 <td>GPU</td>
 <td style="text-align: center;">—</td>
 <td style="text-align: center;">✓</td>
@@ -1921,7 +1922,7 @@ package.</p>
 <col style="width: 44%" />
 </colgroup>
 <thead>
-<tr class="header">
+<tr>
 <th>Rule</th>
 <th>Formula</th>
 <th>Jacobian</th>
@@ -1929,19 +1930,19 @@ package.</p>
 </tr>
 </thead>
 <tbody>
-<tr class="odd">
+<tr>
 <td><code>:expo_rule</code></td>
 <td><span class="math inline">\(u = s \cdot (-\ln(1-t))\)</span></td>
 <td><span class="math inline">\(s/(1-t)\)</span></td>
 <td>Exponential, Weibull, Gamma, Rayleigh</td>
 </tr>
-<tr class="even">
+<tr>
 <td><code>:logistic_1_rule</code></td>
 <td><span class="math inline">\(u = s \cdot t/(1-t)\)</span></td>
 <td><span class="math inline">\(s/(1-t)^2\)</span></td>
 <td>half-normal, truncated-normal, Lognormal, Lomax</td>
 </tr>
-<tr class="odd">
+<tr>
 <td><code>:logistic_2_rule</code></td>
 <td><span class="math inline">\(u = s \cdot (t/(1-t))^2\)</span></td>
 <td><span class="math inline">\(2st/(1-t)^3\)</span></td>
@@ -1961,56 +1962,56 @@ class="math inline">\(s_i\)</span>). The scale parameters are:</p>
 <col style="width: 67%" />
 </colgroup>
 <thead>
-<tr class="header">
+<tr>
 <th>Distribution</th>
 <th>Scale<span class="math inline">\(s\)</span></th>
 <th>Meaning</th>
 </tr>
 </thead>
 <tbody>
-<tr class="odd">
+<tr>
 <td>half-normal</td>
 <td><span class="math inline">\(\sigma\)</span></td>
 <td>Standard deviation of<span class="math inline">\(N^+(0,
 \sigma^2)\)</span></td>
 </tr>
-<tr class="even">
+<tr>
 <td>truncated-normal</td>
 <td><span class="math inline">\(\sigma_u\)</span></td>
 <td>Standard deviation of<span class="math inline">\(N^+(\mu,
 \sigma_u^2)\)</span></td>
 </tr>
-<tr class="odd">
+<tr>
 <td>Exponential</td>
 <td><span class="math inline">\(\sqrt{\lambda}\)</span></td>
 <td><span class="math inline">\(\sqrt{\lambda}\)</span>, where <span
 class="math inline">\(\lambda = \text{Var}(u)\)</span></td>
 </tr>
-<tr class="even">
+<tr>
 <td>Weibull</td>
 <td><span class="math inline">\(\lambda\)</span></td>
 <td>Scale parameter of<span
 class="math inline">\(\text{Weibull}(\lambda, k)\)</span></td>
 </tr>
-<tr class="odd">
+<tr>
 <td>Lognormal</td>
 <td><span class="math inline">\(\sigma\)</span></td>
 <td>Log-scale standard deviation of<span
 class="math inline">\(\text{LogNormal}(\mu, \sigma^2)\)</span></td>
 </tr>
-<tr class="even">
+<tr>
 <td>Lomax</td>
 <td><span class="math inline">\(\lambda\)</span></td>
 <td>Scale parameter of<span class="math inline">\(\text{Lomax}(\alpha,
 \lambda)\)</span></td>
 </tr>
-<tr class="odd">
+<tr>
 <td>Rayleigh</td>
 <td><span class="math inline">\(\sigma\)</span></td>
 <td>Scale parameter of<span
 class="math inline">\(\text{Rayleigh}(\sigma)\)</span></td>
 </tr>
-<tr class="even">
+<tr>
 <td>Gamma</td>
 <td><span class="math inline">\(\theta\)</span></td>
 <td>Scale parameter of<span class="math inline">\(\text{Gamma}(k,
@@ -2078,7 +2079,7 @@ optimization.</p>
 <col style="width: 4%" />
 </colgroup>
 <thead>
-<tr class="header">
+<tr>
 <th>Argument</th>
 <th>Type</th>
 <th>Description</th>
@@ -2086,27 +2087,27 @@ optimization.</p>
 </tr>
 </thead>
 <tbody>
-<tr class="odd">
+<tr>
 <td><code>spec</code></td>
 <td>UnifiedSpec</td>
 <td>Model specification returned by<code>sfmodel_spec()</code>.</td>
 <td>Yes</td>
 </tr>
-<tr class="even">
+<tr>
 <td><code>init</code></td>
 <td>Vector/Tuple</td>
 <td>Complete initial-value vector (or tuple). If<code>init</code> is
 provided, all other component initial-value arguments are ignored.</td>
 <td>No</td>
 </tr>
-<tr class="odd">
+<tr>
 <td><code>frontier</code></td>
 <td>Vector/Tuple</td>
 <td>Initial values for the frontier coefficients (<span
 class="math inline">\(K\)</span> elements).</td>
 <td>No</td>
 </tr>
-<tr class="even">
+<tr>
 <td><code>scaling</code></td>
 <td>Vector/Tuple</td>
 <td>Initial values for the scaling function coefficients<span
@@ -2115,7 +2116,7 @@ class="math inline">\(L\)</span> elements, one per column of
 <code>zvar</code>). Used when <code>hetero = :scaling</code>.</td>
 <td>No</td>
 </tr>
-<tr class="odd">
+<tr>
 <td><code>mu</code></td>
 <td>Vector/Tuple</td>
 <td>Initial values for<span class="math inline">\(\mu\)</span> (used by
@@ -2123,7 +2124,7 @@ class="math inline">\(L\)</span> elements, one per column of
 specifications).</td>
 <td>No</td>
 </tr>
-<tr class="even">
+<tr>
 <td><code>ln_sigma_sq</code></td>
 <td>Vector/Tuple</td>
 <td>Initial values for<span class="math inline">\(\ln(\sigma^2)\)</span>
@@ -2132,7 +2133,7 @@ specifications).</td>
 specifications).</td>
 <td>No</td>
 </tr>
-<tr class="odd">
+<tr>
 <td><code>ln_sigma_v_sq</code></td>
 <td>Vector/Tuple</td>
 <td>Initial values for<span
@@ -2140,21 +2141,21 @@ class="math inline">\(\ln(\sigma_v^2)\)</span> (used when the noise
 distribution is <code>Normal</code> or <code>StudentT</code>).</td>
 <td>No</td>
 </tr>
-<tr class="even">
+<tr>
 <td><code>ln_nu_minus_2</code></td>
 <td>Vector/Tuple</td>
 <td>Initial values for<span class="math inline">\(\ln(\nu-2)\)</span>
 (used when the noise distribution is <code>StudentT</code>).</td>
 <td>No</td>
 </tr>
-<tr class="odd">
+<tr>
 <td><code>ln_b</code></td>
 <td>Vector/Tuple</td>
 <td>Initial values for<span class="math inline">\(\ln(b)\)</span> (used
 when the noise distribution is <code>Laplace</code>).</td>
 <td>No</td>
 </tr>
-<tr class="even">
+<tr>
 <td><code>ln_lambda</code></td>
 <td>Vector/Tuple</td>
 <td>Initial values for<span class="math inline">\(\ln(\lambda)\)</span>
@@ -2162,7 +2163,7 @@ when the noise distribution is <code>Laplace</code>).</td>
 specifications).</td>
 <td>No</td>
 </tr>
-<tr class="odd">
+<tr>
 <td><code>ln_k</code></td>
 <td>Vector/Tuple</td>
 <td>Initial values for<span class="math inline">\(\ln(k)\)</span> (used
@@ -2170,28 +2171,28 @@ by <code>Weibull</code> and <code>Gamma</code> inefficiency
 specifications).</td>
 <td>No</td>
 </tr>
-<tr class="even">
+<tr>
 <td><code>ln_lambda</code></td>
 <td>Vector/Tuple</td>
 <td>Initial values for<span class="math inline">\(\ln(\lambda)\)</span>
 (used by <code>Lomax</code> inefficiency specifications).</td>
 <td>No</td>
 </tr>
-<tr class="odd">
+<tr>
 <td><code>ln_alpha</code></td>
 <td>Vector/Tuple</td>
 <td>Initial values for<span class="math inline">\(\ln(\alpha)\)</span>
 (used by <code>Lomax</code> inefficiency specifications).</td>
 <td>No</td>
 </tr>
-<tr class="even">
+<tr>
 <td><code>ln_theta</code></td>
 <td>Vector/Tuple</td>
 <td>Initial values for<span class="math inline">\(\ln(\theta)\)</span>
 (used by <code>Gamma</code> inefficiency specifications; MCI only).</td>
 <td>No</td>
 </tr>
-<tr class="odd">
+<tr>
 <td><code>theta_rho</code></td>
 <td>Vector/Tuple</td>
 <td>Initial value for the copula parameter<span
@@ -2200,7 +2201,7 @@ class="math inline">\(\theta_\rho\)</span> (used when
 <code>:None</code>).</td>
 <td>No</td>
 </tr>
-<tr class="even">
+<tr>
 <td><code>message</code></td>
 <td>Bool</td>
 <td>If<code>true</code>, print a warning when <code>init</code>
@@ -2315,7 +2316,7 @@ options.</p>
 <col style="width: 7%" />
 </colgroup>
 <thead>
-<tr class="header">
+<tr>
 <th>Argument</th>
 <th>Type</th>
 <th>Description</th>
@@ -2323,27 +2324,27 @@ options.</p>
 </tr>
 </thead>
 <tbody>
-<tr class="odd">
+<tr>
 <td><code>warmstart_solver</code></td>
 <td>Solver</td>
 <td>Warmstart optimizer, e.g.,<code>NelderMead()</code>,
 <code>BFGS()</code></td>
 <td>No</td>
 </tr>
-<tr class="even">
+<tr>
 <td><code>warmstart_opt</code></td>
 <td>NamedTuple</td>
 <td>Warmstart options as a NamedTuple,
 e.g.,<code>(iterations = 200, g_abstol = 1e-5)</code></td>
 <td>No</td>
 </tr>
-<tr class="odd">
+<tr>
 <td><code>main_solver</code></td>
 <td>Solver</td>
 <td>Main optimizer, e.g.,<code>Newton()</code>, <code>BFGS()</code></td>
 <td>Yes</td>
 </tr>
-<tr class="even">
+<tr>
 <td><code>main_opt</code></td>
 <td>NamedTuple</td>
 <td>Main options as a NamedTuple,
@@ -2361,34 +2362,34 @@ e.g.,<code>(iterations = 200, g_abstol = 1e-8)</code></td>
 <col style="width: 16%" />
 </colgroup>
 <thead>
-<tr class="header">
+<tr>
 <th>Parameter</th>
 <th>Description</th>
 <th>Typical Value</th>
 </tr>
 </thead>
 <tbody>
-<tr class="odd">
+<tr>
 <td><code>iterations</code></td>
 <td>Maximum iterations</td>
 <td>20–1000</td>
 </tr>
-<tr class="even">
+<tr>
 <td><code>g_abstol</code><br> <code>g_reltol</code></td>
 <td>Gradient absolute and relative tolerance</td>
 <td>1e-4 to 1e-8</td>
 </tr>
-<tr class="odd">
+<tr>
 <td><code>f_abstol</code><br> <code>f_reltol</code></td>
 <td>Function absolute and relative tolerance</td>
 <td>1e-32</td>
 </tr>
-<tr class="even">
+<tr>
 <td><code>x_abstol</code><br> <code>x_reltol</code></td>
 <td>Parameter absolute and relative tolerance</td>
 <td>1e-32</td>
 </tr>
-<tr class="odd">
+<tr>
 <td><code>show_trace</code></td>
 <td>Display iteration progress</td>
 <td><code>false</code></td>
@@ -2459,7 +2460,7 @@ effects, and results presentation.</p>
 <col style="width: 5%" />
 </colgroup>
 <thead>
-<tr class="header">
+<tr>
 <th>Argument</th>
 <th>Type</th>
 <th>Description</th>
@@ -2467,19 +2468,19 @@ effects, and results presentation.</p>
 </tr>
 </thead>
 <tbody>
-<tr class="odd">
+<tr>
 <td><code>spec</code></td>
 <td>UnifiedSpec</td>
 <td>Model specification from<code>sfmodel_spec()</code>.</td>
 <td>Yes</td>
 </tr>
-<tr class="even">
+<tr>
 <td><code>method</code></td>
 <td>UnifiedMethod</td>
 <td>Method specification from<code>sfmodel_method()</code>.</td>
 <td>Yes</td>
 </tr>
-<tr class="odd">
+<tr>
 <td><code>init</code></td>
 <td>Vector</td>
 <td>Initial parameter vector from<code>sfmodel_init()</code>. If
@@ -2487,34 +2488,34 @@ effects, and results presentation.</p>
 parameters.</td>
 <td>No</td>
 </tr>
-<tr class="even">
+<tr>
 <td><code>optim_options</code></td>
 <td>–</td>
 <td>Optimization options from<code>sfmodel_opt()</code>. If
 <code>nothing</code>, uses defaults.</td>
 <td>No</td>
 </tr>
-<tr class="odd">
+<tr>
 <td><code>jlms_bc_index</code></td>
 <td>Bool</td>
 <td>Compute JLMS and BC efficiency indices
 (default:<code>true</code>).</td>
 <td>No</td>
 </tr>
-<tr class="even">
+<tr>
 <td><code>marginal</code></td>
 <td>Bool</td>
 <td>Compute marginal effects of<span class="math inline">\(Z\)</span> on
 E(u) (default: <code>true</code>).</td>
 <td>No</td>
 </tr>
-<tr class="odd">
+<tr>
 <td><code>show_table</code></td>
 <td>Bool</td>
 <td>Print formatted estimation table (default:<code>true</code>).</td>
 <td>No</td>
 </tr>
-<tr class="even">
+<tr>
 <td><code>verbose</code></td>
 <td>Bool</td>
 <td>Print detailed progress information
@@ -2533,24 +2534,24 @@ E(u) (default: <code>true</code>).</td>
 <col style="width: 63%" />
 </colgroup>
 <thead>
-<tr class="header">
+<tr>
 <th>Field</th>
 <th>Type</th>
 <th>Description</th>
 </tr>
 </thead>
 <tbody>
-<tr class="odd">
+<tr>
 <td><code>converged</code></td>
 <td>Bool</td>
 <td>Whether optimization converged</td>
 </tr>
-<tr class="even">
+<tr>
 <td><code>iter_limit_reached</code></td>
 <td>Bool</td>
 <td>Whether iteration limit was reached</td>
 </tr>
-<tr class="odd">
+<tr>
 <td><code>redflag</code></td>
 <td>Int</td>
 <td>Warning flag: 0 = OK, 1 = potential issues</td>
@@ -2565,39 +2566,39 @@ E(u) (default: <code>true</code>).</td>
 <col style="width: 67%" />
 </colgroup>
 <thead>
-<tr class="header">
+<tr>
 <th>Field</th>
 <th>Type</th>
 <th>Description</th>
 </tr>
 </thead>
 <tbody>
-<tr class="odd">
+<tr>
 <td><code>GPU</code></td>
 <td>Bool</td>
 <td>Whether GPU acceleration was used</td>
 </tr>
-<tr class="even">
+<tr>
 <td><code>n_draws</code></td>
 <td>Int</td>
 <td>Actual number of draws per observation (or per firm for panel)</td>
 </tr>
-<tr class="odd">
+<tr>
 <td><code>multiRand</code></td>
 <td>Bool</td>
 <td>Whether per-observation/per-firm Halton draws were used</td>
 </tr>
-<tr class="even">
+<tr>
 <td><code>chunks</code></td>
 <td>Int</td>
 <td>Number of chunks for memory management</td>
 </tr>
-<tr class="odd">
+<tr>
 <td><code>distinct_Halton_length</code></td>
 <td>Int</td>
 <td>Maximum Halton sequence length for multiRand</td>
 </tr>
-<tr class="even">
+<tr>
 <td><code>estimation_method</code></td>
 <td>Symbol</td>
 <td>Estimation method used (<code>:MCI</code>, <code>:MSLE</code>,
@@ -2608,39 +2609,39 @@ E(u) (default: <code>true</code>).</td>
 <p><strong>Model Results</strong></p>
 <table>
 <thead>
-<tr class="header">
+<tr>
 <th>Field</th>
 <th>Type</th>
 <th>Description</th>
 </tr>
 </thead>
 <tbody>
-<tr class="odd">
+<tr>
 <td><code>n_observations</code></td>
 <td>Int</td>
 <td>Number of observations (N)</td>
 </tr>
-<tr class="even">
+<tr>
 <td><code>loglikelihood</code></td>
 <td>Float64</td>
 <td>Maximized log-likelihood value</td>
 </tr>
-<tr class="odd">
+<tr>
 <td><code>coeff</code></td>
 <td>Vector</td>
 <td>Estimated coefficient vector</td>
 </tr>
-<tr class="even">
+<tr>
 <td><code>std_err</code></td>
 <td>Vector</td>
 <td>Standard errors</td>
 </tr>
-<tr class="odd">
+<tr>
 <td><code>var_cov_mat</code></td>
 <td>Matrix</td>
 <td>Variance-covariance matrix</td>
 </tr>
-<tr class="even">
+<tr>
 <td><code>table</code></td>
 <td>Matrix</td>
 <td>Formatted coefficient table</td>
@@ -2655,20 +2656,20 @@ E(u) (default: <code>true</code>).</td>
 <col style="width: 87%" />
 </colgroup>
 <thead>
-<tr class="header">
+<tr>
 <th>Field</th>
 <th>Type</th>
 <th>Description</th>
 </tr>
 </thead>
 <tbody>
-<tr class="odd">
+<tr>
 <td><code>jlms</code></td>
 <td>Vector</td>
 <td>JLMS inefficiency index<span class="math inline">\(\text{E}(u \mid
 \varepsilon)\)</span> for each observation</td>
 </tr>
-<tr class="even">
+<tr>
 <td><code>bc</code></td>
 <td>Vector</td>
 <td>Battese-Coelli efficiency index<span
@@ -2685,19 +2686,19 @@ each observation</td>
 <col style="width: 62%" />
 </colgroup>
 <thead>
-<tr class="header">
+<tr>
 <th>Field</th>
 <th>Type</th>
 <th>Description</th>
 </tr>
 </thead>
 <tbody>
-<tr class="odd">
+<tr>
 <td><code>marginal</code></td>
 <td>DataFrame</td>
 <td>Observation-level marginal effects on E(u)</td>
 </tr>
-<tr class="even">
+<tr>
 <td><code>marginal_mean</code></td>
 <td>NamedTuple</td>
 <td>Mean marginal effects</td>
@@ -2718,19 +2719,19 @@ href="#scaling-property-model-cross-sectional">Section 9.5</a>.</p>
 <p><strong>OLS Diagnostics</strong></p>
 <table>
 <thead>
-<tr class="header">
+<tr>
 <th>Field</th>
 <th>Type</th>
 <th>Description</th>
 </tr>
 </thead>
 <tbody>
-<tr class="odd">
+<tr>
 <td><code>OLS_loglikelihood</code></td>
 <td>Float64</td>
 <td>Log-likelihood from OLS frontier</td>
 </tr>
-<tr class="even">
+<tr>
 <td><code>OLS_resid_skew</code></td>
 <td>Float64</td>
 <td>Skewness of OLS residuals</td>
@@ -2740,64 +2741,64 @@ href="#scaling-property-model-cross-sectional">Section 9.5</a>.</p>
 <p><strong>Technical Details</strong></p>
 <table>
 <thead>
-<tr class="header">
+<tr>
 <th>Field</th>
 <th>Type</th>
 <th>Description</th>
 </tr>
 </thead>
 <tbody>
-<tr class="odd">
+<tr>
 <td><code>model</code></td>
 <td>–</td>
 <td>The internal model specification</td>
 </tr>
-<tr class="even">
+<tr>
 <td><code>Hessian</code></td>
 <td>Matrix</td>
 <td>Numerical Hessian at optimum</td>
 </tr>
-<tr class="odd">
+<tr>
 <td><code>gradient_norm</code></td>
 <td>Float64</td>
 <td>Gradient norm at convergence</td>
 </tr>
-<tr class="even">
+<tr>
 <td><code>actual_iterations</code></td>
 <td>Int</td>
 <td>Total iterations across all stages</td>
 </tr>
-<tr class="odd">
+<tr>
 <td><code>warmstart_solver</code></td>
 <td>Solver</td>
 <td>Warmstart algorithm used</td>
 </tr>
-<tr class="even">
+<tr>
 <td><code>warmstart_ini</code></td>
 <td>Vector</td>
 <td>Initial values for warmstart</td>
 </tr>
-<tr class="odd">
+<tr>
 <td><code>warmstart_maxIT</code></td>
 <td>Int</td>
 <td>Maximum warmstart iterations</td>
 </tr>
-<tr class="even">
+<tr>
 <td><code>main_solver</code></td>
 <td>Solver</td>
 <td>Main algorithm used</td>
 </tr>
-<tr class="odd">
+<tr>
 <td><code>main_ini</code></td>
 <td>Vector</td>
 <td>Initial values for main stage</td>
 </tr>
-<tr class="even">
+<tr>
 <td><code>main_maxIT</code></td>
 <td>Int</td>
 <td>Maximum main iterations</td>
 </tr>
-<tr class="odd">
+<tr>
 <td><code>main_tolerance</code></td>
 <td>Float64</td>
 <td>Convergence tolerance</td>
@@ -2927,7 +2928,7 @@ sfmodel_ChiSquareTable(dof)    # Row of critical values for a given dof</code></
 <col style="width: 8%" />
 </colgroup>
 <thead>
-<tr class="header">
+<tr>
 <th>Argument</th>
 <th>Type</th>
 <th>Description</th>
@@ -2935,7 +2936,7 @@ sfmodel_ChiSquareTable(dof)    # Row of critical values for a given dof</code></
 </tr>
 </thead>
 <tbody>
-<tr class="odd">
+<tr>
 <td><code>dof</code></td>
 <td>Int</td>
 <td>Degrees of freedom. For <code>sfmodel_MixTable</code>, must be
@@ -3032,7 +3033,7 @@ summary(result);   show(result)</code></pre>
 <col style="width: 6%" />
 </colgroup>
 <thead>
-<tr class="header">
+<tr>
 <th>Argument</th>
 <th>Type</th>
 <th>Description</th>
@@ -3040,13 +3041,13 @@ summary(result);   show(result)</code></pre>
 </tr>
 </thead>
 <tbody>
-<tr class="odd">
+<tr>
 <td><code>result</code></td>
 <td><code>SFResult</code></td>
 <td>A fitted model object returned by <code>sfmodel_fit()</code>.</td>
 <td>Yes</td>
 </tr>
-<tr class="even">
+<tr>
 <td><code>level</code></td>
 <td>Real</td>
 <td>Confidence level for <code>confint</code> (default
@@ -3066,60 +3067,60 @@ for reference.</p>
 <col style="width: 56%" />
 </colgroup>
 <thead>
-<tr class="header">
+<tr>
 <th>Accessor</th>
 <th>Field equivalent</th>
 <th>Returns</th>
 </tr>
 </thead>
 <tbody>
-<tr class="odd">
+<tr>
 <td><code>coef(r)</code></td>
 <td><code>r.coeff</code></td>
 <td>Full coefficient vector</td>
 </tr>
-<tr class="even">
+<tr>
 <td><code>vcov(r)</code></td>
 <td><code>r.var_cov_mat</code></td>
 <td>Variance–covariance matrix</td>
 </tr>
-<tr class="odd">
+<tr>
 <td><code>stderror(r)</code></td>
 <td><code>r.std_err</code></td>
 <td>Asymptotic standard errors</td>
 </tr>
-<tr class="even">
+<tr>
 <td><code>confint(r; level=...)</code></td>
 <td>—</td>
 <td><code>N × 2</code> matrix of Wald confidence intervals</td>
 </tr>
-<tr class="odd">
+<tr>
 <td><code>loglikelihood(r)</code></td>
 <td><code>r.loglikelihood</code></td>
 <td>Maximized log-likelihood</td>
 </tr>
-<tr class="even">
+<tr>
 <td><code>nobs(r)</code></td>
 <td><code>r.n_observations</code></td>
 <td>Number of observations</td>
 </tr>
-<tr class="odd">
+<tr>
 <td><code>dof(r)</code>, <code>dof_residual(r)</code></td>
 <td>—</td>
 <td>Free parameters; residual degrees of freedom (<span
 class="math inline">\(N - k\)</span>)</td>
 </tr>
-<tr class="even">
+<tr>
 <td><code>aic(r)</code>, <code>bic(r)</code></td>
 <td>—</td>
 <td>Akaike and Bayesian information criteria</td>
 </tr>
-<tr class="odd">
+<tr>
 <td><code>coeftable(r)</code></td>
 <td><code>r.table</code> (matrix)</td>
 <td>A <code>StatsBase.CoefTable</code> (printable, exportable)</td>
 </tr>
-<tr class="even">
+<tr>
 <td><code>summary(r)</code>, <code>show(r)</code></td>
 <td>—</td>
 <td>Compact REPL display; works on reloaded objects without re-fit</td>
@@ -3157,20 +3158,20 @@ result.bc          # Battese–Coelli efficiency index</code></pre>
 <col style="width: 77%" />
 </colgroup>
 <thead>
-<tr class="header">
+<tr>
 <th>Field</th>
 <th>Type</th>
 <th>Description</th>
 </tr>
 </thead>
 <tbody>
-<tr class="odd">
+<tr>
 <td><code>jlms</code></td>
 <td><code>Vector{Float64}</code> (length <code>N</code>)</td>
 <td>JLMS index <span class="math inline">\(E(u_i \mid
 \varepsilon_i)\)</span>; higher indicates more inefficiency.</td>
 </tr>
-<tr class="even">
+<tr>
 <td><code>bc</code></td>
 <td><code>Vector{Float64}</code> (length <code>N</code>)</td>
 <td>Battese–Coelli efficiency <span class="math inline">\(E(e^{-u_i}
@@ -3213,21 +3214,21 @@ result.marginal_mean    # sample-mean marginal effects (NamedTuple)</code></pre>
 <col style="width: 77%" />
 </colgroup>
 <thead>
-<tr class="header">
+<tr>
 <th>Field</th>
 <th>Type</th>
 <th>Description</th>
 </tr>
 </thead>
 <tbody>
-<tr class="odd">
+<tr>
 <td><code>marginal</code></td>
 <td><code>DataFrame</code></td>
 <td>One row per observation; columns <code>marg_&lt;name&gt;</code> give
 the observation-level <span class="math inline">\(\partial E(u_i) /
 \partial \mathbf{z}_i\)</span>, one column per Z variable.</td>
 </tr>
-<tr class="even">
+<tr>
 <td><code>marginal_mean</code></td>
 <td><code>NamedTuple</code></td>
 <td>Sample averages of the observation-level effects, one entry per Z
@@ -3275,7 +3276,7 @@ residual_diagnostics(result)</code></pre>
 <col style="width: 4%" />
 </colgroup>
 <thead>
-<tr class="header">
+<tr>
 <th>Argument</th>
 <th>Type</th>
 <th>Description</th>
@@ -3283,13 +3284,13 @@ residual_diagnostics(result)</code></pre>
 </tr>
 </thead>
 <tbody>
-<tr class="odd">
+<tr>
 <td><code>result</code></td>
 <td><code>SFResult</code></td>
 <td>A fitted model returned by <code>sfmodel_fit()</code>.</td>
 <td>Yes</td>
 </tr>
-<tr class="even">
+<tr>
 <td><code>type</code></td>
 <td>Symbol</td>
 <td>For <code>residuals</code>: one of <code>:composed</code> (default),
@@ -3311,39 +3312,39 @@ class="math inline">\(N\)</span>, with the quantity selected by
 <col style="width: 58%" />
 </colgroup>
 <thead>
-<tr class="header">
+<tr>
 <th>Call</th>
 <th>Returned vector</th>
 </tr>
 </thead>
 <tbody>
-<tr class="odd">
+<tr>
 <td><code>residuals(result)</code> (default
 <code>type = :composed</code>)</td>
 <td><span class="math inline">\(\hat\varepsilon_i = y_i -
 x_i&#39;\hat\beta\)</span> (composed error)</td>
 </tr>
-<tr class="even">
+<tr>
 <td><code>residuals(result; type = :u)</code></td>
 <td><span class="math inline">\(\hat u_i\)</span>, the JLMS inefficiency
 estimate</td>
 </tr>
-<tr class="odd">
+<tr>
 <td><code>residuals(result; type = :v)</code></td>
 <td><span class="math inline">\(\hat v_i = \hat\varepsilon_i \mp \hat
 u_i\)</span> (implied noise estimate)</td>
 </tr>
-<tr class="even">
+<tr>
 <td><code>residuals(result; type = :ols)</code></td>
 <td>OLS residuals from the auxiliary OLS fit stored on the result</td>
 </tr>
-<tr class="odd">
+<tr>
 <td><code>fitted(result)</code> (default
 <code>type = :frontier</code>)</td>
 <td><span class="math inline">\(x_i&#39;\hat\beta\)</span> (frontier
 fit)</td>
 </tr>
-<tr class="even">
+<tr>
 <td><code>fitted(result; type = :response)</code></td>
 <td><span class="math inline">\(x_i&#39;\hat\beta \mp \hat u_i\)</span>
 (response-scale fit)</td>
@@ -3359,40 +3360,40 @@ JLMS inefficiency and the Battese–Coelli efficiency indices:</p>
 <col style="width: 61%" />
 </colgroup>
 <thead>
-<tr class="header">
+<tr>
 <th>Field</th>
 <th>Meaning</th>
 </tr>
 </thead>
 <tbody>
-<tr class="odd">
+<tr>
 <td><code>n</code></td>
 <td>Number of observations</td>
 </tr>
-<tr class="even">
+<tr>
 <td><code>mean_jlms</code>, <code>std_jlms</code></td>
 <td>Mean and standard deviation of JLMS</td>
 </tr>
-<tr class="odd">
+<tr>
 <td><code>min_jlms</code>, <code>max_jlms</code>,
 <code>median_jlms</code></td>
 <td>Min, max, and median of JLMS</td>
 </tr>
-<tr class="even">
+<tr>
 <td><code>quantiles_jlms</code></td>
 <td>Deciles <code>q10</code>, <code>q20</code>, …, <code>q90</code> and
 quartiles <code>q25</code>, <code>q75</code></td>
 </tr>
-<tr class="odd">
+<tr>
 <td><code>mean_bc</code>, <code>std_bc</code></td>
 <td>Mean and standard deviation of BC</td>
 </tr>
-<tr class="even">
+<tr>
 <td><code>min_bc</code>, <code>max_bc</code>,
 <code>median_bc</code></td>
 <td>Min, max, and median of BC</td>
 </tr>
-<tr class="odd">
+<tr>
 <td><code>quantiles_bc</code></td>
 <td>Deciles and quartiles of BC</td>
 </tr>
@@ -3406,44 +3407,44 @@ of numeric checks on the composed and OLS residuals:</p>
 <col style="width: 78%" />
 </colgroup>
 <thead>
-<tr class="header">
+<tr>
 <th>Field</th>
 <th>Meaning</th>
 </tr>
 </thead>
 <tbody>
-<tr class="odd">
+<tr>
 <td><code>skew_ols</code></td>
 <td>Sample skewness of OLS residuals (matches
 <code>result.OLS_resid_skew</code>)</td>
 </tr>
-<tr class="even">
+<tr>
 <td><code>skew_composed</code></td>
 <td>Sample skewness of the composed SF residuals <span
 class="math inline">\(\hat\varepsilon\)</span></td>
 </tr>
-<tr class="odd">
+<tr>
 <td><code>expected_skew_sign</code></td>
 <td><span class="math inline">\(-1\)</span> for production, <span
 class="math inline">\(+1\)</span> for cost</td>
 </tr>
-<tr class="even">
+<tr>
 <td><code>skew_ols_sign_ok</code></td>
 <td><code>true</code> iff
 <code>sign(skew_ols) == expected_skew_sign</code></td>
 </tr>
-<tr class="odd">
+<tr>
 <td><code>skew_composed_sign_ok</code></td>
 <td><code>true</code> iff
 <code>sign(skew_composed) == expected_skew_sign</code></td>
 </tr>
-<tr class="even">
+<tr>
 <td><code>JarqueBera_stat</code></td>
 <td>Jarque–Bera statistic on OLS residuals: <span
 class="math inline">\(\mathrm{JB} = \tfrac{n}{6}(s^2 +
 \tfrac{1}{4}(k-3)^2)\)</span></td>
 </tr>
-<tr class="odd">
+<tr>
 <td><code>JarqueBera_pvalue</code></td>
 <td>Upper-tail p-value of <span
 class="math inline">\(\mathrm{JB}\)</span> under <span
@@ -3486,7 +3487,7 @@ lrtest(restricted, unrestricted; mixed = false, dof = nothing)</code></pre>
 <col style="width: 4%" />
 </colgroup>
 <thead>
-<tr class="header">
+<tr>
 <th>Argument</th>
 <th>Type</th>
 <th>Description</th>
@@ -3494,7 +3495,7 @@ lrtest(restricted, unrestricted; mixed = false, dof = nothing)</code></pre>
 </tr>
 </thead>
 <tbody>
-<tr class="odd">
+<tr>
 <td><code>result</code></td>
 <td><code>SFResult</code></td>
 <td><code>sf_vs_ols</code> only. The fitted SF model; its stored
@@ -3502,20 +3503,20 @@ lrtest(restricted, unrestricted; mixed = false, dof = nothing)</code></pre>
 log-likelihood.</td>
 <td>Yes</td>
 </tr>
-<tr class="even">
+<tr>
 <td><code>restricted</code></td>
 <td><code>SFResult</code></td>
 <td><code>lrtest</code> only. Fitted restricted SF model.</td>
 <td>Yes</td>
 </tr>
-<tr class="odd">
+<tr>
 <td><code>unrestricted</code></td>
 <td><code>SFResult</code></td>
 <td><code>lrtest</code> only. Fitted unrestricted SF model, nested in
 the restricted one.</td>
 <td>Yes</td>
 </tr>
-<tr class="even">
+<tr>
 <td><code>dof</code></td>
 <td>Int</td>
 <td>Degrees of freedom for the reference distribution. For
@@ -3523,7 +3524,7 @@ the restricted one.</td>
 <code>lrtest</code>, inferred from the two fits if omitted.</td>
 <td>No</td>
 </tr>
-<tr class="odd">
+<tr>
 <td><code>mixed</code></td>
 <td>Bool</td>
 <td><code>lrtest</code> only. <code>true</code> for the boundary <span
@@ -3542,41 +3543,41 @@ class="math inline">\(\chi^2\)</span>.</td>
 <col style="width: 81%" />
 </colgroup>
 <thead>
-<tr class="header">
+<tr>
 <th>Field</th>
 <th>Meaning</th>
 </tr>
 </thead>
 <tbody>
-<tr class="odd">
+<tr>
 <td><code>LR</code></td>
 <td>Likelihood ratio statistic, <span class="math inline">\(-2(\ell_R -
 \ell_U)\)</span></td>
 </tr>
-<tr class="even">
+<tr>
 <td><code>dof</code></td>
 <td>Degrees of freedom used for the reference distribution</td>
 </tr>
-<tr class="odd">
+<tr>
 <td><code>pvalue</code></td>
 <td>Upper-tail p-value under the chosen reference distribution</td>
 </tr>
-<tr class="even">
+<tr>
 <td><code>mixed</code></td>
 <td><code>true</code> if the mixed <span
 class="math inline">\(\bar{\chi}^2\)</span> reference was used</td>
 </tr>
-<tr class="odd">
+<tr>
 <td><code>critical_values</code></td>
 <td>NamedTuple with fields <code>p10</code>, <code>p05</code>,
 <code>p025</code>, <code>p01</code></td>
 </tr>
-<tr class="even">
+<tr>
 <td><code>ll_restricted</code></td>
 <td>Restricted-model log-likelihood <span
 class="math inline">\(\ell_R\)</span></td>
 </tr>
-<tr class="odd">
+<tr>
 <td><code>ll_unrestricted</code></td>
 <td>Unrestricted-model log-likelihood <span
 class="math inline">\(\ell_U\)</span></td>
@@ -3607,7 +3608,7 @@ plot(result, :marginal, z::AbstractVector)</code></pre>
 <col style="width: 4%" />
 </colgroup>
 <thead>
-<tr class="header">
+<tr>
 <th>Argument</th>
 <th>Type</th>
 <th>Description</th>
@@ -3615,13 +3616,13 @@ plot(result, :marginal, z::AbstractVector)</code></pre>
 </tr>
 </thead>
 <tbody>
-<tr class="odd">
+<tr>
 <td><code>result</code></td>
 <td><code>SFResult</code></td>
 <td>A fitted model object returned by <code>sfmodel_fit()</code>.</td>
 <td>Yes</td>
 </tr>
-<tr class="even">
+<tr>
 <td><code>which</code></td>
 <td>Symbol</td>
 <td>Selects the recipe: <code>:efficiency</code>,
@@ -3630,7 +3631,7 @@ plot(result, :marginal, z::AbstractVector)</code></pre>
 panel.</td>
 <td>No</td>
 </tr>
-<tr class="odd">
+<tr>
 <td><code>z</code></td>
 <td><code>AbstractVector</code></td>
 <td>Only with <code>:marginal</code>. A covariate vector against which
@@ -3648,37 +3649,37 @@ the marginal effect is plotted.</td>
 <col style="width: 75%" />
 </colgroup>
 <thead>
-<tr class="header">
+<tr>
 <th>Call</th>
 <th>What is plotted</th>
 </tr>
 </thead>
 <tbody>
-<tr class="odd">
+<tr>
 <td><code>plot(result)</code></td>
 <td>Default 2×2 diagnostic panel (JLMS and BC histograms,
 residuals-vs-fitted, plus QQ or marginal effect)</td>
 </tr>
-<tr class="even">
+<tr>
 <td><code>plot(result, :efficiency)</code></td>
 <td>JLMS and BC efficiency histograms side by side</td>
 </tr>
-<tr class="odd">
+<tr>
 <td><code>plot(result, :residuals)</code></td>
 <td>Residuals-vs-fitted scatter, residual histogram, and QQ plot of
 <span class="math inline">\(\hat v\)</span></td>
 </tr>
-<tr class="even">
+<tr>
 <td><code>plot(result, :marginal)</code></td>
 <td>Grid of marginal-effect scatters, one per <code>zvar</code>
 covariate</td>
 </tr>
-<tr class="odd">
+<tr>
 <td><code>plot(result, :marginal, z)</code></td>
 <td>Marginal effect plotted against a single user-supplied covariate
 vector <code>z</code></td>
 </tr>
-<tr class="even">
+<tr>
 <td><code>plot(result, :convergence)</code></td>
 <td>Optimizer trace; requires <code>store_trace = true</code> to have
 been passed to <code>sfmodel_opt()</code> at fit time</td>
@@ -3732,7 +3733,7 @@ corresponding out-of-sample quantities.</p>
 <col style="width: 6%" />
 </colgroup>
 <thead>
-<tr class="header">
+<tr>
 <th>Argument</th>
 <th>Type</th>
 <th>Description</th>
@@ -3740,13 +3741,13 @@ corresponding out-of-sample quantities.</p>
 </tr>
 </thead>
 <tbody>
-<tr class="odd">
+<tr>
 <td><code>result</code></td>
 <td><code>SFResult</code></td>
 <td>A fitted model returned by <code>sfmodel_fit()</code>.</td>
 <td>Yes</td>
 </tr>
-<tr class="even">
+<tr>
 <td><code>what</code></td>
 <td>Symbol</td>
 <td>Prediction target: <code>:frontier</code>, <code>:residuals</code>,
@@ -3754,7 +3755,7 @@ corresponding out-of-sample quantities.</p>
 <code>:marginal</code>, or <code>:all</code>.</td>
 <td>Yes</td>
 </tr>
-<tr class="odd">
+<tr>
 <td><code>frontier</code></td>
 <td>Matrix</td>
 <td>Covariates <span class="math inline">\(X_{\text{new}}\)</span> for
@@ -3762,7 +3763,7 @@ the frontier equation. Needed for every <code>what</code> except
 <code>:marginal</code>.</td>
 <td>Target-specific</td>
 </tr>
-<tr class="even">
+<tr>
 <td><code>zvar</code></td>
 <td>Matrix</td>
 <td>Covariates <span class="math inline">\(Z_{\text{new}}\)</span> for
@@ -3772,7 +3773,7 @@ inefficiency determinants. Needed for <code>:response</code>,
 <code>hetero</code> or <code>:scaling</code>.</td>
 <td>Target-specific</td>
 </tr>
-<tr class="odd">
+<tr>
 <td><code>depvar</code></td>
 <td>Vector</td>
 <td>Response values <span class="math inline">\(y_{\text{new}}\)</span>.
@@ -3782,14 +3783,14 @@ expectations depend on <span class="math inline">\(\hat\varepsilon_i =
 y_i - x_i&#39;\hat\beta\)</span>).</td>
 <td>Target-specific</td>
 </tr>
-<tr class="even">
+<tr>
 <td><code>id</code></td>
 <td>Vector</td>
 <td>Firm identifier for each predict-time observation. Required for
 panel fits; ignored for cross-sectional fits.</td>
 <td>Panel only</td>
 </tr>
-<tr class="odd">
+<tr>
 <td><code>draws</code></td>
 <td>Matrix or Vector</td>
 <td>Fit-time Halton draws for simulation-based fits (MCI/MSLE). Required
@@ -3821,7 +3822,7 @@ requirements and the quantity returned:</p>
 <col style="width: 32%" />
 </colgroup>
 <thead>
-<tr class="header">
+<tr>
 <th><code>what</code></th>
 <th style="text-align: center;">Needs <span
 class="math inline">\(X_{\text{new}}\)</span></th>
@@ -3834,7 +3835,7 @@ class="math inline">\(y_{\text{new}}\)</span></th>
 </tr>
 </thead>
 <tbody>
-<tr class="odd">
+<tr>
 <td><code>:frontier</code></td>
 <td style="text-align: center;">✓</td>
 <td style="text-align: center;"></td>
@@ -3842,7 +3843,7 @@ class="math inline">\(y_{\text{new}}\)</span></th>
 <td style="text-align: center;"></td>
 <td><span class="math inline">\(x_i&#39;\hat\beta\)</span></td>
 </tr>
-<tr class="even">
+<tr>
 <td><code>:residuals</code></td>
 <td style="text-align: center;">✓</td>
 <td style="text-align: center;"></td>
@@ -3850,7 +3851,7 @@ class="math inline">\(y_{\text{new}}\)</span></th>
 <td style="text-align: center;"></td>
 <td><span class="math inline">\(y_i - x_i&#39;\hat\beta\)</span></td>
 </tr>
-<tr class="odd">
+<tr>
 <td><code>:response</code></td>
 <td style="text-align: center;">✓</td>
 <td style="text-align: center;">✓</td>
@@ -3859,7 +3860,7 @@ class="math inline">\(y_{\text{new}}\)</span></th>
 <td><span class="math inline">\(x_i&#39;\hat\beta \mp \hat
 u_i\)</span></td>
 </tr>
-<tr class="even">
+<tr>
 <td><code>:jlms</code></td>
 <td style="text-align: center;">✓</td>
 <td style="text-align: center;">✓</td>
@@ -3868,7 +3869,7 @@ u_i\)</span></td>
 <td><span
 class="math inline">\(E(u_i\mid\hat\varepsilon_i)\)</span></td>
 </tr>
-<tr class="odd">
+<tr>
 <td><code>:bc</code></td>
 <td style="text-align: center;">✓</td>
 <td style="text-align: center;">✓</td>
@@ -3877,7 +3878,7 @@ class="math inline">\(E(u_i\mid\hat\varepsilon_i)\)</span></td>
 <td><span
 class="math inline">\(E(e^{-u_i}\mid\hat\varepsilon_i)\)</span></td>
 </tr>
-<tr class="even">
+<tr>
 <td><code>:marginal</code></td>
 <td style="text-align: center;"></td>
 <td style="text-align: center;">✓</td>
@@ -3886,7 +3887,7 @@ class="math inline">\(E(e^{-u_i}\mid\hat\varepsilon_i)\)</span></td>
 <td><span class="math inline">\(\partial E(u_i)/\partial
 \mathbf{z}_i\)</span></td>
 </tr>
-<tr class="odd">
+<tr>
 <td><code>:all</code></td>
 <td style="text-align: center;">✓</td>
 <td style="text-align: center;">✓</td>
@@ -3979,7 +3980,7 @@ both; <strong>Methods</strong> shows the compatible estimation methods
 <col style="width: 9%" />
 </colgroup>
 <thead>
-<tr class="header">
+<tr>
 <th>Symbol</th>
 <th>Distribution</th>
 <th>Init Parameters</th>
@@ -3988,7 +3989,7 @@ both; <strong>Methods</strong> shows the compatible estimation methods
 </tr>
 </thead>
 <tbody>
-<tr class="odd">
+<tr>
 <td><code>:Normal</code></td>
 <td><span class="math inline">\(v \sim N(0, \sigma_v^2)\)</span></td>
 <td><code>ln_sigma_v_sq</code> <span class="math inline">\(=
@@ -3996,7 +3997,7 @@ both; <strong>Methods</strong> shows the compatible estimation methods
 <td>cross, panel</td>
 <td>MCI, MSLE, MLE</td>
 </tr>
-<tr class="even">
+<tr>
 <td><code>:StudentT</code></td>
 <td><span class="math inline">\(v \sim t(0, \sigma_v, \nu)\)</span>,
 <span class="math inline">\(\nu &gt; 2\)</span></td>
@@ -4006,7 +4007,7 @@ class="math inline">\(= \log(\nu - 2)\)</span></td>
 <td>cross</td>
 <td>MCI, MSLE</td>
 </tr>
-<tr class="odd">
+<tr>
 <td><code>:Laplace</code></td>
 <td><span class="math inline">\(v \sim \text{Laplace}(0,
 b)\)</span></td>
@@ -4028,7 +4029,7 @@ b)\)</span></td>
 <col style="width: 22%" />
 </colgroup>
 <thead>
-<tr class="header">
+<tr>
 <th>Symbol</th>
 <th>Distribution</th>
 <th>Init Parameters</th>
@@ -4038,7 +4039,7 @@ b)\)</span></td>
 </tr>
 </thead>
 <tbody>
-<tr class="odd">
+<tr>
 <td><code>:HalfNormal</code></td>
 <td><span class="math inline">\(u \sim N^+(0, \sigma^2)\)</span></td>
 <td><code>ln_sigma_sq</code> <span class="math inline">\(=
@@ -4048,7 +4049,7 @@ b)\)</span></td>
 <td><code>:sigma_sq</code> for <span
 class="math inline">\(\sigma^2\)</span></td>
 </tr>
-<tr class="even">
+<tr>
 <td><code>:TruncatedNormal</code></td>
 <td><span class="math inline">\(u \sim N^+(\mu,
 \sigma_u^2)\)</span></td>
@@ -4061,7 +4062,7 @@ class="math inline">\(\sigma^2\)</span></td>
 class="math inline">\(\mu\)</span><br><code>:sigma_sq</code> for <span
 class="math inline">\(\sigma_u^2\)</span></td>
 </tr>
-<tr class="odd">
+<tr>
 <td><code>:Exponential</code></td>
 <td><span class="math inline">\(u \sim \text{Exp}(\lambda)\)</span>,
 <span class="math inline">\(\lambda = \text{Var}(u)\)</span></td>
@@ -4072,7 +4073,7 @@ class="math inline">\(\sigma_u^2\)</span></td>
 <td><code>:lambda</code> for <span
 class="math inline">\(\lambda\)</span></td>
 </tr>
-<tr class="even">
+<tr>
 <td><code>:Weibull</code></td>
 <td><span class="math inline">\(u \sim \text{Weibull}(\lambda,
 k)\)</span></td>
@@ -4085,7 +4086,7 @@ class="math inline">\(= \log(k)\)</span></td>
 class="math inline">\(\lambda\)</span><br><code>:k</code> for <span
 class="math inline">\(k\)</span></td>
 </tr>
-<tr class="odd">
+<tr>
 <td><code>:Lognormal</code></td>
 <td><span class="math inline">\(u \sim \text{LogNormal}(\mu,
 \sigma^2)\)</span></td>
@@ -4098,7 +4099,7 @@ class="math inline">\(k\)</span></td>
 class="math inline">\(\mu\)</span><br><code>:sigma_sq</code> for <span
 class="math inline">\(\sigma^2\)</span></td>
 </tr>
-<tr class="even">
+<tr>
 <td><code>:Lomax</code></td>
 <td><span class="math inline">\(u \sim \text{Lomax}(\alpha,
 \lambda)\)</span></td>
@@ -4111,7 +4112,7 @@ class="math inline">\(= \log(\alpha)\)</span></td>
 class="math inline">\(\lambda\)</span><br><code>:alpha</code> for <span
 class="math inline">\(\alpha\)</span></td>
 </tr>
-<tr class="odd">
+<tr>
 <td><code>:Rayleigh</code></td>
 <td><span class="math inline">\(u \sim
 \text{Rayleigh}(\sigma)\)</span></td>
@@ -4122,7 +4123,7 @@ class="math inline">\(\alpha\)</span></td>
 <td><code>:sigma_sq</code> for <span
 class="math inline">\(\sigma^2\)</span></td>
 </tr>
-<tr class="even">
+<tr>
 <td><code>:Gamma</code></td>
 <td><span class="math inline">\(u \sim \text{Gamma}(k,
 \theta)\)</span></td>
@@ -4169,7 +4170,7 @@ class="math inline">\(\rho\)</span> is the dependence parameter.</p>
 <col style="width: 29%" />
 </colgroup>
 <thead>
-<tr class="header">
+<tr>
 <th>Symbol</th>
 <th>Copula</th>
 <th>Parameter</th>
@@ -4179,7 +4180,7 @@ class="math inline">\(\rho\)</span> is the dependence parameter.</p>
 </tr>
 </thead>
 <tbody>
-<tr class="odd">
+<tr>
 <td><code>:Gaussian</code></td>
 <td>Gaussian</td>
 <td><span class="math inline">\(\rho \in (-1,1)\)</span></td>
@@ -4188,7 +4189,7 @@ class="math inline">\(\rho\)</span> is the dependence parameter.</p>
 <td><code>theta_rho</code> <span class="math inline">\(=
 \text{atanh}(\rho)\)</span></td>
 </tr>
-<tr class="even">
+<tr>
 <td><code>:Clayton</code></td>
 <td>Clayton</td>
 <td><span class="math inline">\(\rho &gt; 0\)</span></td>
@@ -4197,7 +4198,7 @@ class="math inline">\(\rho\)</span> is the dependence parameter.</p>
 <td><code>theta_rho</code> <span class="math inline">\(=
 \log(\rho)\)</span></td>
 </tr>
-<tr class="odd">
+<tr>
 <td><code>:Clayton90</code></td>
 <td>Clayton 90° rotation</td>
 <td><span class="math inline">\(\rho &gt; 0\)</span></td>
@@ -4206,7 +4207,7 @@ class="math inline">\(\rho\)</span> is the dependence parameter.</p>
 <td><code>theta_rho</code> <span class="math inline">\(=
 \log(\rho)\)</span></td>
 </tr>
-<tr class="even">
+<tr>
 <td><code>:Gumbel</code></td>
 <td>Gumbel</td>
 <td><span class="math inline">\(\rho \geq 1\)</span></td>
@@ -4324,7 +4325,7 @@ following table summarizes the key properties:</p>
 <col style="width: 50%" />
 </colgroup>
 <thead>
-<tr class="header">
+<tr>
 <th>Distribution</th>
 <th>Parameters</th>
 <th>Mode at Zero?</th>
@@ -4333,21 +4334,21 @@ following table summarizes the key properties:</p>
 </tr>
 </thead>
 <tbody>
-<tr class="odd">
+<tr>
 <td>half-normal</td>
 <td>1 (<span class="math inline">\(\sigma\)</span>)</td>
 <td>Yes</td>
 <td>Light</td>
 <td>Default starting point; most common in the literature</td>
 </tr>
-<tr class="even">
+<tr>
 <td>Exponential</td>
 <td>1 (<span class="math inline">\(\lambda\)</span>)</td>
 <td>Yes</td>
 <td>Light</td>
 <td>Simple alternative to half-normal; monotone decreasing density</td>
 </tr>
-<tr class="odd">
+<tr>
 <td>truncated-normal</td>
 <td>2 (<span class="math inline">\(\mu\)</span>, <span
 class="math inline">\(\sigma\)</span>)</td>
@@ -4355,14 +4356,14 @@ class="math inline">\(\sigma\)</span>)</td>
 <td>Light</td>
 <td>When the mode of inefficiency may be at a positive value</td>
 </tr>
-<tr class="even">
+<tr>
 <td>Rayleigh</td>
 <td>1 (<span class="math inline">\(\sigma\)</span>)</td>
 <td>No (mode &gt; 0)</td>
 <td>Light</td>
 <td>One-parameter distribution with mode away from zero</td>
 </tr>
-<tr class="odd">
+<tr>
 <td>Weibull</td>
 <td>2 (<span class="math inline">\(\lambda\)</span>, <span
 class="math inline">\(k\)</span>)</td>
@@ -4372,7 +4373,7 @@ class="math inline">\(k\)</span>)</td>
 1\)</span>) or positive (<span class="math inline">\(k &gt;
 1\)</span>)</td>
 </tr>
-<tr class="even">
+<tr>
 <td>Lognormal</td>
 <td>2 (<span class="math inline">\(\mu\)</span>, <span
 class="math inline">\(\sigma\)</span>)</td>
@@ -4380,7 +4381,7 @@ class="math inline">\(\sigma\)</span>)</td>
 <td>Heavy</td>
 <td>Right-skewed inefficiency with a heavy right tail</td>
 </tr>
-<tr class="odd">
+<tr>
 <td>Lomax</td>
 <td>2 (<span class="math inline">\(\alpha\)</span>, <span
 class="math inline">\(\lambda\)</span>)</td>
@@ -4388,7 +4389,7 @@ class="math inline">\(\lambda\)</span>)</td>
 <td>Heavy</td>
 <td>Heavy-tailed; useful when a few firms are highly inefficient</td>
 </tr>
-<tr class="even">
+<tr>
 <td>Gamma</td>
 <td>2 (<span class="math inline">\(k\)</span>, <span
 class="math inline">\(\theta\)</span>)</td>
@@ -4418,23 +4419,23 @@ estimation (MCI or MSLE).</li>
 <col style="width: 90%" />
 </colgroup>
 <thead>
-<tr class="header">
+<tr>
 <th>Distribution</th>
 <th>When to Use</th>
 </tr>
 </thead>
 <tbody>
-<tr class="odd">
+<tr>
 <td>Normal</td>
 <td>Default and standard assumption.</td>
 </tr>
-<tr class="even">
+<tr>
 <td>Student-t</td>
 <td>When residuals exhibit excess kurtosis (heavier tails than Normal).
 The degrees-of-freedom parameter<span class="math inline">\(\nu\)</span>
 is estimated.</td>
 </tr>
-<tr class="odd">
+<tr>
 <td>Laplace</td>
 <td>When the noise distribution is believed to be double-exponential
 (sharper peak, heavier tails than Normal).</td>
@@ -4462,7 +4463,7 @@ and use Halton quasi-random draws.</p>
 <col style="width: 30%" />
 </colgroup>
 <thead>
-<tr class="header">
+<tr>
 <th>Feature</th>
 <th>MLE</th>
 <th>MCI</th>
@@ -4470,61 +4471,61 @@ and use Halton quasi-random draws.</p>
 </tr>
 </thead>
 <tbody>
-<tr class="odd">
+<tr>
 <td>Likelihood</td>
 <td>Analytic (exact)</td>
 <td>Simulated</td>
 <td>Simulated</td>
 </tr>
-<tr class="even">
+<tr>
 <td>Simulation draws</td>
 <td>Not needed</td>
 <td>Halton sequence<br>or user supplied sequence</td>
 <td>Halton sequence<br>or user supplied sequence</td>
 </tr>
-<tr class="odd">
+<tr>
 <td>GPU support</td>
 <td>No</td>
 <td>Yes</td>
 <td>Yes</td>
 </tr>
-<tr class="even">
+<tr>
 <td>Noise distributions</td>
 <td>Normal only</td>
 <td>Normal, StudentT, Laplace</td>
 <td>Normal, StudentT, Laplace</td>
 </tr>
-<tr class="odd">
+<tr>
 <td>Ineff distributions</td>
 <td>half-normal, trunc-normal, Expo</td>
 <td>All 8</td>
 <td>All except Gamma</td>
 </tr>
-<tr class="even">
+<tr>
 <td>Copula support</td>
 <td>None</td>
 <td>Gaussian, Clayton, Clayton90, Gumbel</td>
 <td>Gaussian, Clayton, Clayton90, Gumbel</td>
 </tr>
-<tr class="odd">
+<tr>
 <td>Scaling property</td>
 <td>Yes (TruncNormal only)</td>
 <td>All 8 distributions</td>
 <td>All except Gamma</td>
 </tr>
-<tr class="even">
+<tr>
 <td>Heteroscedastic</td>
 <td>Yes</td>
 <td>Yes</td>
 <td>Yes</td>
 </tr>
-<tr class="odd">
+<tr>
 <td>Panel models</td>
 <td>TFE, TFE_CSW, TRE</td>
 <td>TFE only</td>
 <td>TFE only</td>
 </tr>
-<tr class="even">
+<tr>
 <td>Default<code>n_draws</code></td>
 <td>N/A</td>
 <td>1024</td>
@@ -4658,34 +4659,34 @@ correlation measure</li>
 <col style="width: 74%" />
 </colgroup>
 <thead>
-<tr class="header">
+<tr>
 <th>Copula</th>
 <th>Tail Dependence</th>
 <th>Interpretation</th>
 </tr>
 </thead>
 <tbody>
-<tr class="odd">
+<tr>
 <td>Gaussian</td>
 <td>None (symmetric, no tail dependence)</td>
 <td>Dependence is moderate and evenly spread; no extreme co-movement in
 the tails</td>
 </tr>
-<tr class="even">
+<tr>
 <td>Clayton</td>
 <td>Lower tail</td>
 <td>Firms at the low end of <span class="math inline">\(v\)</span>
 (e.g., negative shock) and low end of <span
 class="math inline">\(u\)</span> (e.g., efficient) move together.</td>
 </tr>
-<tr class="odd">
+<tr>
 <td>Clayton 90°</td>
 <td>Upper-lower (rotated)</td>
 <td>Firms at the high end of <span class="math inline">\(v\)</span>
 (e.g., positive shock) and low end of <span
 class="math inline">\(u\)</span> (e.g., efficient) move together.</td>
 </tr>
-<tr class="even">
+<tr>
 <td>Gumbel</td>
 <td>Upper tail</td>
 <td>Firms at the high end of both <span class="math inline">\(v\)</span>
@@ -4749,44 +4750,44 @@ distribution:</p>
 <col style="width: 83%" />
 </colgroup>
 <thead>
-<tr class="header">
+<tr>
 <th>Distribution</th>
 <th><span class="math inline">\(E(u_i^*)\)</span></th>
 </tr>
 </thead>
 <tbody>
-<tr class="odd">
+<tr>
 <td>half-normal</td>
 <td><span class="math inline">\(\sigma\sqrt{2/\pi}\)</span></td>
 </tr>
-<tr class="even">
+<tr>
 <td>truncated-normal</td>
 <td><span class="math inline">\(\sigma_u(\Lambda +
 \phi(\Lambda)/\Phi(\Lambda))\)</span>, <span
 class="math inline">\(\Lambda = \mu/\sigma_u\)</span></td>
 </tr>
-<tr class="odd">
+<tr>
 <td>Exponential</td>
 <td><span class="math inline">\(\sqrt{\lambda}\)</span></td>
 </tr>
-<tr class="even">
+<tr>
 <td>Weibull</td>
 <td><span class="math inline">\(\lambda\,\Gamma(1 + 1/k)\)</span></td>
 </tr>
-<tr class="odd">
+<tr>
 <td>Lognormal</td>
 <td><span class="math inline">\(\exp(\mu + \sigma^2/2)\)</span></td>
 </tr>
-<tr class="even">
+<tr>
 <td>Lomax</td>
 <td><span class="math inline">\(\lambda / (\alpha - 1)\)</span>, <span
 class="math inline">\(\alpha &gt; 1\)</span></td>
 </tr>
-<tr class="odd">
+<tr>
 <td>Rayleigh</td>
 <td><span class="math inline">\(\sigma\sqrt{\pi/2}\)</span></td>
 </tr>
-<tr class="even">
+<tr>
 <td>Gamma</td>
 <td><span class="math inline">\(k\theta\)</span></td>
 </tr>
@@ -4906,42 +4907,42 @@ additional user adjustments.</p>
 <col style="width: 46%" />
 </colgroup>
 <thead>
-<tr class="header">
+<tr>
 <th>Aspect</th>
 <th>Production Frontier</th>
 <th>Cost Frontier</th>
 </tr>
 </thead>
 <tbody>
-<tr class="odd">
+<tr>
 <td>Composed error</td>
 <td><span class="math inline">\(\varepsilon = v - u\)</span></td>
 <td><span class="math inline">\(\varepsilon = v + u\)</span></td>
 </tr>
-<tr class="even">
+<tr>
 <td>OLS residual skewness</td>
 <td>Should be<strong>negative</strong></td>
 <td>Should be<strong>positive</strong></td>
 </tr>
-<tr class="odd">
+<tr>
 <td>JLMS<span class="math inline">\(E(u \mid \varepsilon)\)</span></td>
 <td>Higher = more inefficient</td>
 <td>Same interpretation</td>
 </tr>
-<tr class="even">
+<tr>
 <td>BC<span class="math inline">\(E(e^{-u} \mid
 \varepsilon)\)</span></td>
 <td>Closer to 1 = more efficient</td>
 <td>Same interpretation</td>
 </tr>
-<tr class="odd">
+<tr>
 <td>BC interpretation</td>
 <td>Firm produces<span class="math inline">\(\text{BC} \times
 100\%\)</span> of potential output</td>
 <td>Firm’s cost is<span class="math inline">\(\frac{1}{\text{BC}} \times
 100\%\)</span> of the efficient cost level</td>
 </tr>
-<tr class="even">
+<tr>
 <td>Frontier coefficients</td>
 <td>Output elasticities</td>
 <td>Cost elasticities</td>
@@ -4970,25 +4971,25 @@ Halton Draws</h3>
 time. The following is provided only as a rough reference.</p>
 <table>
 <thead>
-<tr class="header">
+<tr>
 <th>n_draws</th>
 <th>Typical Use Case</th>
 </tr>
 </thead>
 <tbody>
-<tr class="odd">
+<tr>
 <td>127</td>
 <td>Quick testing, CPU comfortable</td>
 </tr>
-<tr class="even">
+<tr>
 <td>1024</td>
 <td>Standard estimation (default)</td>
 </tr>
-<tr class="odd">
+<tr>
 <td>4095 (<span class="math inline">\(2^{12}-1\)</span>)</td>
 <td>Publication-quality results</td>
 </tr>
-<tr class="even">
+<tr>
 <td>8191</td>
 <td>High precision</td>
 </tr>
@@ -5229,7 +5230,7 @@ unified API by setting the <code>datatype</code> argument in
 <col style="width: 27%" />
 </colgroup>
 <thead>
-<tr class="header">
+<tr>
 <th><code>datatype</code></th>
 <th>Model</th>
 <th>Methods</th>
@@ -5237,19 +5238,19 @@ unified API by setting the <code>datatype</code> argument in
 </tr>
 </thead>
 <tbody>
-<tr class="odd">
+<tr>
 <td><code>:panel_TFE</code></td>
 <td>Wang and Ho (2010) true fixed-effect</td>
 <td>MCI, MSLE, MLE</td>
 <td>half-normal, truncated-normal</td>
 </tr>
-<tr class="even">
+<tr>
 <td><code>:panel_TFE_CSW</code></td>
 <td>Chen, Schmidt, and Wang (2014) fixed-effect</td>
 <td>MLE only</td>
 <td>half-normal only</td>
 </tr>
-<tr class="odd">
+<tr>
 <td><code>:panel_TRE</code></td>
 <td>Greene (2005) True random-effect</td>
 <td>MLE only</td>
@@ -5456,70 +5457,70 @@ vs. Cross-Sectional Differences</h3>
 <col style="width: 38%" />
 </colgroup>
 <thead>
-<tr class="header">
+<tr>
 <th>Feature</th>
 <th>Cross-Sectional</th>
 <th>Panel (TFE / TFE_CSW / TRE)</th>
 </tr>
 </thead>
 <tbody>
-<tr class="odd">
+<tr>
 <td><code>datatype</code></td>
 <td><code>:cross_sectional</code> (default)</td>
 <td><code>:panel_TFE</code>, <code>:panel_TFE_CSW</code>,
 <code>:panel_TRE</code></td>
 </tr>
-<tr class="even">
+<tr>
 <td>Noise distributions</td>
 <td>Normal, Student T, Laplace</td>
 <td>Normal only</td>
 </tr>
-<tr class="odd">
+<tr>
 <td>Inefficiency distributions</td>
 <td>All 8</td>
 <td>TFE: all 8 (MCI/MSLE), 2 (MLE); CSW: half-normal; TRE: 2</td>
 </tr>
-<tr class="even">
+<tr>
 <td>Methods</td>
 <td>MCI, MSLE, MLE</td>
 <td>TFE: all 3; CSW/TRE: MLE only</td>
 </tr>
-<tr class="odd">
+<tr>
 <td>Copula</td>
 <td>Gaussian, Clayton, Clayton90, Gumbel</td>
 <td>Not supported</td>
 </tr>
-<tr class="even">
+<tr>
 <td>Heteroscedastic <code>hetero</code></td>
 <td>Yes (via Z), or <code>hetero=:scaling</code> for scaling property
 model</td>
 <td>supported through scaling function</td>
 </tr>
-<tr class="odd">
+<tr>
 <td>Scaling property model</td>
 <td><code>hetero=:scaling</code>; <code>zvar</code> has no constant;
 init keyword: <code>scaling</code></td>
 <td>Always active; <code>zvar</code> has no constant; init keyword:
 <code>scaling</code></td>
 </tr>
-<tr class="even">
+<tr>
 <td>Constant in <code>frontier</code>/<code>zvar</code></td>
 <td>Required in <code>frontier</code>; required in <code>zvar</code>
 unless <code>hetero=:scaling</code></td>
 <td><strong>Not allowed</strong> (within-demeaning eliminates)</td>
 </tr>
-<tr class="odd">
+<tr>
 <td>JLMS/BC indices</td>
 <td>Observation-level (<span class="math inline">\(N\)</span>
 vector)</td>
 <td>Observation-level vector</td>
 </tr>
-<tr class="even">
+<tr>
 <td>Panel id variable</td>
 <td>N/A</td>
 <td><code>id</code> (required for both balanced and unbalanced)</td>
 </tr>
-<tr class="odd">
+<tr>
 <td></td>
 <td></td>
 <td></td>
@@ -5541,14 +5542,31 @@ typically required.</li>
 10.1</a>).</li>
 </ul>
 <hr />
-<h2 id="citation">Citation</h2>
+<h2 id="references">References</h2>
 <ul>
+<li><p>Battese, G.E. and Coelli, T.J. (1988). “Prediction of firm-level
+technical efficiencies with a generalized frontier production function
+and panel data,” <em>Journal of Econometrics</em>, 38(3),
+387-399.</p></li>
+<li><p>Battese, G.E. and Coelli, T.J. (1995). “A model for technical
+inefficiency effects in a stochastic frontier production function for
+panel data,” <em>Empirical Economics</em>, 20(2), 325-332.</p></li>
 <li><p>Chen, Y.-Y., Schmidt, P. and Wang, H.-J. (2014). “Consistent
 estimation of the fixed effects stochastic frontier model,” <em>Journal
 of Econometrics</em>, 181(2), 65-76.</p></li>
 <li><p>Chen, Y.-Y. and Wang, H.-J. (2026) “Tradeoff between Efficiency
 and Resilience: Evidence from Power Plants and Rice Farmers,”
 <em>manuscript</em>, National Taiwan University.</p></li>
+<li><p>Greene, W. (2005). “Reconsidering heterogeneity in panel data
+estimators of the stochastic frontier model,” <em>Journal of
+Econometrics</em>, 126(2), 269-303.</p></li>
+<li><p>Jondrow, J., Lovell, C.A.K., Materov, I.S., and Schmidt, P.
+(1982). “On the estimation of technical inefficiency in the stochastic
+frontier production function model,” <em>Journal of Econometrics</em>,
+19(2-3), 233-238.</p></li>
+<li><p>Kodde, D.A. and Palm, F.C. (1986). “Wald criteria for jointly
+testing equality and inequality restrictions,” <em>Econometrica</em>,
+54(5), 1243-1248.</p></li>
 <li><p>Wang, H.-J. (2002) “Heteroscedasticity and Non-Monotonic
 Efficiency Effects of a Stochastic Frontier Model,” <em>Journal of
 Productivity Analysis</em>, 18, pp.241-253.</p></li>
@@ -5559,6 +5577,14 @@ Taiwan University.</p></li>
 <li><p>Wang, H.-J. and Ho, C.-W. (2010). “Estimating fixed-effect panel
 stochastic frontier models by model transformation,” <em>Journal of
 Econometrics</em>, 157(2), 286-296.</p></li>
+</ul>
+<hr />
+<h2 id="citation">Citation</h2>
+<ul>
+<li>Wang, H.-J. and Cheng, E.-T. (2026) “SFrontiers.jl: A
+Simulation-Based Likelihood Estimation Framework for Stochastic Frontier
+Models with Distributional Flexibility,” <em>manuscript</em>, National
+Taiwan University.</li>
 </ul>
 <hr />
 

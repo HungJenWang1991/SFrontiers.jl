@@ -2253,6 +2253,21 @@ function sfmodel_panel_init(; spec::PanelModelSpec,
         return init_vec
     end
 
+    # Component mode: reject kwargs that do not apply to the current distribution,
+    # matching the strict "error on extras" behavior of sfmodel_MCI_init /
+    # sfmodel_MSLE_init. Without this check, e.g. `mu=0.5` passed to a HalfNormal
+    # spec (no μ parameter) would be silently dropped (Bug 11 pattern).
+    _unused = String[]
+    mu        !== nothing && !haskey(idx, :mu)        && push!(_unused, "mu")
+    ln_lambda !== nothing && !haskey(idx, :ln_lambda) && push!(_unused, "ln_lambda")
+    ln_k      !== nothing && !haskey(idx, :ln_k)      && push!(_unused, "ln_k")
+    ln_alpha  !== nothing && !haskey(idx, :ln_alpha)  && push!(_unused, "ln_alpha")
+    ln_theta  !== nothing && !haskey(idx, :ln_theta)  && push!(_unused, "ln_theta")
+    isempty(_unused) ||
+        error("Unused init kwarg(s) in sfmodel_panel_init(): " *
+              join(_unused, ", ") *
+              ". Not part of the current distribution (:$(spec.ineff)).")
+
     # Component mode: start with OLS + defaults
     y_t = sf_panel_demean(spec.depvar, spec.offsets)
     x_t = sf_panel_demean(spec.frontier, spec.offsets)
@@ -2481,6 +2496,9 @@ function sfmodel_panel_fit(;
         end
     else
         sf_init = init isa AbstractVector ? Float64.(init) : Float64.(vec(init))
+        expected_len = panel_plen(spec.model.ineff, spec.K, spec.L)
+        length(sf_init) == expected_len ||
+            error("Length mismatch in sfmodel_panel_fit(): init has $(length(sf_init)) elements, expected $expected_len.")
     end
 
     # 4. OLS statistics on demeaned data

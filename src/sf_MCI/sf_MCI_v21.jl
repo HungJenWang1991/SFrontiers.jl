@@ -4719,6 +4719,9 @@ function sfmodel_MCI_fit(;
         end
     else
         sf_init = init isa AbstractVector ? Float64.(init) : Float64.(vec(init))
+        expected_len = plen(model.model, model.K, model.L, model.hetero; L_scaling=model.L_scaling)
+        length(sf_init) == expected_len ||
+            error("Length mismatch in sfmodel_MCI_fit(): init has $(length(sf_init)) elements, expected $expected_len.")
     end
 
     # ========== OLS Statistics ==========

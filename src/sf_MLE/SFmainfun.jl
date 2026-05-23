@@ -690,6 +690,24 @@ function sfmodel_init(;
         return _dicINI
     end
 
+    # Mode 2: validate kwarg-to-model compatibility before any writes.
+    # (a) sigma_a_sq is only meaningful for panel TRE models (Greene 2005),
+    #     where σₐ² occupies the q-position. Passing it to any other spec
+    #     would silently corrupt some other parameter's slot (Bug 11 pattern).
+    if sigma_a_sq !== nothing && spec.panel !== :TRE
+        throw(ArgumentError(
+            "`sigma_a_sq` is only valid for panel TRE models. " *
+            "For this spec (panel=$(spec.panel)), σₐ² is not a parameter. " *
+            "If you meant σᵤ², use `ln_sigma_u_sq` instead."))
+    end
+    # (b) `hscale` and `gamma` both target the q-position (:eqq). Specifying
+    #     both means the second-set silently wins. They are also for different
+    #     model families (scaling vs TimeDecay/Kumbhakar1990).
+    if hscale !== nothing && gamma !== nothing
+        throw(ArgumentError(
+            "Cannot specify both `hscale` and `gamma`; they target the same parameter slot."))
+    end
+
     # Mode 2: Component-by-component
     if frontier !== nothing
         _dicINI[:frontier] = _to_init_vec(frontier)
@@ -705,9 +723,11 @@ function sfmodel_init(;
         _dicINI[:eqw] = v
     end
     if sigma_a_sq !== nothing
+        # σₐ² lives at the q-position for panel TRE (PTREH/PTRET);
+        # see SFgetvars.jl getvar(::Type{PTREH}/{PTRET}) lines 1080-1085.
         v = _to_init_vec(sigma_a_sq)
         _dicINI[:σₐ²] = v
-        _dicINI[:eqw] = v
+        _dicINI[:eqq] = v
     end
     if ln_sigma_v_sq !== nothing
         v = _to_init_vec(ln_sigma_v_sq)

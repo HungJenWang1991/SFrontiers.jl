@@ -941,6 +941,18 @@ end
 # ==============================================================
 
 function _predict_marginal(r::SFResult, spec, Zn::AbstractMatrix)
+    # predict(:marginal) is currently cross-sectional only. The helpers
+    # _Eu_at_z / _scalar_from / _eval_μ / _eval_lnσu² / _get_scaling_delta
+    # below all dereference `spec.mci_spec.idx.*`, which is `nothing` for
+    # panel_TFE, panel_TFE_CSW, and panel_TRE specs. Mirrors the same
+    # cross-sectional-only restriction in _dispatch_jlms_bc for MLE-based
+    # panel jlms/bc.
+    if hasproperty(spec, :datatype) && spec.datatype !== :cross_sectional
+        error("predict(:marginal) currently supports cross-sectional fits only. " *
+              "Got `spec.datatype === :$(spec.datatype)`. " *
+              "Panel marginal effects via predict() are deferred to a later round.")
+    end
+
     ineff = spec.ineff
     ineff ∈ (:HalfNormal, :TruncatedNormal) ||
         error("predict(:marginal) currently supports `ineff=:HalfNormal` or " *

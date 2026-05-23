@@ -910,6 +910,27 @@ function _reorder_init_mci_to_mle(spec::UnifiedSpec, init)
     return init
 end
 
+# Reorder init vector from Panel-Backend order → MLE order for panel_TFE.
+# Panel HN order: [frontier(K), δ_hscale(L), lnσᵤ²(1), lnσᵥ²(1)]    — matches MLE
+# Panel TN order: [frontier(K), δ_hscale(L), μ(1), lnσᵤ²(1), lnσᵥ²(1)]
+# MLE   TN order: [frontier(K), μ(1), δ_hscale(L), lnσᵤ²(1), lnσᵥ²(1)]
+function _reorder_init_panel_to_mle(spec::UnifiedSpec, init)
+    isnothing(init) && return nothing
+    spec.panel_spec === nothing && return init
+    K = spec.panel_spec.K
+    L = spec.panel_spec.L
+    v = collect(init)
+    if spec.ineff == :TruncatedNormal
+        return vcat(
+            v[1:K],            # frontier
+            v[K+L+1:K+L+1],    # μ (was after scaling in Panel)
+            v[K+1:K+L],        # scaling → hscale
+            v[K+L+2:end]       # lnσᵤ², lnσᵥ²
+        )
+    end
+    return v
+end
+
 # Reorder MLE result coefficients → MCI canonical order for TruncatedNormal+scaling.
 # MLE order: [frontier(K), μ(1), hscale(L), σᵤ²(1), σᵥ²(1)]
 # MCI order: [frontier(K), scaling(L), μ(1), σ²(1), σᵥ²(1)]
@@ -941,6 +962,39 @@ function _reorder_result_mle_to_mci(spec::UnifiedSpec, result)
                               std_err = new_std_err,
                               var_cov_mat = new_vcov,
                               Hessian = new_hessian))
+    end
+    return result
+end
+
+# Reorder MLE result coefficient vector → Panel-Backend canonical order for panel_TFE.
+# Only TruncatedNormal needs reordering (μ and δ_hscale swap); HN orders match.
+# MLE   TN order: [frontier(K), μ(1), δ_hscale(L), lnσᵤ²(1), lnσᵥ²(1)]
+# Panel TN order: [frontier(K), δ_hscale(L), μ(1), lnσᵤ²(1), lnσᵥ²(1)]
+function _reorder_result_mle_to_panel(spec::UnifiedSpec, result)
+    if spec.ineff == :TruncatedNormal && spec.panel_spec !== nothing
+        K = spec.panel_spec.K
+        L = spec.panel_spec.L
+        n = length(result.coeff)
+        # perm: [1:K, (K+2):(K+1+L), K+1, (K+2+L):n]
+        perm = vcat(1:K, (K+2):(K+1+L), K+1, (K+2+L):n)
+        new_coeff    = result.coeff[perm]
+        new_std_err  = result.std_err[perm]
+        new_vcov     = result.var_cov_mat[perm, perm]
+        new_hessian  = result.Hessian[perm, perm]
+        merged = merge(result, (coeff = new_coeff,
+                                std_err = new_std_err,
+                                var_cov_mat = new_vcov,
+                                Hessian = new_hessian))
+        # `varnames` is consumed by accessors.jl `_row_names` → `coeftable(r)`.
+        # Keep labels aligned with the reordered values for the public API.
+        # (The CoefTable stored at `result.table` was built by the MLE backend
+        # before this reorder and intentionally left in MLE order — it is the
+        # during-fit display artifact, not a public-API surface.)
+        if hasproperty(result, :varnames) && length(result.varnames) >= n
+            new_varnames = result.varnames[perm]
+            merged = merge(merged, (varnames = new_varnames,))
+        end
+        return merged
     end
     return result
 end
@@ -990,9 +1044,10 @@ function sfmodel_fit(;
         if spec.mle_spec === nothing
             _mle_unavailable_error(spec)
         end
-        # For panel_TFE, init was built by Panel_Backend — pass init=nothing
-        # so MLE uses its own OLS-based defaults
-        mle_init = (spec.datatype == :panel_TFE) ? nothing :
+        # For panel_TFE, init was built by Panel_Backend (Panel order); translate
+        # to MLE order. For cross-sectional, reorder MCI/MSLE init to MLE order.
+        mle_init = (spec.datatype == :panel_TFE) ?
+                   _reorder_init_panel_to_mle(spec, init) :
                    _reorder_init_mci_to_mle(spec, init)
         mle_opt  = _to_mle_opt(optim_options)
         raw = MLE_Backend.sfmodel_fit(;
@@ -1003,7 +1058,10 @@ function sfmodel_fit(;
             marginal = marginal,
             show_table = show_table,
             verbose = verbose)
-        return _wrap_result(_attach_mle_data(spec, _reorder_result_mle_to_mci(spec, raw)), :MLE, spec)
+        reordered = (spec.datatype == :panel_TFE) ?
+                    _reorder_result_mle_to_panel(spec, raw) :
+                    _reorder_result_mle_to_mci(spec, raw)
+        return _wrap_result(_attach_mle_data(spec, reordered), :MLE, spec)
 
     # --- Panel TFE with simulation methods (MCI/MSLE → Panel_Backend) ---
     elseif spec.datatype == :panel_TFE && !(method isa MLEMethodSpec)

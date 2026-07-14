@@ -547,20 +547,23 @@ function make_panel_constants(model::PanelModel, ::Type{TT}, T_max::Int) where {
         clamp_lo      = TT(1e-15),
         sigma_floor   = TT(1e-12),
         sigma_ceil    = TT(1e12),
-        k_floor       = TT(1e-6),
-        k_ceil        = TT(1e6),
+        k_floor        = TT(0.1),       # Weibull/Gamma shape floor (kernel-aligned)
+        weibull_k_ceil = TT(10.0),      # Weibull shape ceiling (kernel: [0.1, 10])
+        gamma_k_ceil   = TT(100.0),     # Gamma shape ceiling   (kernel: [0.1, 100])
         theta_floor   = TT(1e-12),
         theta_ceil    = TT(1e12),
-        xm_floor      = TT(1e-12),
-        xm_ceil       = TT(1e6),
-        alpha_floor   = TT(1e-6),
-        alpha_ceil    = TT(1e6),
+        xm_floor      = TT(1e-10),      # Lomax scale floor  (kernel: [1e-10, 1e10])
+        xm_ceil       = TT(1e10),       # Lomax scale ceiling
+        alpha_floor   = TT(0.1),        # Lomax shape floor  (kernel: [0.1, 100])
+        alpha_ceil    = TT(100.0),      # Lomax shape ceiling
         sqrt2         = sqrt2,
         inv_sqrt2     = inv(sqrt2),
         sqrt_pi       = sqrt(TT(π)),
-        lo_erf        = TT(32) * eps(TT),
+        lo_erf        = TT(32) * eps(TT),               # HalfNormal: erfinv arg ∈ [0,1)
+        lo_erf_signed = -one(TT) + TT(32) * eps(TT),    # TN/Lognormal: signed erfinv arg ∈ (−1,1)
         hi_erf        = one(TT) - TT(32) * eps(TT),
         exp_clamp     = TT(1e-15),
+        out_ceil      = TT(1e15),       # Lomax draw output ceiling (kernel-aligned)
     )
 end
 
@@ -613,7 +616,7 @@ end
 function get_panel_ineff_vals(::Weibull_Panel, p, idx, c)
     P = eltype(p)
     lambda = clamp(exp(p[idx.ln_lambda]), P(c.sigma_floor), P(c.sigma_ceil))
-    k = clamp(exp(p[idx.ln_k]), P(c.k_floor), P(c.k_ceil))
+    k = clamp(exp(p[idx.ln_k]), P(c.k_floor), P(c.weibull_k_ceil))
     return (lambda=lambda, k=k)
 end
 
@@ -641,7 +644,7 @@ end
 
 function get_panel_ineff_vals(::Gamma_Panel, p, idx, c)
     P = eltype(p)
-    k = clamp(exp(p[idx.ln_k]), P(c.k_floor), P(c.k_ceil))
+    k = clamp(exp(p[idx.ln_k]), P(c.k_floor), P(c.gamma_k_ceil))
     theta = clamp(exp(p[idx.ln_theta]), P(c.theta_floor), P(c.theta_ceil))
     lgk = loggamma(k)
     return (k=k, theta=theta, lgk=lgk)
@@ -779,7 +782,7 @@ function mypan_gen_udraws_msle(::TruncatedNormal_Panel, ineff_vals, halton_P, c,
     s2 = P(c.sqrt2)
     erf_arg = erf(mu / (sigma_u * s2))
     inner = halton_P .+ (halton_P .- 1) .* erf_arg
-    inner_clamped = clamp.(inner, P(c.lo_erf), P(c.hi_erf))
+    inner_clamped = clamp.(inner, P(c.lo_erf_signed), P(c.hi_erf))  # signed arg: floor at −1+32eps, not the HalfNormal [0,1) floor
     return mu .+ sigma_u .* s2 .* erfinv.(inner_clamped)
 end
 
@@ -797,14 +800,14 @@ end
 function mypan_gen_udraws_msle(::Lognormal_Panel, ineff_vals, halton_P, c, ::Type{P}) where P
     mu = ineff_vals.mu
     sigma = ineff_vals.sigma
-    inner = clamp.(2 .* halton_P .- 1, P(c.lo_erf), P(c.hi_erf))
+    inner = clamp.(2 .* halton_P .- 1, P(c.lo_erf_signed), P(c.hi_erf))  # signed arg: floor at −1+32eps
     return exp.(mu .+ sigma .* P(c.sqrt2) .* erfinv.(inner))
 end
 
 function mypan_gen_udraws_msle(::Lomax_Panel, ineff_vals, halton_P, c, ::Type{P}) where P
     lambda = ineff_vals.lambda
     alpha = ineff_vals.alpha
-    return lambda .* expm1.((-1 / alpha) .* log.(max.(1 .- halton_P, P(c.exp_clamp))))
+    return clamp.(lambda .* expm1.((-1 / alpha) .* log.(max.(1 .- halton_P, P(c.exp_clamp)))), zero(P), P(c.out_ceil))
 end
 
 function mypan_gen_udraws_msle(::Rayleigh_Panel, ineff_vals, halton_P, c, ::Type{P}) where P
@@ -1375,15 +1378,16 @@ function _panel_uncondU_expo(coef, idx, z_obs)
     return h_val * sqrt(lambda)
 end
 
-"""E(u_it) for Weibull(λ, k): h(z) * λ * Γ(1 + 1/k)"""
-function _panel_uncondU_weibull(coef, idx, z_obs)
+"""E(u_it) for Weibull(λ, k): h(z) * λ * Γ(1 + 1/k). Clamps use the FIX-15 kernel
+constants `c` so the marginal effect uses the same effective parameters as the NLL (R-14)."""
+function _panel_uncondU_weibull(coef, idx, z_obs, c)
     L = length(idx.delta)
     z_delta = sum(coef[idx.delta[j]] * z_obs[j] for j in 1:L)
     h_val = exp(z_delta)
     lambda = clamp(exp(coef[idx.ln_lambda]),
-                   oftype(z_delta, 1e-12), oftype(z_delta, 1e12))
+                   oftype(z_delta, c.sigma_floor), oftype(z_delta, c.sigma_ceil))
     k_val = clamp(exp(coef[idx.ln_k]),
-                  oftype(z_delta, 1e-6), oftype(z_delta, 1e6))
+                  oftype(z_delta, c.k_floor), oftype(z_delta, c.weibull_k_ceil))
     return h_val * lambda * exp(loggamma(1 + 1 / k_val))
 end
 
@@ -1398,15 +1402,16 @@ function _panel_uncondU_lognorm(coef, idx, z_obs)
     return h_val * exp(mu + sigma_sq / 2)
 end
 
-"""E(u_it) for Lomax(α, λ): h(z) * λ / (α - 1). Requires α > 1."""
-function _panel_uncondU_lomax(coef, idx, z_obs)
+"""E(u_it) for Lomax(α, λ): h(z) * λ / (α - 1). Requires α > 1. Clamps use the FIX-15
+kernel constants `c` so the marginal effect uses the same effective parameters as the NLL (R-14)."""
+function _panel_uncondU_lomax(coef, idx, z_obs, c)
     L = length(idx.delta)
     z_delta = sum(coef[idx.delta[j]] * z_obs[j] for j in 1:L)
     h_val = exp(z_delta)
     lambda = clamp(exp(coef[idx.ln_lambda]),
-                   oftype(z_delta, 1e-12), oftype(z_delta, 1e6))
+                   oftype(z_delta, c.xm_floor), oftype(z_delta, c.xm_ceil))
     alpha = clamp(exp(coef[idx.ln_alpha]),
-                  oftype(z_delta, 1e-6), oftype(z_delta, 1e6))
+                  oftype(z_delta, c.alpha_floor), oftype(z_delta, c.alpha_ceil))
     if alpha <= 1
         return oftype(z_delta, Inf)
     end
@@ -1423,15 +1428,16 @@ function _panel_uncondU_rayleigh(coef, idx, z_obs)
     return h_val * sigma * sqrt(oftype(z_delta, π) / 2)
 end
 
-"""E(u_it) for Gamma(k, θ): h(z) * k * θ"""
-function _panel_uncondU_gamma(coef, idx, z_obs)
+"""E(u_it) for Gamma(k, θ): h(z) * k * θ. Clamps use the FIX-15 kernel constants `c`
+so the marginal effect uses the same effective parameters as the NLL (R-14)."""
+function _panel_uncondU_gamma(coef, idx, z_obs, c)
     L = length(idx.delta)
     z_delta = sum(coef[idx.delta[j]] * z_obs[j] for j in 1:L)
     h_val = exp(z_delta)
     k_val = clamp(exp(coef[idx.ln_k]),
-                  oftype(z_delta, 1e-6), oftype(z_delta, 1e6))
+                  oftype(z_delta, c.k_floor), oftype(z_delta, c.gamma_k_ceil))
     theta = clamp(exp(coef[idx.ln_theta]),
-                  oftype(z_delta, 1e-12), oftype(z_delta, 1e12))
+                  oftype(z_delta, c.theta_floor), oftype(z_delta, c.theta_ceil))
     return h_val * k_val * theta
 end
 
@@ -1502,16 +1508,24 @@ get_panel_marg(::TruncatedNormal_Panel, spec::_PanelInternalSpec, coef::Abstract
     _panel_marg_generic(_panel_uncondU_trun, spec, coef)
 get_panel_marg(::Exponential_Panel, spec::_PanelInternalSpec, coef::AbstractVector) =
     _panel_marg_generic(_panel_uncondU_expo, spec, coef)
-get_panel_marg(::Weibull_Panel, spec::_PanelInternalSpec, coef::AbstractVector) =
-    _panel_marg_generic(_panel_uncondU_weibull, spec, coef)
+# Weibull/Lomax/Gamma marginal helpers take the FIX-15 kernel constants `c` so their
+# clamps stay aligned with the NLL. Build `c` once here and close over it (R-14).
+function get_panel_marg(::Weibull_Panel, spec::_PanelInternalSpec, coef::AbstractVector)
+    c = make_panel_constants(spec.model, Float64, spec.T_max)
+    _panel_marg_generic((cf, ix, z) -> _panel_uncondU_weibull(cf, ix, z, c), spec, coef)
+end
 get_panel_marg(::Lognormal_Panel, spec::_PanelInternalSpec, coef::AbstractVector) =
     _panel_marg_generic(_panel_uncondU_lognorm, spec, coef)
-get_panel_marg(::Lomax_Panel, spec::_PanelInternalSpec, coef::AbstractVector) =
-    _panel_marg_generic(_panel_uncondU_lomax, spec, coef)
+function get_panel_marg(::Lomax_Panel, spec::_PanelInternalSpec, coef::AbstractVector)
+    c = make_panel_constants(spec.model, Float64, spec.T_max)
+    _panel_marg_generic((cf, ix, z) -> _panel_uncondU_lomax(cf, ix, z, c), spec, coef)
+end
 get_panel_marg(::Rayleigh_Panel, spec::_PanelInternalSpec, coef::AbstractVector) =
     _panel_marg_generic(_panel_uncondU_rayleigh, spec, coef)
-get_panel_marg(::Gamma_Panel, spec::_PanelInternalSpec, coef::AbstractVector) =
-    _panel_marg_generic(_panel_uncondU_gamma, spec, coef)
+function get_panel_marg(::Gamma_Panel, spec::_PanelInternalSpec, coef::AbstractVector)
+    c = make_panel_constants(spec.model, Float64, spec.T_max)
+    _panel_marg_generic((cf, ix, z) -> _panel_uncondU_gamma(cf, ix, z, c), spec, coef)
+end
 
 """
     panel_marginal_effects(spec::_PanelInternalSpec, coef) -> (DataFrame, NamedTuple)
@@ -1541,7 +1555,10 @@ Returns (var_cov_matrix=..., redflag=Int).
 function _panel_invert_hessian(H::AbstractMatrix{TT};
                                 message::Bool=true) where {TT<:Real}
     redflag = 0
-    var_cov_matrix = similar(H)
+    # Defined fallback: if inv(H) throws below (redflag=1), the returned matrix must be a
+    # well-defined NaN matrix, not an uninitialized `similar(H)` whose garbage diagonal can
+    # crash the downstream sqrt-based SE line. See re-audit R-06.
+    var_cov_matrix = fill!(similar(H, float(TT)), NaN)
 
     try
         var_cov_matrix = inv(H)
@@ -1562,6 +1579,12 @@ function _panel_invert_hessian(H::AbstractMatrix{TT};
 
     return (var_cov_matrix=var_cov_matrix, redflag=redflag)
 end
+
+# NaN-safe standard errors from a var-cov matrix. A non-positive-diagonal (redflag>0) vcov
+# would make `sqrt` throw a DomainError, so those entries become NaN instead — a degenerate
+# fit still returns its coefficients/loglik/jlms/bc, and `stderror(r)` stays NaN-consistent
+# with `sqrt.(diag(vcov(r)))`. See re-audit R-06 (regression from FIX-20).
+_stderr_from_vcov(V::AbstractMatrix) = map(d -> d < 0 ? oftype(d, NaN) : sqrt(d), diag(V))
 
 """
     panel_var_cov_mat(nll_func, coef; message=true) -> NamedTuple
@@ -1653,7 +1676,7 @@ function panel_print_table(spec::_PanelInternalSpec{T}, coef::AbstractVector,
     N_total = sum(spec.T_periods)
 
     # Compute statistics (asymptotic Normal, standard for MLE)
-    stddev = sqrt.(abs.(diag(var_cov_matrix)))
+    stddev = _stderr_from_vcov(var_cov_matrix)  # non-PD vcov ⇒ NaN SEs (no DomainError); keeps stderror(r) NaN-consistent with sqrt.(diag(vcov(r))). Re-audit R-06.
     t_stats = coef ./ stddev
     tt = cquantile(Normal(0, 1), 0.025)  # ~1.96
 
@@ -1943,24 +1966,22 @@ end
 """
     sfmodel_panel_spec(@useData(df), @depvar(y), @frontier(x1,x2), @id(id); ...)
 
-DSL form — unbalanced panel without @zvar (constant scaling h(z)=exp(δ₀)).
+DSL form without @zvar. NOT SUPPORTED: a constant scaling h(z)=exp(δ₀) is
+unidentified in the Wang-Ho panel model (within-group demeaning eliminates it),
+so this variant errors at spec time (FIX-09). Provide `@zvar(...)` with a
+regressor that varies within firms.
 """
 function sfmodel_panel_spec(data_spec::UseDataSpec, depvar_spec::DepvarSpec,
                               frontier_spec::FrontierSpec, id_spec::IdSpec;
                               noise::Symbol=:Normal,
                               ineff::Symbol=:HalfNormal,
                               type::Symbol=:prod)
-    df = data_spec.df
-    depvar, frontier, frontier_names = _panel_dsl_extract(df, depvar_spec, frontier_spec)
-    NT = length(depvar)
-    zvar = ones(Float64, NT, 1)
-    id_col = df[!, id_spec.name]
-    model_temp = _build_panel_model(noise, ineff)
-    varnames = vcat(frontier_names, ["_cons"], _panel_ineff_varnames(model_temp.ineff))
-
-    return sfmodel_panel_spec(; depvar=depvar, frontier=frontier, zvar=zvar,
-                                 id=id_col, noise=noise, ineff=ineff, type=type,
-                                 varnames=varnames)
+    error("The Wang-Ho panel model requires `@zvar(...)` with within-firm variation " *
+          "for the scaling function h(z)=exp(z'δ). A spec without @zvar uses a constant " *
+          "scaling h(z)=exp(δ₀), which is unidentified: within-group demeaning eliminates " *
+          "it, the likelihood is flat in δ₀ and the inefficiency parameters, and jlms/bc " *
+          "carry no information from the data (FIX-09). Add `@zvar(...)` with a regressor " *
+          "that varies within firms.")
 end
 
 # ============================================================================
@@ -2011,7 +2032,7 @@ spec = sfmodel_panel_spec(
 )
 ```
 """
-function sfmodel_panel_spec(; depvar, frontier, zvar,
+function sfmodel_panel_spec(; depvar, frontier, zvar=nothing,
                               T_periods::Union{Int,Nothing}=nothing,
                               id=nothing,
                               noise::Symbol=:Normal,
@@ -2020,6 +2041,20 @@ function sfmodel_panel_spec(; depvar, frontier, zvar,
                               varnames::Union{Nothing, Vector{String}}=nothing,
                               eqnames::Union{Nothing, Vector{String}}=nothing,
                               eq_indices::Union{Nothing, Vector{Int}}=nothing)
+
+    # FIX-09: a panel spec without `zvar` implies a constant scaling h(z)=exp(δ₀),
+    # which is unidentified in the Wang-Ho model (within-group demeaning eliminates
+    # it). Give the informative identification error instead of the generic
+    # "Unsupported matrix input type: Nothing" that `_to_matrix_panel(nothing)`
+    # would otherwise raise (this also covers the unified `sfmodel_spec` keyword
+    # path, which forwards `zvar=nothing`).
+    isnothing(zvar) && error(
+        "The Wang-Ho panel model requires `zvar` with within-firm variation for the " *
+        "scaling function h(z)=exp(z'δ). A panel spec without `zvar` uses a constant " *
+        "scaling h(z)=exp(δ₀), which is unidentified: within-group demeaning eliminates " *
+        "it, the likelihood is flat in δ₀ and the inefficiency parameters, and jlms/bc " *
+        "carry no information from the data (FIX-09). Provide `zvar=...` with a regressor " *
+        "that varies within firms.")
 
     # Normalize inputs
     depvar_norm = _to_vector_panel(depvar)
@@ -2056,10 +2091,29 @@ function sfmodel_panel_spec(; depvar, frontier, zvar,
     size(frontier_norm, 1) == NT || error("frontier has $(size(frontier_norm, 1)) rows, expected $NT.")
     size(zvar_norm, 1) == NT || error("zvar has $(size(zvar_norm, 1)) rows, expected $NT.")
 
-    # Reject constant columns (unidentifiable after within-demeaning)
+    # Reject constant columns (unidentifiable after within-demeaning).
     _check_no_constant_column(frontier_norm, "frontier")
-    if L > 1 || !all(==(1.0), zvar_norm)   # exempt DSL-generated constant-only zvar
-        _check_no_constant_column(zvar_norm, "zvar")
+    _check_no_constant_column(zvar_norm, "zvar")   # incl. the DSL all-ones column (FIX-09: exemption removed)
+    # Scaling h(z)=exp(z'δ) is identified only if z varies WITHIN firms. If every
+    # zvar column is constant within every firm (e.g. a time-invariant industry
+    # dummy, or the no-@zvar ones column), the within-demeaned h̃ ≡ 0 for all δ, the
+    # likelihood is flat in δ and the inefficiency parameters, and jlms/bc reduce to
+    # uninformative prior means (FIX-09). Error at spec time rather than silently
+    # return arbitrary scores.
+    let z_has_within_variation = false
+        for j in axes(zvar_norm, 2), i in 1:N
+            s, e = offsets[i] + 1, offsets[i + 1]
+            seg = @view zvar_norm[s:e, j]
+            if any(x -> x != seg[1], seg)
+                z_has_within_variation = true
+                break
+            end
+        end
+        z_has_within_variation || error(
+            "`zvar` has no within-firm variation: every column is constant within each " *
+            "firm, so the Wang-Ho scaling h(z)=exp(z'δ) is unidentified (within-group " *
+            "demeaning eliminates it; the likelihood is flat and jlms/bc carry no " *
+            "information from the data). Provide a zvar that varies within firms.")
     end
 
     # Build model
@@ -2261,6 +2315,12 @@ function sfmodel_panel_init(; spec::PanelModelSpec,
     mu        !== nothing && !haskey(idx, :mu)        && push!(_unused, "mu")
     ln_lambda !== nothing && !haskey(idx, :ln_lambda) && push!(_unused, "ln_lambda")
     ln_k      !== nothing && !haskey(idx, :ln_k)      && push!(_unused, "ln_k")
+    # `ln_sigma_sq` sets the ineff variance for HalfNormal/TN (idx key :ln_sigma_u_sq)
+    # and Lognormal/Rayleigh (idx key :ln_sigma_sq); reject it only for the four
+    # distributions that have neither key (Exp/Weibull/Lomax/Gamma), where it was
+    # previously dropped silently (R-24).
+    ln_sigma_sq !== nothing && !haskey(idx, :ln_sigma_sq) && !haskey(idx, :ln_sigma_u_sq) &&
+        push!(_unused, "ln_sigma_sq")
     ln_alpha  !== nothing && !haskey(idx, :ln_alpha)  && push!(_unused, "ln_alpha")
     ln_theta  !== nothing && !haskey(idx, :ln_theta)  && push!(_unused, "ln_theta")
     isempty(_unused) ||
@@ -2380,6 +2440,17 @@ function sfmodel_panel_opt(; warmstart_solver=nothing,
     return PanelOptSpec(warmstart_solver, ws_opt, main_solver, m_opt)
 end
 
+# R-27: capture the main optimizer's iteration trace as a NamedTuple for
+# plot(:convergence). Returns `nothing` unless the fit's Optim.Options carried
+# store_trace=true (set by the unified `sfmodel_opt(store_trace=true)`).
+function _sf_optim_trace(optres, want::Bool)
+    want || return nothing
+    fv = Optim.f_trace(optres)
+    return (iteration = collect(0:(length(fv) - 1)),
+            value     = fv,
+            g_norm    = Optim.g_norm_trace(optres))
+end
+
 
 # ============================================================================
 # Section 20: sfmodel_panel_fit()
@@ -2433,7 +2504,7 @@ Estimate the Wang and Ho (2010) panel stochastic frontier model.
 
 # Returns
 NamedTuple with fields including `converged`, `loglikelihood`, `coeff`, `std_err`,
-`jlms` (firm-level), `bc` (firm-level), and more. All results also accessible via `result.list`.
+`jlms` (observation-level, length Σ T_i), `bc` (observation-level, length Σ T_i), and more. All results also accessible via `result.list`.
 """
 function sfmodel_panel_fit(;
     spec::PanelModelSpec,
@@ -2607,7 +2678,7 @@ function sfmodel_panel_fit(;
         redflag = max(redflag, vcov_result.redflag)
     end
 
-    stddev = sqrt.(abs.(diag(var_cov_matrix)))
+    stddev = _stderr_from_vcov(var_cov_matrix)  # non-PD vcov ⇒ NaN SEs (no DomainError); keeps stderror(r) NaN-consistent with sqrt.(diag(vcov(r))). Re-audit R-06.
 
     # Hessian
     numerical_hessian = hessian(_lik, _coevec)
@@ -2710,6 +2781,7 @@ function sfmodel_panel_fit(;
     _dicRES[:main_ini] = sf_init_2nd
     _dicRES[:main_maxIT] = sf_main_maxit
     _dicRES[:main_tolerance] = myopt.main_opt.g_abstol
+    _dicRES[:trace] = _sf_optim_trace(_optres, myopt.main_opt.store_trace)   # R-27: main-solver trace for plot(:convergence)
     _dicRES[:redflag] = redflag
     _dicRES[:______________________] = "___________________"
     _dicRES[:GPU] = method.GPU
@@ -2758,6 +2830,7 @@ function sfmodel_panel_fit(;
         main_ini = _dicRES[:main_ini],
         main_maxIT = _dicRES[:main_maxIT],
         main_tolerance = _dicRES[:main_tolerance],
+        trace = _dicRES[:trace],
         redflag = _dicRES[:redflag],
         GPU = _dicRES[:GPU],
         n_draws = _dicRES[:n_draws],
@@ -2845,8 +2918,8 @@ result.converged          # true/false
 result.loglikelihood      # log-likelihood at optimum
 result.coeff              # coefficient vector
 result.std_err            # standard errors
-result.jlms               # N-vector: E[u_i* | data_i]
-result.bc                 # N-vector: E[exp(-u_i*) | data_i]
+result.jlms               # NT-vector (obs-level): jlms_it = h_it * E[u_i* | data_i]
+result.bc                 # NT-vector (obs-level): E[exp(-h_it * u_i*) | data_i]
 result.frontier           # estimated β
 result.delta              # estimated δ
 result.var_cov_mat        # variance-covariance matrix
@@ -2961,9 +3034,16 @@ spec_bal = sfmodel_panel_spec(
 )
 
 
-## Example 8: DSL — Without @zvar (constant scaling h(z)=exp(δ₀))
+## Example 8: DSL — Without @zvar → REJECTED at spec time (FIX-09)
+##
+## A panel spec without @zvar implies a constant scaling h(z)=exp(δ₀), which is
+## unidentified in the Wang-Ho model (within-group demeaning eliminates it). As of
+## FIX-09 both the DSL and keyword paths raise an explanatory identification error
+## instead of manufacturing an all-ones zvar and publishing prior-mean jlms/bc. The
+## call below is retained only to document that it is now rejected — copying it
+## yields an instructive error, not a silent (mis)fit. Use Example 6/7 with @zvar.
 
-spec_no_z = sfmodel_panel_spec(
+spec_no_z = sfmodel_panel_spec(   # <-- raises: requires @zvar with within-firm variation
     @useData(df),
     @depvar(yit),
     @frontier(xit),

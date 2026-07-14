@@ -1033,7 +1033,8 @@ meth3 = sfmodel_method(
 my_draws = reshape(rand(2^12), 1, :)
 meth4 = sfmodel_method(
     method = :MSLE,
-    draws = my_draws,  # identical for each obs
+    draws = my_draws,     # 1×S row matrix, identical for each obs
+    multiRand = false,    # REQUIRED for user-supplied draws (see §9.8 Custom Draw Sequences)
     GPU = true,
 )
 
@@ -1294,7 +1295,7 @@ Returns a `NamedTuple` with comprehensive results:
 | -------------------- | ---- | ------------------------------------------ |
 | `converged`          | Bool | Whether optimization converged             |
 | `iter_limit_reached` | Bool | Whether iteration limit was reached        |
-| `redflag`            | Int  | Warning flag: 0 = OK, 1 = potential issues |
+| `redflag`            | Int  | Warning flag: 0 = OK, 1 = convergence problems, 2 = non-positive var-cov diagonal (SEs are `NaN`) |
 
 **Method Information**
 
@@ -1434,13 +1435,13 @@ When `show_table = true`, the function prints:
 
 `Optim.jl` declares convergence as soon as **any** of its stopping criteria is met — a small gradient norm (`g_abstol`), a small change in the log-likelihood (`f_abstol`), or a small change in the parameter vector (`x_abstol`). Because of this, `result.converged = true` does not by itself guarantee that the gradient at the reported optimum is small: the optimizer may have stopped because the objective or the parameters stopped moving, while the gradient remained sizeable.
 
-`SFrontiers.jl` therefore returns an additional warning flag, `redflag`, that re-examines the quality of the result after `Optim` returns. `redflag = 1` whenever any of the following holds, regardless of what `converged` reports:
+`SFrontiers.jl` therefore returns an additional warning flag, `redflag`, that re-examines the quality of the result after `Optim` returns. It takes one of three values, regardless of what `converged` reports (the highest applicable value is reported):
 
-- Gradient norm exceeds 0.1 (or is `NaN`)
-- Iteration limit was reached
-- Variance–covariance matrix has non-positive diagonal elements
+- `redflag = 0`: no issues detected.
+- `redflag = 1`: a convergence-quality problem — the gradient norm exceeds 0.1 (or is `NaN`), the iteration limit was reached, or the Hessian is not invertible.
+- `redflag = 2`: the variance–covariance matrix has non-positive diagonal elements, so the affected standard errors are reported as `NaN`.
 
-Treat `redflag = 1` as a signal to inspect `gradient_norm` and re-run with different initial values, more iterations, or a different solver (see [Handling Convergence Issues](#handling-convergence-issues)).
+Treat any `redflag > 0` as a signal to inspect `gradient_norm` and re-run with different initial values, more iterations, or a different solver (see [Handling Convergence Issues](#handling-convergence-issues)).
 
 <a id="sfmodel_mixtable-and-sfmodel_chisquaretable"></a>
 
@@ -1791,7 +1792,7 @@ A `Plots.Plot` object that can be displayed, saved with `savefig`, or further co
 | `plot(result, :marginal, z)`     | Marginal effect plotted against a single user-supplied covariate vector `z`                          |
 | `plot(result, :convergence)`     | Optimizer trace; requires `store_trace = true` to have been passed to `sfmodel_opt()` at fit time    |
 
-The QQ sub-panel of `:residuals` compares the **imputed noise estimate** $\hat v_i = \hat\varepsilon_i \mp \hat u_i$ against $N(0, \hat\sigma_v^2)$, not the composed residual itself. This is because the model assumes normality of $v$, not $\varepsilon$. The composed residual is deliberately non-normal under the SF specification (its skewness is the basis of `sf_vs_ols`). Since $\hat v$ is a derived latent-variable quantity, the plot is a soft distributional-misspecification diagnostic rather than a formal normality test.
+The QQ sub-panel of `:residuals` standardizes the **imputed noise estimate** $\hat v_i = \hat\varepsilon_i \mp \hat u_i$ by its own sample mean and standard deviation and compares the result against $N(0,1)$ (with a 45° reference line), not the composed residual itself. Because location and scale are removed, this is a normality **shape** check — it does *not* test whether $\mathrm{Var}(\hat v)$ matches the fitted $\hat\sigma_v^2$. The reason for looking at $\hat v$ rather than $\hat\varepsilon$ is that the model assumes normality of $v$, not $\varepsilon$: the composed residual is deliberately non-normal under the SF specification (its skewness is the basis of `sf_vs_ols`). Since $\hat v$ is a derived latent-variable quantity, the plot is a soft distributional-misspecification diagnostic rather than a formal normality test.
 
 If `using Plots` has not been called, `plot(result, ...)` raises `UndefVarError: plot not defined`, accompanied by an error hint instructing the user to load `Plots.jl`.
 

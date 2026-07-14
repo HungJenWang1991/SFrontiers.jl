@@ -40,7 +40,10 @@ using Measures: mm
         vhat  = vec(StatsAPI.residuals(r; type = :v))
         std_v = _standardize(vhat)
         theo  = _normal_quantiles(length(std_v))
-        p4_title  = "QQ: v̂ vs N(0, σ̂_v²)"
+        # R-28: v̂ is self-standardized (sample mean/std) and compared to N(0,1),
+        # so location and scale are forced — this is a normality *shape* check,
+        # not a scale-aware "N(0, σ̂_v²)" comparison. Label it as such.
+        p4_title  = "QQ: standardized v̂ vs N(0,1)"
         p4_xlabel = "theoretical N(0,1) quantile"
         p4_ylabel = "sample quantile of std. v̂"
     end
@@ -163,7 +166,7 @@ end
     bottom_margin --> 8mm
     top_margin    --> 4mm
     right_margin  --> 4mm
-    title  --> ["Residuals vs fitted" "Residual histogram" "QQ: v̂ vs N(0, σ̂_v²)"]
+    title  --> ["Residuals vs fitted" "Residual histogram" "QQ: standardized v̂ vs N(0,1)"]
     xlabel --> ["x'β̂" "ε̂" "theoretical N(0,1) quantile"]
     ylabel --> ["ε̂" "frequency" "sample quantile of std. v̂"]
 

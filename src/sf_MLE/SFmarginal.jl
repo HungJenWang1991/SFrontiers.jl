@@ -421,12 +421,13 @@ function get_marg(::Type{PanDecay}, # PorC::Int64,
 
         #* same as fewht
 
-     mm_z = Array{Float64}(undef, num.nofz, num.nofobs)  
-     mm_q = Array{Float64}(undef, num.nofq, num.nofobs)                  
-     mm_w = Array{Float64}(undef, num.nofw, num.nofobs)    
+     nofobs_new = size(Z, 1)  # Do not use num.nofobs (unbalanced bootstrap resample may have a different row count).
+     mm_z = Array{Float64}(undef, num.nofz, nofobs_new)  
+     mm_q = Array{Float64}(undef, num.nofq, nofobs_new)                  
+     mm_w = Array{Float64}(undef, num.nofw, nofobs_new)    
 
 
-     @inbounds for i in 1:num.nofobs   
+     @inbounds for i in 1:nofobs_new   
      @views marg = ForwardDiff.gradient(marg -> marg_pdecay( pos, coef, 
                                              marg[1 : num.nofz],
                                              marg[num.nofz+1 : num.nofz+num.nofq],
@@ -496,11 +497,12 @@ function get_marg(::Type{PanKumb90}, # PorC::Int64,
 
         #* same as fewht
 
-     mm_z = Array{Float64}(undef, num.nofz, num.nofobs)  
-     mm_q = Array{Float64}(undef, num.nofq, num.nofobs)                  
-     mm_w = Array{Float64}(undef, num.nofw, num.nofobs)    
+     nofobs_new = size(Z, 1)  # Do not use num.nofobs (unbalanced bootstrap resample may have a different row count).
+     mm_z = Array{Float64}(undef, num.nofz, nofobs_new)  
+     mm_q = Array{Float64}(undef, num.nofq, nofobs_new)                  
+     mm_w = Array{Float64}(undef, num.nofw, nofobs_new)    
 
-     @inbounds for i in 1:num.nofobs   
+     @inbounds for i in 1:nofobs_new   
      @views marg = ForwardDiff.gradient(marg -> marg_pkumb90( pos, coef, 
                                              marg[1 : num.nofz],
                                              marg[num.nofz+1 : num.nofz+num.nofq],

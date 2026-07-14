@@ -3,10 +3,16 @@
 #
 # `predict(::SFResult; ...)` — application of a fitted stochastic frontier
 # model to new observations. Implemented for cross-sectional models
-# (MCI / MSLE / MLE) with Normal noise and HalfNormal or TruncatedNormal
-# inefficiency, which collectively cover the paper's and the manual's
-# worked examples (rice-farmer Wang 2002). Other distributions and
-# panel datatypes raise an informative error.
+# (MCI / MSLE / MLE) across all eight inefficiency distributions (HalfNormal,
+# TruncatedNormal, Exponential, Lognormal, Rayleigh, Gamma, Lomax, Weibull) in
+# homoscedastic, heteroscedastic, and scaling-property forms, with copulas; and
+# for the three panel datatypes (panel_TFE via MCI/MSLE, panel_TFE_CSW and
+# panel_TRE via MLE, which take `id=`). MCI / MSLE fits reuse the fit-time
+# simulation kernels for EVERY inefficiency distribution (so predict on the
+# estimation data reproduces the fitted jlms/bc bit-for-bit from the same Halton
+# draws); the analytic MLE backend uses a closed form. MLE cross-sectional predict
+# covers Normal + {HalfNormal, TruncatedNormal, Exponential}. Unsupported
+# combinations raise an informative error.
 #
 # Dispatch targets (see Table in §3.12):
 #   :frontier   -> x'β̂                              (needs frontier)
@@ -47,18 +53,26 @@ The set of required inputs depends on `what`:
 ¹ `zvar` is required only when the fitted model uses exogenous
 determinants (`hetero` or scaling).
 
-`draws` (optional) supplies the fit-time Halton matrix for MCI-based
-`:jlms` / `:bc` / `:response` / `:all` targets. Shape: `N_train × n_draws`
-for `multiRand=true`, or `1 × n_draws` (or a length-`n_draws` vector) for
-`multiRand=false`. When omitted, predict reconstructs the fit-time Halton
-matrix deterministically. Required only when the fit itself was run with
+`draws` (optional) supplies the fit-time Halton matrix for the simulation-based
+`:jlms` / `:bc` / `:response` / `:all` targets of MCI / MSLE fits (this includes
+`:HalfNormal` / `:TruncatedNormal`, which are simulated by these backends). Shape:
+`N_train × n_draws` for `multiRand=true`, or `1 × n_draws` (or a length-`n_draws`
+vector) for `multiRand=false`. When omitted, predict reconstructs the fit-time
+Halton matrix deterministically, so predict on the estimation data reproduces the
+fitted jlms/bc bit-for-bit. Required only when the fit itself was run with
 user-supplied `draws=` in `sfmodel_method` — in which case the draws are
 not stored on the result and must be passed back in.
 
-Supported distributions: Normal noise with `:HalfNormal` or
-`:TruncatedNormal` inefficiency (homoscedastic, heteroscedastic, or
-scaling-property forms). For other combinations, `predict` raises
-an informative error. Panel datatypes are not yet supported.
+Supported models: all eight inefficiency distributions (`:HalfNormal`,
+`:TruncatedNormal`, `:Exponential`, `:Lognormal`, `:Rayleigh`, `:Gamma`,
+`:Lomax`, `:Weibull`) in homoscedastic, heteroscedastic, and scaling-property
+forms, with copulas — MCI / MSLE fits reuse the fit-time simulation kernels for
+every distribution, while the analytic MLE backend uses a closed form. The three
+panel datatypes are supported too:
+`:panel_TFE` (via MCI/MSLE), `:panel_TFE_CSW` and `:panel_TRE` (via MLE); panel
+targets require the `id=` keyword. MLE cross-sectional predict covers Normal +
+`:HalfNormal`/`:TruncatedNormal`/`:Exponential`. Unsupported combinations raise
+an informative error.
 """
 function StatsAPI.predict(r::SFResult;
         frontier = nothing,
@@ -248,7 +262,7 @@ end
 # the dispatcher guards it. Clamp constants match _MLE_CLAMP in
 # src/sf_MLE/SFloglikefun.jl:18-22 (exp_lo=1e-12, exp_hi=1e12).
 
-function _predict_eff_mle_exp(r::SFResult, spec, Xn_in, yn_in; bc::Bool)
+function _predict_eff_mle_exp(r::SFResult, spec, Xn_in, Zn_in, yn_in; bc::Bool)
     mci = spec.mci_spec
     mci === nothing &&
         error("predict: MLE+Exponential path requires an attached cross-sectional " *
@@ -264,18 +278,30 @@ function _predict_eff_mle_exp(r::SFResult, spec, Xn_in, yn_in; bc::Bool)
     ε   = sgn .* (yn .- Xn * β)   # production convention ε = v − u
 
     lambda_rng = _as_range(mci.idx.ineff.lambda)
-    length(lambda_rng) == 1 ||
-        error("predict: MLE+Exp helper expects homoscedastic λ (length(idx)==1); " *
-              "got length $(length(lambda_rng)). Hetero-λ is not fittable by MLE.")
-
-    w_pre = r.coeff[lambda_rng][1]
+    δ_λ   = r.coeff[lambda_rng]
     v_pre = r.coeff[_as_range(mci.idx.noise.ln_sigma_v_sq)][1]
 
-    λ   = sqrt(clamp(exp(w_pre), 1e-12, 1e12))
+    # w_pre = ln(λ²) per observation. Homoscedastic λ ⇒ length(lambda_rng)==1
+    # (constant only). Hetero-λ ⇒ w_pre = W·δ where W is the full fit-time zvar
+    # (its first column is the constant, per the MLE `@requireConst` convention),
+    # mirroring SFindex.jl jlmsbc(Expo) `w_pre = W*coef`. λ = sqrt(exp(w_pre)).
+    if length(lambda_rng) == 1
+        w_pre = fill(δ_λ[1], length(yn))
+    else
+        Zn = _require_matrix(Zn_in, "zvar")
+        _check_len(view(Zn, :, 1), Xn)
+        size(Zn, 2) == length(lambda_rng) ||
+            error("predict: hetero-λ `zvar` has $(size(Zn,2)) columns but model expects " *
+                  "$(length(lambda_rng)) (the same zvar used at fit time, including its " *
+                  "constant column).")
+        w_pre = Zn * δ_λ
+    end
+
+    λ   = sqrt.(clamp.(exp.(w_pre), 1e-12, 1e12))
     σᵥ² = clamp(exp(v_pre), 1e-12, 1e12)
     σᵥ  = sqrt(σᵥ²)
 
-    μs = -ε .- σᵥ² / λ
+    μs = -ε .- σᵥ² ./ λ
     rv = μs ./ σᵥ
 
     if !bc
@@ -316,14 +342,23 @@ end
 # `theta_rho` via `get_copula_vals(model.copula, p, idx, c)`. No
 # separate draws are needed — the same Halton stream serves both.
 
+# True only for the analytic MLE backend: Normal + HN/TN JLMS/BC are computed in
+# closed form at fit time, so predict mirrors that same closed form (no Halton draws).
 _eff_use_closed_form(spec) =
-    spec.noise === :Normal && spec.ineff in (:HalfNormal, :TruncatedNormal)
+    spec.noise === :Normal && spec.ineff in (:HalfNormal, :TruncatedNormal) &&
+    spec.copula === :None
 
-_frontier_type_from_sign(sgn::Real) = (sgn == -1 ? :cost : :prod)
-
-# Route :jlms / :bc by backend. Panel_TFE goes to the panel helper (any ineff);
-# cross-section HN/TN go to the shared closed form; everything else dispatches
-# on r.backend.
+# Route :jlms / :bc by backend so that predict on the estimation data reproduces the
+# fitted r.jlms / r.bc *by the same construction the fit used*:
+#   * MCI / MSLE (and panel_TFE) fits populate r.jlms / r.bc by simulating E(u|ε) over
+#     Halton draws — so predict reuses that simulation kernel for EVERY inefficiency
+#     distribution, including HalfNormal / TruncatedNormal. It reconstructs the identical
+#     Halton draws (or accepts them via `draws=`) and returns bit-identical values on the
+#     training data. (Before the 2026-07 predict re-review, HN/TN short-circuited to the
+#     analytic closed form here, which disagreed with the simulated fit by the simulation
+#     error; that short-circuit now applies to the MLE backend only.)
+#   * MLE fits compute JLMS/BC analytically at fit time, so predict mirrors that closed
+#     form exactly (Normal + HN/TN, plus the Normal + Exponential closed form). No draws.
 function _dispatch_jlms_bc(r::SFResult, spec, Xn, Zn, yn; bc::Bool, user_draws, id = nothing)
     if hasproperty(spec, :datatype) && spec.datatype === :panel_TFE
         if r.backend === :Panel
@@ -341,18 +376,21 @@ function _dispatch_jlms_bc(r::SFResult, spec, Xn, Zn, yn; bc::Bool, user_draws, 
                   "(got backend `:$(r.backend)`).")
         return _predict_eff_mle_panel(r, spec, Xn, Zn, yn, id; bc = bc)
     end
-    if _eff_use_closed_form(spec)
-        return _predict_eff(r, spec, Xn, Zn, yn; bc = bc)
-    end
+    # Cross-sectional MCI / MSLE: always reuse the fit-time simulation kernel (every
+    # ineff, incl. HalfNormal / TruncatedNormal). `draws=` therefore applies to HN/TN too.
     if r.backend === :MCI
         return _predict_eff_mci(r, spec, Xn, Zn, yn; bc = bc, user_draws = user_draws)
     end
     if r.backend === :MSLE
         return _predict_eff_msle(r, spec, Xn, Zn, yn; bc = bc, user_draws = user_draws)
     end
+    # Cross-sectional MLE: mirror the fit-time analytic closed form.
     if r.backend === :MLE
+        if _eff_use_closed_form(spec)
+            return _predict_eff(r, spec, Xn, Zn, yn; bc = bc)
+        end
         if spec.noise === :Normal && spec.ineff === :Exponential
-            return _predict_eff_mle_exp(r, spec, Xn, yn; bc = bc)
+            return _predict_eff_mle_exp(r, spec, Xn, Zn, yn; bc = bc)
         end
         error("predict: MLE fit with noise=$(spec.noise), ineff=$(spec.ineff) is " *
               "not supported. MLE supports Normal + {HalfNormal, TruncatedNormal, " *
@@ -376,19 +414,24 @@ end
 
 # Validate a user-supplied `draws` matrix passed to predict().
 function _validate_user_draws(draws, n_draws::Int, multiRand::Bool, N_train::Int)
-    M = draws isa AbstractVector ? reshape(draws, 1, length(draws)) :
-        (draws isa AbstractMatrix ? draws :
-         error("predict: `draws` must be a matrix (or a vector for multiRand=false)."))
-    size(M, 2) == n_draws ||
-        error("predict: `draws` has $(size(M,2)) columns; fit used $n_draws.")
+    draws isa AbstractVector || draws isa AbstractMatrix ||
+        error("predict: `draws` must be a matrix (or a vector for multiRand=false).")
     if multiRand
+        M = draws isa AbstractVector ? reshape(draws, 1, length(draws)) : draws
+        size(M, 2) == n_draws ||
+            error("predict: `draws` has $(size(M,2)) columns; fit used $n_draws.")
         size(M, 1) == N_train ||
             error("predict: `draws` has $(size(M,1)) rows; expected $N_train " *
                   "(training N). Pass the same matrix used at fit time.")
-    else
-        size(M, 1) == 1 ||
-            error("predict: `draws` for a multiRand=false fit must have 1 row, got $(size(M,1)).")
+        return M
     end
+    # multiRand=false shares one draw row across all observations. The fit flattens
+    # whatever shape was supplied via `vec` (see `_prepare_draws`), so a length-D
+    # vector, a 1×D row, and a D×1 column are all equivalent inputs. Mirror that here
+    # so the exact object passed at fit time round-trips symmetrically (R-19).
+    M = reshape(vec(draws), 1, :)
+    size(M, 2) == n_draws ||
+        error("predict: `draws` has $(length(draws)) elements; fit used $n_draws.")
     return M
 end
 
@@ -427,6 +470,11 @@ function _predict_eff_mci(r::SFResult, spec, Xn_in, Zn_in, yn_in;
     elseif _hetero_needs_zvar(spec)
         Zn_raw = _require_matrix(Zn_in, "zvar")
         _check_len(view(Zn_raw, :, 1), Xn)
+        size(Zn_raw, 2) == mci.L ||
+            error("predict: hetero `zvar` has $(size(Zn_raw,2)) columns but model was " *
+                  "fitted with $(mci.L). Pass the same zvar (same columns, same order) " *
+                  "used at fit time — get_ineff_vals reads only the leading columns, so " *
+                  "an extra/missing column silently shifts the hetero parameters.")
         Zn_T = Zn_raw isa AbstractMatrix{T} ? Zn_raw : convert(Matrix{T}, Zn_raw)
         Zn_scaling_T = nothing
     else
@@ -476,12 +524,15 @@ function _predict_eff_mci(r::SFResult, spec, Xn_in, Zn_in, yn_in;
     P_ = eltype(p)
     ε  = yn_T .- sum(P_(p[idx.beta[j]]) .* view(Xn_T, :, j) for j in 1:K)
 
-    # Use the same default transformation rule as the fit path when the
-    # user did not override `transformation` in sfmodel_method(). This is
-    # what produces bit-identical predict-on-training for ineff distributions
-    # whose T-approach rule differs from the direct quantile (e.g. Lognormal,
-    # Lomax, HalfNormal, TruncatedNormal under :logistic_1_rule).
-    trans_rule = MCI_Backend.default_transformation_rule(spec.ineff)
+    # Use the fit-time transformation rule resolved at fit and stored on the
+    # internal assembled spec (`r.model`, a sfmodel_MCI_spec). It reflects the
+    # user's sfmodel_method(transformation=…) override, or the distribution
+    # default when none was given — reproducing bit-identical predict-on-training
+    # for ineff distributions whose T-approach rule differs from the direct
+    # quantile (e.g. Lognormal, Lomax, HalfNormal, TruncatedNormal under
+    # :logistic_1_rule). Fall back to the default only when unavailable.
+    trans_rule = (hasproperty(r, :model) && hasproperty(r.model, :transformation)) ?
+        r.model.transformation : MCI_Backend.default_transformation_rule(spec.ineff)
     trans_func, jacob_func = MCI_Backend.resolve_transformation(trans_rule)
 
     sgn_int = Int(_frontier_sign(r))
@@ -549,6 +600,11 @@ function _predict_eff_msle(r::SFResult, spec, Xn_in, Zn_in, yn_in;
     elseif _hetero_needs_zvar(spec)
         Zn_raw = _require_matrix(Zn_in, "zvar")
         _check_len(view(Zn_raw, :, 1), Xn)
+        size(Zn_raw, 2) == msle.L ||
+            error("predict: hetero `zvar` has $(size(Zn_raw,2)) columns but model was " *
+                  "fitted with $(msle.L). Pass the same zvar (same columns, same order) " *
+                  "used at fit time — get_ineff_vals reads only the leading columns, so " *
+                  "an extra/missing column silently shifts the hetero parameters.")
         Zn_T = Zn_raw isa AbstractMatrix{T} ? Zn_raw : convert(Matrix{T}, Zn_raw)
         Zn_scaling_T = nothing
     else
@@ -954,11 +1010,17 @@ function _predict_marginal(r::SFResult, spec, Zn::AbstractMatrix)
     end
 
     ineff = spec.ineff
-    ineff ∈ (:HalfNormal, :TruncatedNormal) ||
-        error("predict(:marginal) currently supports `ineff=:HalfNormal` or " *
-              "`:TruncatedNormal`; got `:$ineff`.")
-
     scaling = spec.hetero === :scaling
+
+    # Distributions outside the Normal + HN/TN closed form reuse the fit-time
+    # marginal E(u) kernels (`uncondU_*`, the very closures `get_marg`
+    # differentiates), so predict(:marginal) stays consistent with the fitted
+    # object's own `result.marginal`. HN/TN keep the ForwardDiff path below,
+    # untouched — its raw n×L contract is pinned by runtests.jl and its evaluators
+    # (`_eval_μ`/`_eval_lnσu²`) are G6/R-05's to rewrite.
+    if ineff ∉ (:HalfNormal, :TruncatedNormal)
+        return _predict_marginal_kernel(r, spec, Zn, ineff, scaling)
+    end
     # γ coefficients on z: for scaling, the δ vector; for hetero params,
     # coefs for ln(σ_u²) and (for TN) for μ.
     n = size(Zn, 1)
@@ -970,6 +1032,108 @@ function _predict_marginal(r::SFResult, spec, Zn::AbstractMatrix)
         out[i, :] .= g
     end
     return out
+end
+
+# --------------------------------------------------------------
+# Marginal effects for the six non-HN/TN inefficiency distributions
+# (Exponential, Lognormal, Rayleigh, Gamma, Lomax, Weibull) and their
+# scaling-property forms. Reuses the fit-time E(u) kernels that populate
+# `result.marginal` (`MCI_Backend`/`MSLE_Backend` `uncondU_*` /
+# `uncondU_scaling`), so predict(:marginal) is consistent with the fitted
+# object's own marginal table. The per-observation ForwardDiff gradient of total
+# E(u) w.r.t. the supplied z-row yields the same raw n×L contract as the HN/TN
+# path in `_predict_marginal` (so `size(predict(:marginal)) == size(zvar)`); its
+# non-constant columns equal `result.marginal` evaluated at the fit zvar.
+#
+# NB (G6/R-05): the `hetero ? z : ones-basis` channel selector in
+# `_marginal_Eu_closure` mirrors `get_marg`'s own `Zmarg = [one(T)]` construction.
+# R-05 revises how a homoscedastic parameter enters the marginal *inside* the
+# kernels; because the E(u) math is delegated to `uncondU_*`, that fix propagates
+# here automatically and only this selector must be revisited alongside
+# `_eval_μ`/`_eval_lnσu²`.
+function _predict_marginal_kernel(r::SFResult, spec, Zn::AbstractMatrix,
+                                  ineff::Symbol, scaling::Bool)
+    T = Float64
+    n = size(Zn, 1)
+    L = size(Zn, 2)
+    coef = r.coeff isa AbstractVector{T} ? r.coeff : convert(Vector{T}, r.coeff)
+
+    if r.backend === :MCI
+        sub = spec.mci_spec
+        BE  = MCI_Backend
+    elseif r.backend === :MSLE
+        sub = spec.msle_spec
+        BE  = MSLE_Backend
+    else
+        error("predict(:marginal): the kernel path for `ineff=:$ineff` supports the " *
+              "MCI / MSLE backends only; got backend `:$(r.backend)`.")
+    end
+    sub === nothing &&
+        error("predict(:marginal): no $(r.backend) spec is attached for ineff=:$ineff.")
+
+    idx        = sub.idx
+    ineff_type = sub.model.ineff
+    hetero     = sub.hetero isa AbstractVector ? sub.hetero : Symbol[]
+
+    # Column-count validation, mirroring `_predict_eff_mci` (R-18).
+    if scaling
+        L == sub.L_scaling ||
+            error("predict(:marginal): scaling `zvar` has $L columns but model δ " *
+                  "expects $(sub.L_scaling). Pass the same no-constant Z used at fit time.")
+    else
+        L == sub.L ||
+            error("predict(:marginal): hetero `zvar` has $L columns but model was " *
+                  "fitted with $(sub.L). Pass the same zvar (same columns, same order) " *
+                  "used at fit time.")
+    end
+
+    f = _marginal_Eu_closure(BE, coef, idx, ineff, hetero, ineff_type, scaling)
+
+    out = Matrix{T}(undef, n, L)
+    for i in 1:n
+        zi = Vector{T}(view(Zn, i, :))
+        out[i, :] .= gradient(f, zi)
+    end
+    return out
+end
+
+# Total-E(u) closure differentiated per observation by `_predict_marginal_kernel`.
+# `BE` is the backend module (MCI_Backend / MSLE_Backend). A homoscedastic channel
+# of a two-parameter distribution receives a length-1 ones basis (⇒ zero gradient
+# contribution), exactly mirroring `get_marg`'s `Zmarg = [one(T)]`; a single-
+# parameter distribution passes the full z (its kernel sums only the leading
+# `length(idx.ineff.<param>)` columns). Differentiating `uncondU(coef, idx, z, z)`
+# w.r.t. one shared z reproduces `get_marg`'s channel-summed (`addDataFrame`) result.
+function _marginal_Eu_closure(BE::Module, coef, idx, ineff::Symbol,
+                              hetero::AbstractVector, ineff_type, scaling::Bool)
+    scaling && return z -> BE.uncondU_scaling(coef, idx, z, ineff_type)
+    if ineff === :Exponential
+        return z -> BE.uncondU_expo(coef, idx, z)
+    elseif ineff === :Rayleigh
+        return z -> BE.uncondU_rayleigh(coef, idx, z)
+    elseif ineff === :Lognormal
+        mh = :mu in hetero; sh = :sigma_sq in hetero
+        return z -> BE.uncondU_lognorm(coef, idx,
+                                       mh ? z : [one(eltype(z))],
+                                       sh ? z : [one(eltype(z))])
+    elseif ineff === :Gamma
+        kh = :k in hetero; th = :theta in hetero
+        return z -> BE.uncondU_gamma(coef, idx,
+                                     kh ? z : [one(eltype(z))],
+                                     th ? z : [one(eltype(z))])
+    elseif ineff === :Lomax
+        lh = :lambda in hetero; ah = :alpha in hetero
+        return z -> BE.uncondU_lomax(coef, idx,
+                                     lh ? z : [one(eltype(z))],
+                                     ah ? z : [one(eltype(z))])
+    elseif ineff === :Weibull
+        lh = :lambda in hetero; kh = :k in hetero
+        return z -> BE.uncondU_weibull(coef, idx,
+                                       lh ? z : [one(eltype(z))],
+                                       kh ? z : [one(eltype(z))])
+    else
+        error("predict(:marginal): kernel path does not support ineff=:$ineff.")
+    end
 end
 
 function _Eu_at_z(r::SFResult, spec, z::AbstractVector, ineff::Symbol, scaling::Bool)
@@ -1024,7 +1188,8 @@ function _get_sigma_v_sq(r::SFResult, spec)
 end
 
 # Returns (μvec, σu²vec) evaluated at supplied Zn (N × L matrix).
-# For homoscedastic parameters, the vector is filled with the scalar value.
+# Homoscedastic parameters are a constant for MLE (`_cons`), or coef·Z[:,1] for
+# MCI/MSLE (matching get_ineff_vals) — see `_evaluate_param`.
 function _get_mu_sigma_u_sq(r::SFResult, spec, Zn::AbstractMatrix, ineff::Symbol)
     n = size(Zn, 1)
     scaling = spec.hetero === :scaling
@@ -1085,9 +1250,13 @@ function _evaluate_param(r::SFResult, spec, Zn::AbstractMatrix, group::Symbol,
             error("predict: hetero `$group` expects $(length(γ)) z-columns, got $(size(Zn,2)).")
         lin = Zn * γ
     else
-        # Homoscedastic: γ is scalar; same value for every obs.
-        v = length(γ) == 1 ? γ[1] : γ[1]
-        lin = fill(v, n)
+        # Homoscedastic — a true constant on every backend, matching the MLE `_cons`
+        # semantics. The MCI/MSLE spec constructors now require the first zvar column to be the
+        # ones intercept whenever a parameter is homoscedastic (re-audit R-05 / FIX-06), so the
+        # likelihood's `coef·Z[:,1]` ≡ `coef·1`. Evaluate the constant directly, so predict is
+        # independent of the new-data zvar's first column and predict(:jlms) stays consistent
+        # with predict(:marginal)'s `_eval_μ`/`_eval_lnσu²`.
+        lin = fill(γ[1], n)
     end
     return exponentiate ? exp.(lin) : lin
 end

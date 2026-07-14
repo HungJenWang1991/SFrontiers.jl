@@ -248,7 +248,11 @@ function get_marg(::TruncatedNormal_MSLE, spec::sfmodel_MSLE_spec, coef::Abstrac
     @inbounds for i in 1:n_obs
         Zi = collect(@view Z[i, :])
 
-        # Build combined Z vector for gradient
+        # Build combined Z vector for gradient. A homoscedastic parameter is pinned at the
+        # constant `[one(T)]`; the spec constructor's `_validate_homoscedastic_zvar` guard
+        # (re-audit R-05 / FIX-06) requires the first zvar column to be the ones intercept
+        # whenever a parameter is homoscedastic, so `coef·Z[:,1]` equals `coef·1` and this
+        # pin matches the likelihood and the MLE `_cons`.
         Zmarg_mu = mu_hetero ? Zi : [one(T)]
         Zmarg_sigma = sigma_hetero ? Zi : [one(T)]
         Zmarg_combined = vcat(Zmarg_mu, Zmarg_sigma)
@@ -551,7 +555,7 @@ function _get_z_varnames(spec::sfmodel_MSLE_spec)
     # Find the first heteroscedastic equation and extract its variable names
     eq_name_patterns = [
         ("μ", :mu), ("mu", :mu),
-        ("ln_σᵤ²", :sigma_sq), ("ln_sigma", :sigma_sq), ("sigma", :sigma_sq),
+        ("ln_σᵤ²", :sigma_sq), ("ln_σ²", :sigma_sq), ("ln_σ2", :sigma_sq), ("ln_sigma", :sigma_sq), ("sigma", :sigma_sq),
         ("λ", :lambda), ("lambda", :lambda),
         ("ln_k", :k), ("k", :k),
         ("θ", :theta), ("theta", :theta),

@@ -330,13 +330,13 @@ function getvar(::Type{Expo}, dat::DataFrame)
     #* create equation names and mark positions for making tables
     eqvec = (frontier = begx + 1, 
            #        μ = begz + 1,
-              log_λ = begw + 1,
+              log_λ² = begw + 1,
               log_σᵥ² = begv + 1)
 
 
     #* create equation names and mark positions
     eqvec2 = (coeff_frontier = (begx:endx),
-              coeff_log_λ  = (begw:endw),
+              coeff_log_λ²  = (begw:endw),
               coeff_log_σᵥ²  = (begv:endv))
 
     #* retrieve variable names for making tables

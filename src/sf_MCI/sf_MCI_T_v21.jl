@@ -419,6 +419,160 @@ function log_pdf_ineff_chunk!(::Gamma_MCI, out, u, ineff_vals, c, rs, re)
 end
 
 # ============================================================================
+# Section 1d: Inefficiency CDF F_u(u) — copula models only (FIX-22)
+# ============================================================================
+#
+# The T-approach draws u = trans(t) via a generic importance transform, so the
+# raw Halton draw t is NOT the inefficiency CDF F_u(u) (they coincide only when
+# `trans` is the inverse-CDF/quantile). The copula density's second argument must
+# be the true F_u(u). Because scaling u = h·u* is a monotone transform,
+# F_u(u) = F_{u*}(u*), so these are evaluated on the base draw u* (pre-scaling).
+# Each F_u is the exact inverse of the matching quantile function (Section 3).
+#
+# `_copula_true_Fu` is a trait: true → use the computed CDF F_u(u) as the copula's
+# u-side argument. All 8 inefficiency distributions pass the true CDF (FIX-22),
+# so MCI + copula estimates the same c(F_v,F_u) model the manual documents (§8)
+# and matches MSLE. Gamma uses the AD-safe regularized incomplete gamma below.
+_copula_true_Fu(::MCIIneffModel) = true
+
+# AD-safe regularized lower incomplete gamma P(a,x) = γ(a,x)/Γ(a), the Gamma(a,θ)
+# CDF at u=θx. Series (gser) for x < a+1, continued fraction for Q (gcf) otherwise
+# — both use only ForwardDiff-differentiable primitives, so P is stable in the
+# shape a as well as x (verified vs Distributions.jl and the analytic dP/dx =
+# x^(a-1)e^{-x}/Γ(a)). `lga = loggamma(a)` is passed precomputed (ineff_vals.lgk).
+@inline function _reg_inc_gamma_P(a, x, lga)
+    x <= zero(x) && return zero(x)
+    if x < a + one(a)
+        ap  = a
+        del = one(x) / a
+        s   = del
+        for _ in 1:1000
+            ap  += one(ap)
+            del *= x / ap
+            s   += del
+            abs(del) < abs(s) * 1e-15 && break
+        end
+        return s * exp(-x + a * log(x) - lga)
+    else
+        FPMIN = oftype(x, 1e-30)   # typed to the input eltype so the CF branch stays type-stable (Float32/GPU); 1e-30 is representable in Float32 and the standard Lentz guard
+        b = x + one(x) - a
+        c = one(x) / FPMIN
+        d = one(x) / b
+        h = d
+        for i in 1:1000
+            an = -i * (i - a)
+            b += 2 * one(x)
+            d  = an * d + b
+            abs(d) < FPMIN && (d = oftype(d, FPMIN))
+            c  = b + an / c
+            abs(c) < FPMIN && (c = oftype(c, FPMIN))
+            d  = one(x) / d
+            del = d * c
+            h  *= del
+            abs(del - one(x)) < 1e-15 && break
+        end
+        return one(x) - exp(-x + a * log(x) - lga) * h
+    end
+end
+
+function ineff_cdf!(::Exponential_MCI, out, u, ineff_vals, c)
+    lambda = reshape(ineff_vals.lambda, :, 1)
+    @. out = -expm1(-max(u, zero(u)) / sqrt(lambda))            # F = 1 - exp(-u/√λ)
+    return nothing
+end
+function ineff_cdf!(::HalfNormal_MCI, out, u, ineff_vals, c)
+    sigma = reshape(ineff_vals.sigma, :, 1)
+    @. out = 2 * _normcdf(max(u, zero(u)) / sigma) - 1          # F = erf(u/(σ√2))
+    return nothing
+end
+function ineff_cdf!(::TruncatedNormal_MCI, out, u, ineff_vals, c)
+    mu = reshape(ineff_vals.mu, :, 1)
+    sigma_u = reshape(ineff_vals.sigma_u, :, 1)
+    @. out = (_normcdf((max(u, zero(u)) - mu) / sigma_u) - _normcdf(-mu / sigma_u)) /
+             max(1 - _normcdf(-mu / sigma_u), c.clamp_lo)
+    return nothing
+end
+function ineff_cdf!(::Weibull_MCI, out, u, ineff_vals, c)
+    lambda = reshape(ineff_vals.lambda, :, 1)
+    k = reshape(ineff_vals.k, :, 1)
+    @. out = -expm1(-(max(u, zero(u)) / lambda)^k)             # F = 1 - exp(-(u/λ)^k)
+    return nothing
+end
+function ineff_cdf!(::Lognormal_MCI, out, u, ineff_vals, c)
+    mu = reshape(ineff_vals.mu, :, 1)
+    sigma = reshape(ineff_vals.sigma, :, 1)
+    @. out = _normcdf((log(max(u, c.clamp_lo)) - mu) / sigma)   # F = Φ((ln u − μ)/σ)
+    return nothing
+end
+function ineff_cdf!(::Lomax_MCI, out, u, ineff_vals, c)
+    lambda = reshape(ineff_vals.lambda, :, 1)
+    alpha = reshape(ineff_vals.alpha, :, 1)
+    @. out = -expm1(-alpha * log1p(max(u, zero(u)) / lambda))   # F = 1 - (1+u/λ)^(-α)
+    return nothing
+end
+function ineff_cdf!(::Rayleigh_MCI, out, u, ineff_vals, c)
+    sigma = reshape(ineff_vals.sigma, :, 1)
+    @. out = -expm1(-max(u, zero(u))^2 / (2 * sigma^2))         # F = 1 - exp(-u²/2σ²)
+    return nothing
+end
+function ineff_cdf!(::Gamma_MCI, out, u, ineff_vals, c)
+    k = reshape(ineff_vals.k, :, 1)
+    theta = reshape(ineff_vals.theta, :, 1)
+    lgk = reshape(ineff_vals.lgk, :, 1)
+    @. out = _reg_inc_gamma_P(k, max(u, zero(u)) / max(theta, c.clamp_lo), lgk)  # F = P(k, u/θ)
+    return nothing
+end
+
+# Chunked variants (slice parameter vectors for the current chunk).
+function ineff_cdf_chunk!(::Exponential_MCI, out, u, ineff_vals, c, rs, re)
+    lambda = reshape((@view ineff_vals.lambda[rs:re]), :, 1)
+    @. out = -expm1(-max(u, zero(u)) / sqrt(lambda))
+    return nothing
+end
+function ineff_cdf_chunk!(::HalfNormal_MCI, out, u, ineff_vals, c, rs, re)
+    sigma = reshape((@view ineff_vals.sigma[rs:re]), :, 1)
+    @. out = 2 * _normcdf(max(u, zero(u)) / sigma) - 1
+    return nothing
+end
+function ineff_cdf_chunk!(::TruncatedNormal_MCI, out, u, ineff_vals, c, rs, re)
+    mu = reshape((@view ineff_vals.mu[rs:re]), :, 1)
+    sigma_u = reshape((@view ineff_vals.sigma_u[rs:re]), :, 1)
+    @. out = (_normcdf((max(u, zero(u)) - mu) / sigma_u) - _normcdf(-mu / sigma_u)) /
+             max(1 - _normcdf(-mu / sigma_u), c.clamp_lo)
+    return nothing
+end
+function ineff_cdf_chunk!(::Weibull_MCI, out, u, ineff_vals, c, rs, re)
+    lambda = reshape((@view ineff_vals.lambda[rs:re]), :, 1)
+    k = reshape((@view ineff_vals.k[rs:re]), :, 1)
+    @. out = -expm1(-(max(u, zero(u)) / lambda)^k)
+    return nothing
+end
+function ineff_cdf_chunk!(::Lognormal_MCI, out, u, ineff_vals, c, rs, re)
+    mu = reshape((@view ineff_vals.mu[rs:re]), :, 1)
+    sigma = reshape((@view ineff_vals.sigma[rs:re]), :, 1)
+    @. out = _normcdf((log(max(u, c.clamp_lo)) - mu) / sigma)
+    return nothing
+end
+function ineff_cdf_chunk!(::Lomax_MCI, out, u, ineff_vals, c, rs, re)
+    lambda = reshape((@view ineff_vals.lambda[rs:re]), :, 1)
+    alpha = reshape((@view ineff_vals.alpha[rs:re]), :, 1)
+    @. out = -expm1(-alpha * log1p(max(u, zero(u)) / lambda))
+    return nothing
+end
+function ineff_cdf_chunk!(::Rayleigh_MCI, out, u, ineff_vals, c, rs, re)
+    sigma = reshape((@view ineff_vals.sigma[rs:re]), :, 1)
+    @. out = -expm1(-max(u, zero(u))^2 / (2 * sigma^2))
+    return nothing
+end
+function ineff_cdf_chunk!(::Gamma_MCI, out, u, ineff_vals, c, rs, re)
+    k = reshape((@view ineff_vals.k[rs:re]), :, 1)
+    theta = reshape((@view ineff_vals.theta[rs:re]), :, 1)
+    lgk = reshape((@view ineff_vals.lgk[rs:re]), :, 1)
+    @. out = _reg_inc_gamma_P(k, max(u, zero(u)) / max(theta, c.clamp_lo), lgk)
+    return nothing
+end
+
+# ============================================================================
 # Section 2: Unified Workspace Allocation
 # ============================================================================
 
@@ -439,7 +593,8 @@ function make_mci_workspace(ε, ::Type{P}, n_obs, D, chunks; has_copula::Bool=fa
     rows = chunks == 1 ? n_obs : cld(n_obs, chunks)
     ws = (u = similar(ε, P, rows, D), log_w = similar(ε, P, rows, D))
     if has_copula
-        return merge(ws, (copula_adj = similar(ε, P, rows, D), Fv_buf = similar(ε, P, rows, D)))
+        return merge(ws, (copula_adj = similar(ε, P, rows, D), Fv_buf = similar(ε, P, rows, D),
+                          Fu_buf = similar(ε, P, rows, D)))
     end
     return ws
 end
@@ -533,6 +688,17 @@ function MCI_nll_mci_T(ε::AbstractVector{P}, draws_1D, model, c, n_obs, D,
         # Component 3: Log Jacobian
         @. log_lik_buffer = log_lik_buffer + log(max(jacob(draws_1D, scale_bcast), c.clamp_lo))
 
+        # Copula (FIX-22): the copula density's 2nd argument must be the true
+        # inefficiency CDF F_u(u*), computed on the base draw BEFORE scaling and
+        # the composite error (F_u(u)=F_{u*}(u*) since scaling is monotone). Gamma
+        # falls back to the draw t (no ForwardDiff-stable incomplete-gamma CDF).
+        Fu_src = draws_1D
+        if has_copula && _copula_true_Fu(model.ineff)
+            Fu_buf = workspace === nothing ? similar(ε, P, n_obs, D) : workspace.Fu_buf
+            ineff_cdf!(model.ineff, Fu_buf, u_buffer, ineff_vals, c)
+            Fu_src = Fu_buf
+        end
+
         # Scaling: multiply u* by h_i AFTER log_pdf and log_Jacobian, BEFORE composite error
         if scaling_h !== nothing
             u_buffer .= u_buffer .* scaling_h
@@ -542,11 +708,10 @@ function MCI_nll_mci_T(ε::AbstractVector{P}, draws_1D, model, c, n_obs, D,
         @. u_buffer = ε_N1 + frontier_sign * u_buffer
 
         # Component 4b: Copula adjustment (before log_noise_pdf! overwrites u_buffer)
-        # In T-approach, F_u(u) = t (draws_1D) by probability integral transform
         if has_copula
             copula_adj = workspace === nothing ? similar(ε, P, n_obs, D) : workspace.copula_adj
             Fv_buf = workspace === nothing ? similar(ε, P, n_obs, D) : workspace.Fv_buf
-            copula_log_adjustment!(model.copula, copula_adj, Fv_buf, u_buffer, draws_1D,
+            copula_log_adjustment!(model.copula, copula_adj, Fv_buf, u_buffer, Fu_src,
                                    model.noise, noise_vals, copula_vals, c)
         end
 
@@ -571,7 +736,8 @@ function MCI_nll_mci_T(ε::AbstractVector{P}, draws_1D, model, c, n_obs, D,
         log_lik_buffer = workspace === nothing ? similar(ε, P, chunk_size, D) : workspace.log_w
         copula_adj_buf = has_copula ? (workspace === nothing ? similar(ε, P, chunk_size, D) : workspace.copula_adj) : log_lik_buffer
         Fv_adj_buf = has_copula ? (workspace === nothing ? similar(ε, P, chunk_size, D) : workspace.Fv_buf) : log_lik_buffer
-        chunk_nlls = Vector{P}(undef, chunks)
+        Fu_adj_buf = has_copula ? (workspace === nothing ? similar(ε, P, chunk_size, D) : workspace.Fu_buf) : log_lik_buffer
+        chunk_nlls = zeros(P, chunks)  # zero-init: empty trailing chunks skip their slot (`continue`); sum must not read undef
 
         for chunk_idx in 1:chunks
             row_start = (chunk_idx - 1) * chunk_size + 1
@@ -595,6 +761,14 @@ function MCI_nll_mci_T(ε::AbstractVector{P}, draws_1D, model, c, n_obs, D,
             log_pdf_ineff_chunk!(model.ineff, log_lik_buf, u_buf, ineff_vals, c, row_start, row_end)
             @. log_lik_buf = log_lik_buf + log(max(jacob(draws_chunk, scale_chunk), c.clamp_lo))
 
+            # Copula (FIX-22): true F_u(u*) on the base draw before scaling.
+            Fu_src = draws_chunk
+            if has_copula && _copula_true_Fu(model.ineff)
+                Fu_buf_c = @view Fu_adj_buf[1:chunk_N, :]
+                ineff_cdf_chunk!(model.ineff, Fu_buf_c, u_buf, ineff_vals, c, row_start, row_end)
+                Fu_src = Fu_buf_c
+            end
+
             # Scaling: multiply u* by h_i AFTER log_pdf and log_Jacobian, BEFORE composite error
             if scaling_h !== nothing
                 u_buf .= u_buf .* (@view scaling_h[row_start:row_end])
@@ -606,7 +780,7 @@ function MCI_nll_mci_T(ε::AbstractVector{P}, draws_1D, model, c, n_obs, D,
             if has_copula
                 copula_adj = @view copula_adj_buf[1:chunk_N, :]
                 Fv_buf = @view Fv_adj_buf[1:chunk_N, :]
-                copula_log_adjustment!(model.copula, copula_adj, Fv_buf, u_buf, draws_chunk,
+                copula_log_adjustment!(model.copula, copula_adj, Fv_buf, u_buf, Fu_src,
                                        model.noise, noise_vals, copula_vals, c)
             end
 
@@ -683,6 +857,15 @@ function _jlms_bc_mci_T(ε::AbstractVector{P}, draws_1D, model, c, n_obs, D,
         log_pdf_ineff!(model.ineff, log_w_buffer, u_buffer, ineff_vals, c)
         @. log_w_buffer = log_w_buffer + log(max(jacob(draws_1D, scale_bcast), c.clamp_lo))
 
+        # Copula (FIX-22): true F_u(u*) on the base draw before scaling.
+        has_copula = copula_plen(model.copula) > 0
+        Fu_src = draws_1D
+        if has_copula && _copula_true_Fu(model.ineff)
+            Fu_buf = similar(ε, P, n_obs, D)
+            ineff_cdf!(model.ineff, Fu_buf, u_buffer, ineff_vals, c)
+            Fu_src = Fu_buf
+        end
+
         # Scaling: multiply u* by h_i AFTER log_pdf and log_Jacobian, BEFORE composite error
         if scaling_h !== nothing
             u_buffer .= u_buffer .* scaling_h
@@ -691,11 +874,10 @@ function _jlms_bc_mci_T(ε::AbstractVector{P}, draws_1D, model, c, n_obs, D,
         @. z_buffer = ε_N1 + sign * u_buffer
 
         # Copula adjustment (must run before log_noise_pdf! overwrites z_buffer)
-        has_copula = copula_plen(model.copula) > 0
         if has_copula
             copula_adj = similar(ε, P, n_obs, D)
             Fv_buf = similar(ε, P, n_obs, D)
-            copula_log_adjustment!(model.copula, copula_adj, Fv_buf, z_buffer, draws_1D,
+            copula_log_adjustment!(model.copula, copula_adj, Fv_buf, z_buffer, Fu_src,
                                    model.noise, noise_vals, copula_vals, c)
         end
 
@@ -731,6 +913,7 @@ function _jlms_bc_mci_T(ε::AbstractVector{P}, draws_1D, model, c, n_obs, D,
         has_copula_chunked = copula_plen(model.copula) > 0
         copula_adj_buf = has_copula_chunked ? similar(ε, P, chunk_size, D) : z_buffer
         Fv_adj_buf = has_copula_chunked ? similar(ε, P, chunk_size, D) : z_buffer
+        Fu_adj_buf = has_copula_chunked ? similar(ε, P, chunk_size, D) : z_buffer
 
         for chunk_idx in 1:chunks
             row_start = (chunk_idx - 1) * chunk_size + 1
@@ -755,6 +938,14 @@ function _jlms_bc_mci_T(ε::AbstractVector{P}, draws_1D, model, c, n_obs, D,
             log_pdf_ineff_chunk!(model.ineff, lw_buf, u_buf, ineff_vals, c, row_start, row_end)
             @. lw_buf = lw_buf + log(max(jacob(draws_chunk, scale_chunk), c.clamp_lo))
 
+            # Copula (FIX-22): true F_u(u*) on the base draw before scaling.
+            Fu_src = draws_chunk
+            if has_copula_chunked && _copula_true_Fu(model.ineff)
+                Fu_buf_c = @view Fu_adj_buf[1:chunk_N, :]
+                ineff_cdf_chunk!(model.ineff, Fu_buf_c, u_buf, ineff_vals, c, row_start, row_end)
+                Fu_src = Fu_buf_c
+            end
+
             # Scaling: multiply u* by h_i AFTER log_pdf and log_Jacobian, BEFORE composite error
             if scaling_h !== nothing
                 u_buf .= u_buf .* (@view scaling_h[row_start:row_end])
@@ -766,7 +957,7 @@ function _jlms_bc_mci_T(ε::AbstractVector{P}, draws_1D, model, c, n_obs, D,
             if has_copula_chunked
                 copula_adj = @view copula_adj_buf[1:chunk_N, :]
                 Fv_buf = @view Fv_adj_buf[1:chunk_N, :]
-                copula_log_adjustment!(model.copula, copula_adj, Fv_buf, z_buf, draws_chunk,
+                copula_log_adjustment!(model.copula, copula_adj, Fv_buf, z_buf, Fu_src,
                                        model.noise, noise_vals, copula_vals, c)
             end
 

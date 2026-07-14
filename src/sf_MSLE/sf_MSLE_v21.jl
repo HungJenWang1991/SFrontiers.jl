@@ -227,6 +227,30 @@ function _validate_hetero(ineff::MSLEIneffModel, hetero::Vector{Symbol})
 end
 
 """
+    _validate_homoscedastic_zvar(ineff::MSLEIneffModel, hetero::Vector{Symbol}, zvar_norm)
+
+Re-audit R-05 / FIX-06(A)(B). Twin of the MCI backend's guard. A homoscedastic inefficiency
+parameter (not listed in `hetero`) is evaluated as `coef·Z[:,1]`, so — to match the MLE
+backend, which keeps such parameters as true `_cons` constants — the first `zvar` column must
+be the constant intercept of ones whenever any inefficiency parameter is homoscedastic.
+See the MCI twin for the full rationale.
+"""
+function _validate_homoscedastic_zvar(ineff::MSLEIneffModel, hetero::Vector{Symbol},
+                                      zvar_norm::AbstractMatrix)
+    homo = setdiff(valid_hetero(ineff), hetero)
+    if !isempty(homo) && !all(isone, @view zvar_norm[:, 1])
+        error("The first `zvar` column must be a constant intercept of ones (the `_cons` " *
+              "column) because inefficiency parameter(s) $(homo) are homoscedastic and are " *
+              "evaluated at `coef·zvar[:,1]`. The supplied `zvar` has a non-constant first " *
+              "column, so $(homo) would silently become heteroscedastic in the first " *
+              "z-variable (the marginal effects and `predict` would then disagree with the " *
+              "likelihood, and with the MLE backend). Prepend a column of ones to `zvar`, " *
+              "or add $(homo) to `hetero`.")
+    end
+    return nothing
+end
+
+"""
     plen(model::MSLEModel, K::Int, L::Int, hetero::Vector{Symbol})
 
 Calculate total parameter vector length for a given model and heteroscedasticity settings.
@@ -1237,6 +1261,17 @@ function sfmodel_MSLE_opt(;
     return sfmodel_MSLE_optim(warmstart_solver, ws_opt, main_solver, m_opt)
 end
 
+# R-27: capture the main optimizer's iteration trace as a NamedTuple for
+# plot(:convergence). Returns `nothing` unless the fit's Optim.Options carried
+# store_trace=true (set by the unified `sfmodel_opt(store_trace=true)`).
+function _sf_optim_trace(optres, want::Bool)
+    want || return nothing
+    fv = Optim.f_trace(optres)
+    return (iteration = collect(0:(length(fv) - 1)),
+            value     = fv,
+            g_norm    = Optim.g_norm_trace(optres))
+end
+
 # ============================================================================
 # End of Optimization Options Specification
 # ============================================================================
@@ -1599,6 +1634,7 @@ function sfmodel_spec(; depvar, frontier, zvar=nothing,
     # Build model and validate
     model = _build_model(noise, ineff; copula=copula)
     _validate_hetero(model.ineff, hetero_vec)
+    _validate_homoscedastic_zvar(model.ineff, hetero_vec, zvar_norm)  # re-audit R-05 / FIX-06
 
     # Validate varnames length if provided
     if !isnothing(varnames)
@@ -2919,7 +2955,7 @@ end
 # ============================================================================
 
 """
-    qmc_nll(Y, X, Z, p, draws; noise, ineff, hetero=Symbol[], constants=nothing)
+    qmc_nll(Y, X, Z, p, draws; noise, ineff, copula=:None, hetero=Symbol[], chunks=4, type=:prod, constants=nothing)
 
 Compute negative log-likelihood for stochastic frontier model using MSLE integration.
 CPU version - processes all draws at once without chunking.
@@ -2956,6 +2992,14 @@ CPU version - processes all draws at once without chunking.
   - `:Lomax` → `[:lambda]`, `[:alpha]`, or both
   - `:Rayleigh` → `[:sigma_sq]`
 
+- `copula::Symbol=:None`: Copula family coupling the noise and inefficiency draws.
+  One of `:None`, `:Gaussian`, `:Clayton`, `:Clayton90`, `:Gumbel`.
+- `chunks::Int=4`: Number of observation chunks for memory management.
+- `type::Symbol=:prod`: Frontier type. `:prod`/`:production` gives ε = v − u (the
+  composed error is reconstructed as `z = ε + u`); `:cost` gives ε = v + u
+  (`z = ε − u`). **Must match the `type` used to fit the model.** Passing the wrong
+  `type` silently inverts the efficiency ranking — the indices stay in a plausible
+  range, so the error is invisible.
 - `constants`: Precomputed constants from `make_constants` (default: computed fresh)
 
 # Returns
@@ -2974,6 +3018,9 @@ nll = qmc_nll(Y, X, Z, p, halton; noise=:Laplace, ineff=:Weibull, hetero=[:lambd
 
 # StudentT noise + Lognormal inefficiency
 nll = qmc_nll(Y, X, Z, p, halton; noise=:StudentT, ineff=:Lognormal, hetero=[:mu, :sigma_sq])
+
+# Cost frontier: pass type=:cost so the sign matches the fitted model
+nll = qmc_nll(Y, X, Z, p, halton; noise=:Normal, ineff=:HalfNormal, type=:cost)
 ```
 """
 function qmc_nll(Y::AbstractVector{T}, X::AbstractMatrix{T}, Z::AbstractMatrix{T},
@@ -3074,7 +3121,7 @@ function qmc_nll(Y::AbstractVector{T}, X::AbstractMatrix{T}, Z::AbstractMatrix{T
         buffer = similar(ε, P, chunk_size, D)
         copula_adj_buf = has_copula ? similar(buffer) : buffer
         Fv_adj_buf = has_copula ? similar(buffer) : buffer
-        chunk_nlls = Vector{P}(undef, chunks)
+        chunk_nlls = zeros(P, chunks)  # zero-init: empty trailing chunks skip their slot (`continue`); sum must not read undef
 
         for chunk_idx in 1:chunks
             row_start = (chunk_idx - 1) * chunk_size + 1
@@ -3212,7 +3259,7 @@ function qmc_nll(spec::sfmodel_MSLE_spec{T}, p::AbstractVector{P};
         buffer = similar(ε, P, chunk_size, D)
         copula_adj_buf = has_copula ? similar(buffer) : buffer
         Fv_adj_buf = has_copula ? similar(buffer) : buffer
-        chunk_nlls = Vector{P}(undef, chunks)
+        chunk_nlls = zeros(P, chunks)  # zero-init: empty trailing chunks skip their slot (`continue`); sum must not read undef
 
         for chunk_idx in 1:chunks
             row_start = (chunk_idx - 1) * chunk_size + 1
@@ -3305,7 +3352,7 @@ The old pattern `theta |> CuArray` is no longer needed.
 # ============================================================================
 
 """
-    jlms_bc_indices(Y, X, Z, p, draws; noise, ineff, hetero, chunks, constants)
+    jlms_bc_indices(Y, X, Z, p, draws; noise, ineff, copula=:None, hetero, chunks, type=:prod, constants)
 
 Compute JLMS (inefficiency index) and BC (efficiency index) for each observation
 using MSLE integration.
@@ -3327,7 +3374,12 @@ Same as `qmc_nll`:
 - `noise::Symbol`: Noise distribution (:Normal, :StudentT, :Laplace)
 - `ineff::Symbol`: Inefficiency distribution
 - `hetero::Vector{Symbol}`: Heteroscedasticity options (default: empty)
+- `copula::Symbol=:None`: Copula family coupling the noise and inefficiency draws.
+  One of `:None`, `:Gaussian`, `:Clayton`, `:Clayton90`, `:Gumbel`.
 - `chunks::Int`: Number of chunks for memory management (default: 1)
+- `type::Symbol=:prod`: Frontier type — `:prod`/`:production` or `:cost`. **Must match
+  the fitted model's `type`.** Indices are computed against `z = ε + sign·u`
+  (`sign = +1` prod, `−1` cost); a mismatched `type` silently inverts the ranking.
 - `constants`: Precomputed constants from `make_constants` (default: computed fresh)
 
 # Returns
@@ -3344,6 +3396,10 @@ halton = reshape(make_halton_p(1023), 1, 1023)
 # After estimation, compute efficiency indices
 result = jlms_bc_indices(Y, X, Z, p_hat, halton;
     noise=:Normal, ineff=:TruncatedNormal, hetero=[:mu])
+
+# Cost frontier: pass type=:cost (defaults to :prod otherwise)
+result_cost = jlms_bc_indices(Y, X, Z, p_hat, halton;
+    noise=:Normal, ineff=:TruncatedNormal, hetero=[:mu], type=:cost)
 
 # Technical efficiency = result.bc
 # Technical inefficiency = result.jlms
@@ -3720,7 +3776,10 @@ NamedTuple: `(var_cov_matrix=Matrix, redflag=Int)`
 function _invert_hessian(H::AbstractMatrix{T};
                          message::Bool=true) where {T<:Real}
     redflag = 0
-    var_cov_matrix = similar(H)
+    # Defined fallback: if inv(H) throws below (redflag=1), the returned matrix must be a
+    # well-defined NaN matrix, not an uninitialized `similar(H)` whose garbage diagonal can
+    # crash the downstream sqrt-based SE line. See re-audit R-06.
+    var_cov_matrix = fill!(similar(H, float(T)), NaN)
 
     # Attempt to invert Hessian
     try
@@ -3743,6 +3802,12 @@ function _invert_hessian(H::AbstractMatrix{T};
 
     return (var_cov_matrix=var_cov_matrix, redflag=redflag)
 end
+
+# NaN-safe standard errors from a var-cov matrix. A non-positive-diagonal (redflag>0) vcov
+# would make `sqrt` throw a DomainError, so those entries become NaN instead — a degenerate
+# fit still returns its coefficients/loglik/jlms/bc, and `stderror(r)` stays NaN-consistent
+# with `sqrt.(diag(vcov(r)))`. See re-audit R-06 (regression from FIX-20).
+_stderr_from_vcov(V::AbstractMatrix) = map(d -> d < 0 ? oftype(d, NaN) : sqrt(d), diag(V))
 
 """
     var_cov_mat(nll_func::Function, coef::AbstractVector{T}; message::Bool=true) where {T<:Real}
@@ -3804,26 +3869,50 @@ Auto-detect log-transformed parameters based on model type for auxiliary table.
 Only returns parameters that are scalar (not heteroscedastic).
 
 # Returns
-Vector of tuples: `[(display_name, param_index), ...]`
+Vector of tuples: `[(display_name, param_index, offset), ...]`, where the auxiliary
+table reports the original-scale value `exp(coef[param_index]) + offset` (offset is 0
+for the log-variance/scale/shape params and 2 for StudentT's ν = exp(ln(ν−2)) + 2).
 """
 function _detect_log_params(model::MSLEModel, idx, L::Int, hetero::Vector{Symbol})
-    entries = Tuple{String, Int}[]
+    # Entries are (display_name, param_index, offset): the auxiliary table reports
+    # the original-scale value `exp(coef[param_index]) + offset`. `offset` is 0 for
+    # every log-variance/scale/shape parameter and 2 for StudentT's degrees of
+    # freedom ν = exp(ln(ν−2)) + 2 (R-12).
+    entries = Tuple{String, Int, Float64}[]
 
     # Noise parameters (always scalar)
     if hasfield(typeof(idx.noise), :ln_sigma_v_sq)
-        push!(entries, ("σᵥ²", idx.noise.ln_sigma_v_sq))
+        push!(entries, ("σᵥ²", idx.noise.ln_sigma_v_sq, 0.0))
     elseif hasfield(typeof(idx.noise), :ln_b)
-        push!(entries, ("b", idx.noise.ln_b))
+        push!(entries, ("b", idx.noise.ln_b, 0.0))
+    end
+    # StudentT degrees of freedom: ν = exp(ln_nu_minus_2) + 2 (R-12)
+    if hasfield(typeof(idx.noise), :ln_nu_minus_2)
+        push!(entries, ("ν", idx.noise.ln_nu_minus_2, 2.0))
     end
 
-    # Inefficiency parameters (only if scalar - not heteroscedastic)
+    # Inefficiency parameters (only if scalar - not heteroscedastic). The elseif
+    # chain reports the scale/first parameter; the shape/second parameter (Weibull
+    # k, Lomax α) is pushed independently below (R-12).
     ineff = idx.ineff
     if hasfield(typeof(ineff), :sigma_u) && length(ineff.sigma_u) == 1
-        push!(entries, ("σᵤ²", first(ineff.sigma_u)))
+        push!(entries, ("σᵤ²", first(ineff.sigma_u), 0.0))
     elseif hasfield(typeof(ineff), :sigma_sq) && length(ineff.sigma_sq) == 1
-        push!(entries, ("σᵤ²", first(ineff.sigma_sq)))
+        # HalfNormal → σᵤ²; Lognormal/Rayleigh → σ² (match _default_eq_names)
+        label_sq = (model.ineff isa Lognormal_MSLE || model.ineff isa Rayleigh_MSLE) ? "σ²" : "σᵤ²"
+        push!(entries, (label_sq, first(ineff.sigma_sq), 0.0))
     elseif hasfield(typeof(ineff), :lambda) && length(ineff.lambda) == 1
-        push!(entries, ("λ", first(ineff.lambda)))
+        push!(entries, ("λ", first(ineff.lambda), 0.0))
+    elseif hasfield(typeof(ineff), :ln_lambda) && length(ineff.ln_lambda) == 1
+        push!(entries, ("λ", first(ineff.ln_lambda), 0.0))   # Lomax: field is :ln_lambda, not :lambda
+    end
+
+    # Second (shape) inefficiency parameter — Weibull k, Lomax α (R-12).
+    if hasfield(typeof(ineff), :k) && length(ineff.k) == 1
+        push!(entries, ("k", first(ineff.k), 0.0))
+    end
+    if hasfield(typeof(ineff), :alpha) && length(ineff.alpha) == 1
+        push!(entries, ("α", first(ineff.alpha), 0.0))
     end
 
     return entries
@@ -3938,7 +4027,7 @@ function print_table(coef::AbstractVector{T}, var_cov_matrix::AbstractMatrix{T},
     idx = _param_ind(model, K, L, hetero; L_scaling=L_scaling)
 
     # Compute statistics
-    stddev = sqrt.(diag(var_cov_matrix))
+    stddev = _stderr_from_vcov(var_cov_matrix)  # NaN-safe: non-PD vcov ⇒ NaN SEs, no DomainError (re-audit R-06)
     t_stats = coef ./ stddev
     tt = cquantile(Normal(0, 1), 0.025)  # ~1.96
 
@@ -4006,10 +4095,10 @@ function print_table(coef::AbstractVector{T}, var_cov_matrix::AbstractMatrix{T},
         println("Log-parameters converted to original scale (σ² = exp(log_σ²)):")
 
         aux_data = Matrix{Any}(undef, length(aux_entries), 3)
-        for (row, (name, param_idx)) in enumerate(aux_entries)
+        for (row, (name, param_idx, offset)) in enumerate(aux_entries)
             aux_data[row, 1] = name
-            aux_data[row, 2] = exp(coef[param_idx])
-            aux_data[row, 3] = exp(coef[param_idx]) * stddev[param_idx]  # Delta method
+            aux_data[row, 2] = exp(coef[param_idx]) + offset
+            aux_data[row, 3] = exp(coef[param_idx]) * stddev[param_idx]  # Delta method (offset is a constant)
         end
 
         pretty_table(aux_data;
@@ -4158,7 +4247,11 @@ A NamedTuple containing:
 - `actual_iterations`: Total iterations across all stages
 - `warmstart_solver`, `warmstart_ini`, `warmstart_maxIT`: Warmstart info
 - `main_solver`, `main_ini`, `main_maxIT`: Main optimization info
-- `redflag`: Convergence warning flag (0=OK, 1=problems)
+- `redflag`: Convergence/quality flag (highest applicable value is reported):
+  0 = OK; 1 = convergence problems (gradient norm > 0.1 or `NaN`, iteration
+  limit reached, or the Hessian is not invertible); 2 = the variance-covariance
+  matrix has non-positive diagonal elements, so the affected standard errors are
+  `NaN`.
 - `list`: OrderedDict containing all results
 
 # Example
@@ -4390,7 +4483,7 @@ function sfmodel_MSLE_fit(;
         redflag = max(redflag, vcov_result.redflag)
     end
 
-    stddev = sqrt.(abs.(diag(var_cov_matrix)))  # abs for safety if negative
+    stddev = _stderr_from_vcov(var_cov_matrix)  # non-PD vcov ⇒ NaN SEs (no DomainError); keeps stderror(r) NaN-consistent with sqrt.(diag(vcov(r))). Re-audit R-06.
 
     # Compute Hessian for storage
     numerical_hessian = hessian(_lik, _coevec)
@@ -4492,14 +4585,24 @@ function sfmodel_MSLE_fit(;
     _dicRES[:main_ini] = sf_init_2nd
     _dicRES[:main_maxIT] = sf_main_maxit
     _dicRES[:main_tolerance] = myopt.main_opt.g_abstol
+    _dicRES[:trace] = _sf_optim_trace(_optres, myopt.main_opt.store_trace)   # R-27: main-solver trace for plot(:convergence)
     _dicRES[:redflag] = redflag
     _dicRES[:______________________] = "___________________"
     _dicRES[:GPU] = method.GPU
-    _dicRES[:n_draws] = method.draws !== nothing ? size(method.draws)[end] : method.n_draws
+    # R-19: report the number of draws actually used and whether user draws were
+    # truly consumed, so predict() can round-trip. `model.draws_2D` is the (1×D or
+    # N×D) matrix `_prepare_draws` built, so `size(...,2)` is the real D for every
+    # input shape — the old `size(method.draws)[end]` returned 1 for a multiRand=false
+    # D×1 matrix, making that fit impossible to predict. And when multiRand=true is
+    # handed a 1-D `draws`, `_prepare_draws` warns and auto-substitutes Halton, so the
+    # fit did NOT consume the user draws — `user_draws_supplied` must stay false (else
+    # predict wrongly demands draws that were never used).
+    _dicRES[:n_draws] = size(model.draws_2D, 2)
     _dicRES[:multiRand] = method.multiRand
     _dicRES[:chunks] = method.chunks
     _dicRES[:distinct_Halton_length] = method.distinct_Halton_length
-    _dicRES[:user_draws_supplied] = method.draws !== nothing
+    _dicRES[:user_draws_supplied] =
+        method.draws !== nothing && !(method.multiRand && ndims(method.draws) == 1)
     _dicRES[:estimation_method] = method.method
 
     # Add individual coefficient vectors based on model equations
@@ -4517,6 +4620,13 @@ function sfmodel_MSLE_fit(;
     end
     if hasfield(typeof(idx.ineff), :sigma_sq)
         _dicRES[:sigma_sq] = _coevec[idx.ineff.sigma_sq]
+        # R-21: HalfNormal stores its ln σᵤ² under :sigma_sq; also expose it under
+        # :sigma_u for parity with TruncatedNormal (the manual reserves :sigma_u for
+        # HalfNormal/TN). Lognormal/Rayleigh keep only :sigma_sq — their parameter is
+        # Var(ln u) / a squared scale, not σᵤ².
+        if model.model.ineff isa HalfNormal_MSLE
+            _dicRES[:sigma_u] = _coevec[idx.ineff.sigma_sq]
+        end
     end
     if hasfield(typeof(idx.ineff), :sigma_u)
         _dicRES[:sigma_u] = _coevec[idx.ineff.sigma_u]

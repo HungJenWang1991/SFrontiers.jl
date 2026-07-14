@@ -26,7 +26,10 @@ Observation-level residuals from a fitted stochastic frontier model.
 - `:ols`: residuals from the frontier-only OLS regression, yᵢ − xᵢ'β̂ₒₗₛ.
 
 For panel TFE models, `:composed`/`:ols` residuals are computed on the
-within-demeaned data (the scale at which the likelihood is evaluated).
+within-demeaned data (the scale at which the likelihood is evaluated). For
+these Wang–Ho fits `:v` uses the within-firm demeaned inefficiency ũ (see
+[`_inefficiency_for_noise`](@ref)), so `ε̃ = ṽ − sign·ũ` stays consistent and
+each firm's v̂ averages to ~0.
 """
 function StatsAPI.residuals(r::SFResult; type::Symbol = :composed)
     y = _get_depvar(r)
@@ -40,7 +43,7 @@ function StatsAPI.residuals(r::SFResult; type::Symbol = :composed)
     elseif type === :v
         sgn = _frontier_sign(r)
         eps = y .- X * β
-        return eps .+ sgn .* collect(r.jlms)
+        return eps .+ sgn .* _inefficiency_for_noise(r)
     elseif type === :ols
         β_ols = X \ y
         return y .- X * β_ols
@@ -56,7 +59,9 @@ end
 Fitted values from the stochastic frontier model.
 
 - `:frontier` (default): xᵢ'β̂.
-- `:response`: xᵢ'β̂ − û for production, xᵢ'β̂ + û for cost.
+- `:response`: xᵢ'β̂ − û for production, xᵢ'β̂ + û for cost. For Wang–Ho
+  panel fits, û is the within-firm demeaned inefficiency ũ, matching the
+  demeaned frontier (see [`_inefficiency_for_noise`](@ref)).
 """
 function StatsAPI.fitted(r::SFResult; type::Symbol = :frontier)
     X = _get_frontier_matrix(r)
@@ -66,7 +71,7 @@ function StatsAPI.fitted(r::SFResult; type::Symbol = :frontier)
         return yhat_frontier
     elseif type === :response
         sgn = _frontier_sign(r)
-        return yhat_frontier .- sgn .* collect(r.jlms)
+        return yhat_frontier .- sgn .* _inefficiency_for_noise(r)
     else
         error("fitted: unknown `type=:$type`. Valid options are :frontier, :response.")
     end
@@ -126,8 +131,54 @@ function _frontier_sign(r::SFResult)
         s = getproperty(m, :sign)
         return s == -1 ? -1.0 : 1.0
     catch
-        return 1.0  # default to production
+        # Every current fit path stores the sign via _sf_sign, PorC, or model.sign,
+        # so this branch is unreachable today. Fail loudly rather than silently
+        # assuming production: a future result shape that loses its sign metadata
+        # would otherwise return production-signed numbers for a cost model.
+        error("diagnostics: frontier sign not recoverable from this result " *
+              "(backend=$(getfield(r, :backend))). Expected `_sf_sign`, `PorC`, " *
+              "or `model.sign`.")
     end
+end
+
+# Firm boundary offsets (length N+1) attached for Wang–Ho panel_TFE fits; `nothing`
+# for every other fit (cross-sectional, CSW, TRE).
+function _panel_offsets(r::SFResult)
+    nt = getfield(r, :nt)
+    return hasproperty(nt, :_sf_panel_offsets) ? getproperty(nt, :_sf_panel_offsets) : nothing
+end
+
+# Within-group demeaning by firm-boundary offsets (mirrors Panel_Backend.sf_panel_demean).
+function _within_demean(x::AbstractVector, offsets::AbstractVector{<:Integer})
+    out = similar(x, float(eltype(x)))
+    for i in 1:(length(offsets) - 1)
+        s, e = offsets[i] + 1, offsets[i + 1]
+        seg = @view x[s:e]
+        out[s:e] .= seg .- mean(seg)
+    end
+    return out
+end
+
+"""
+    _inefficiency_for_noise(r) -> Vector
+
+The inefficiency term to subtract from ε̂/frontier when forming `:v`/`:response`.
+
+For a **Wang–Ho panel_TFE** fit (any backend) the composed residual is within-firm
+demeaned (ε̃), while `r.jlms = h_it·E[u*ᵢ|ε̃]` is built from the *non-demeaned*
+scaling h_it. The demeaned inefficiency that actually enters ε̃ is
+`ũ_it = h̃_it·E[u*ᵢ|ε̃]`; because `E[u*ᵢ|ε̃]` is constant within a firm, this equals
+the within-firm demeaning of `r.jlms` (`jlmsᵢₜ − mean_firm(jlms)`) — no backend
+quantity beyond the firm offsets is needed (re-audit R-26). Using the raw jlms
+would leave `:v`/`:response` off by the firm-mean term `h̄ᵢ·E[u*|·]`.
+
+For every non-panel fit this returns `collect(r.jlms)` unchanged.
+"""
+function _inefficiency_for_noise(r::SFResult)
+    jl = collect(r.jlms)
+    off = _panel_offsets(r)
+    off === nothing && return jl
+    return _within_demean(vec(jl), off)
 end
 
 # ------------------------------------------------------------------
@@ -213,11 +264,17 @@ function sf_vs_ols(r::SFResult; dof::Union{Nothing, Integer} = nothing)
     return LRTestResult(LR, k, pval, true, cv, ll_R, ll_U)
 end
 
-# Crude default: total parameters minus number of frontier coefficients.
-# Users are encouraged to pass `dof` explicitly to match the literature.
+# Default dof = number of extra SF parameters over OLS = (unrestricted − restricted).
+# OLS already estimates the K frontier coefficients *and* the noise variance
+# `ln σᵥ²` (which is exactly OLS's own residual variance), so both cancel in the
+# (unrestricted − restricted) LR difference and must be excluded — hence `− K − 1`.
+# What remains are the genuine restrictions: the inefficiency-distribution
+# parameters and any copula parameters (copula θ_ρ vanishes under H₀: σᵤ²=0 ⇒
+# u≡0, so it *does* count). Excluding `ln σᵥ²` corrects a former off-by-one that
+# could flip the mixed-χ̄² decision (re-audit R-04). Users may still pass `dof`.
 function _default_sf_vs_ols_dof(r::SFResult)
     K = length(r.frontier)
-    return max(StatsAPI.dof(r) - K, 1)
+    return max(StatsAPI.dof(r) - K - 1, 1)
 end
 
 _chisq_pvalue(x::Real, k::Integer)       = chisqccdf(k, max(x, 0.0))

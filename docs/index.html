@@ -432,7 +432,7 @@
     </ul>
   </div>
   <div class="sidebar-footer">
-    <span class="version-badge">v1.2.2</span>
+    <span class="version-badge">v1.3.0</span>
     <span class="author-info">&copy; Hung-Jen Wang</span>
   </div>
 </aside>
@@ -2048,7 +2048,8 @@ meth3 = sfmodel_method(
 my_draws = reshape(rand(2^12), 1, :)
 meth4 = sfmodel_method(
     method = :MSLE,
-    draws = my_draws,  # identical for each obs
+    draws = my_draws,     # 1×S row matrix, identical for each obs
+    multiRand = false,    # REQUIRED for user-supplied draws (see §9.8 Custom Draw Sequences)
     GPU = true,
 )
 
@@ -2554,7 +2555,8 @@ E(u) (default: <code>true</code>).</td>
 <tr>
 <td><code>redflag</code></td>
 <td>Int</td>
-<td>Warning flag: 0 = OK, 1 = potential issues</td>
+<td>Warning flag: 0 = OK, 1 = convergence problems, 2 = non-positive
+var-cov diagonal (SEs are <code>NaN</code>)</td>
 </tr>
 </tbody>
 </table>
@@ -2886,15 +2888,19 @@ stopped because the objective or the parameters stopped moving, while
 the gradient remained sizeable.</p>
 <p><code>SFrontiers.jl</code> therefore returns an additional warning
 flag, <code>redflag</code>, that re-examines the quality of the result
-after <code>Optim</code> returns. <code>redflag = 1</code> whenever any
-of the following holds, regardless of what <code>converged</code>
-reports:</p>
+after <code>Optim</code> returns. It takes one of three values,
+regardless of what <code>converged</code> reports (the highest
+applicable value is reported):</p>
 <ul>
-<li>Gradient norm exceeds 0.1 (or is <code>NaN</code>)</li>
-<li>Iteration limit was reached</li>
-<li>Variance–covariance matrix has non-positive diagonal elements</li>
+<li><code>redflag = 0</code>: no issues detected.</li>
+<li><code>redflag = 1</code>: a convergence-quality problem — the
+gradient norm exceeds 0.1 (or is <code>NaN</code>), the iteration limit
+was reached, or the Hessian is not invertible.</li>
+<li><code>redflag = 2</code>: the variance–covariance matrix has
+non-positive diagonal elements, so the affected standard errors are
+reported as <code>NaN</code>.</li>
 </ul>
-<p>Treat <code>redflag = 1</code> as a signal to inspect
+<p>Treat any <code>redflag &gt; 0</code> as a signal to inspect
 <code>gradient_norm</code> and re-run with different initial values,
 more iterations, or a different solver (see <a
 href="#handling-convergence-issues">Handling Convergence
@@ -3686,18 +3692,24 @@ been passed to <code>sfmodel_opt()</code> at fit time</td>
 </tr>
 </tbody>
 </table>
-<p>The QQ sub-panel of <code>:residuals</code> compares the
+<p>The QQ sub-panel of <code>:residuals</code> standardizes the
 <strong>imputed noise estimate</strong> <span class="math inline">\(\hat
-v_i = \hat\varepsilon_i \mp \hat u_i\)</span> against <span
-class="math inline">\(N(0, \hat\sigma_v^2)\)</span>, not the composed
-residual itself. This is because the model assumes normality of <span
-class="math inline">\(v\)</span>, not <span
-class="math inline">\(\varepsilon\)</span>. The composed residual is
-deliberately non-normal under the SF specification (its skewness is the
-basis of <code>sf_vs_ols</code>). Since <span class="math inline">\(\hat
-v\)</span> is a derived latent-variable quantity, the plot is a soft
-distributional-misspecification diagnostic rather than a formal
-normality test.</p>
+v_i = \hat\varepsilon_i \mp \hat u_i\)</span> by its own sample mean and
+standard deviation and compares the result against <span
+class="math inline">\(N(0,1)\)</span> (with a 45° reference line), not
+the composed residual itself. Because location and scale are removed,
+this is a normality <strong>shape</strong> check — it does <em>not</em>
+test whether <span class="math inline">\(\mathrm{Var}(\hat v)\)</span>
+matches the fitted <span class="math inline">\(\hat\sigma_v^2\)</span>.
+The reason for looking at <span class="math inline">\(\hat v\)</span>
+rather than <span class="math inline">\(\hat\varepsilon\)</span> is that
+the model assumes normality of <span class="math inline">\(v\)</span>,
+not <span class="math inline">\(\varepsilon\)</span>: the composed
+residual is deliberately non-normal under the SF specification (its
+skewness is the basis of <code>sf_vs_ols</code>). Since <span
+class="math inline">\(\hat v\)</span> is a derived latent-variable
+quantity, the plot is a soft distributional-misspecification diagnostic
+rather than a formal normality test.</p>
 <p>If <code>using Plots</code> has not been called,
 <code>plot(result, ...)</code> raises
 <code>UndefVarError: plot not defined</code>, accompanied by an error

@@ -194,3 +194,35 @@ const df    = DataFrame(yvar = y, cons = cons, x1 = x1, x2 = x2, z1 = z1)
     end
 
 end
+
+# Regression tests for the correctness fixes in 00to_fix.md.
+include("test_fixes.jl")
+
+# Regression tests for the prod/cost sign fixes in 00Direction2_findings.md.
+include("test_direction2_fixes.jl")
+
+# Regression tests for the 03_reaudit_findings.md Group 1 fixes (R-06, R-23).
+include("test_reaudit_G1.jl")
+
+# Regression tests for the 03_reaudit_findings.md Group 2 fixes (R-02, R-13, R-15, R-16, R-17).
+include("test_reaudit_G2.jl")
+
+# Regression tests for the 03_reaudit_findings.md Group 3 fixes (R-04, R-03, R-26).
+include("test_reaudit_G3.jl")
+
+# Regression tests for the 03_reaudit_findings.md Group 4 fixes (R-18, R-19, R-20, R-08).
+include("test_reaudit_G4.jl")
+
+# Regression tests for the 03_reaudit_findings.md Group 5 fixes (R-12, R-11, R-14, R-24, R-21).
+include("test_reaudit_G5.jl")
+
+# Regression tests for the 03_reaudit_findings.md Group 6 fix (R-05, FIX-06(A)/(B)).
+include("test_reaudit_G6.jl")
+
+# Regression tests for the 03_reaudit_findings.md Group 7 fixes
+# (R-01, R-22, R-28, FIX-09, R-27, R-07, R-09, R-10).
+include("test_reaudit_G7.jl")
+
+# Regression tests for the 2026-07 predict re-review: MCI/MSLE predict reuses the
+# fit-time simulation kernel for HN/TN so predict==fit bit-for-bit on the estimation data.
+include("test_predict_sim_identity.jl")

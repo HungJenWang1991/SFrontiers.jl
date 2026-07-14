@@ -186,9 +186,9 @@ function sfmodel_MoMTest(arg::Vararg; data::DataFrame, ω::Union{Vector, Real, T
         end
 
         if s == "H"
-            Resid2 = Resid .- _porc*sqrt(σᵤ²)*sqrt(2/π)
+            Resid2 = Resid .- sqrt(σᵤ²)*sqrt(2/π)   # R-01: subtract E[u] unconditionally (see JLMS note below)
         elseif s == "E"
-            Resid2 = Resid .- _porc*sqrt(σᵤ²)
+            Resid2 = Resid .- sqrt(σᵤ²)              # R-01: subtract E[u] unconditionally
         end
         
         Grad2 = CResid.^2 .- (σᵥ²+λ₂*σᵤ²)
@@ -310,14 +310,14 @@ function sfmodel_MoMTest(arg::Vararg; data::DataFrame, ω::Union{Vector, Real, T
     #***** JLMS & BC ********************************
     
     if s == "H" 
-        myeps = Resid .- (_porc)*sqrt(σᵤ²)*sqrt(2/π)  # prod: v-(u-E(u)) - E(u) = v-u;  cost: v+(u-E(u)) + E(u) = v+u
+        myeps = Resid .- sqrt(σᵤ²)*sqrt(2/π)  # R-01: subtract E[u] unconditionally. Resid is already _porc-flipped (L153) into production v−u form (prod) / −(v+u) form (cost), each offset by +E[u] that the OLS intercept absorbed; the extra _porc here added E[u] for :cost (shift +2E[u]).
         mustar  = -σᵤ²*myeps/(σᵤ² + σᵥ²) 
         sig2star = σᵤ²*σᵥ²/(σᵤ² + σᵥ²) 
         rat1 = mustar/sqrt(sig2star)
         _jlms = sqrt(sig2star) .* exp.(normlogpdf.(rat1) .- normlogcdf.(rat1)) .+ (mustar)
         _bc  = exp.(clamp.(-mustar .+ 0.5*sig2star .+ normlogcdf.(rat1 .- sqrt(sig2star)) .- normlogcdf.(rat1), -500.0, 500.0))
     elseif s == "E" 
-        myeps = Resid .- (_porc)*sqrt(σᵤ²) # prod: v-(u-E(u)) - E(u) = v-u;  cost: v+(u-E(u)) + E(u) = v+u
+        myeps = Resid .- sqrt(σᵤ²) # R-01: subtract E[u] unconditionally (see the half-normal branch above)
         mustar = -myeps .- σᵥ²/sqrt(σᵤ²) 
         rat1 = mustar/sqrt(σᵥ²)
         _jlms = sqrt(σᵥ²) .* exp.(normlogpdf.(rat1) .- normlogcdf.(rat1)) .+ mustar

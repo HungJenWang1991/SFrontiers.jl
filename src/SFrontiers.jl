@@ -500,6 +500,11 @@ function sfmodel_spec(args::DSLArg...;
 
     # --- Helper: build MLE spec for cross-sectional DSL ---
     _build_mle_cross_dsl = () -> begin
+        # MLE scaling only supports TruncatedNormal; skip for other distributions
+        # (mirror the keyword sibling `_build_mle_cross`; re-audit R-15).
+        if hetero === :scaling && ineff != :TruncatedNormal
+            return nothing
+        end
         if noise == :Normal && copula == :None &&
            ineff in (:HalfNormal, :TruncatedNormal, :Exponential)
             (depvar_data, frontier_data, zvar_data, _) = _dsl_extract_data()
@@ -839,16 +844,21 @@ so no `method` argument is needed.
 - `warmstart_opt=nothing`: NamedTuple of warmstart options (e.g., `(iterations=200,)`).
 - `main_solver`: Main optimizer (e.g., `Newton()`). Required.
 - `main_opt`: NamedTuple of main optimization options. Required.
+- `store_trace=false`: When `true`, the main optimizer's iteration trace is captured
+  onto the result as `result.trace` so it can be drawn later with
+  `plot(result, :convergence)` (R-27). Left `false` by default (no overhead).
 """
 function sfmodel_opt(; warmstart_solver = nothing,
                      warmstart_opt = nothing,
                      main_solver,
-                     main_opt)
+                     main_opt,
+                     store_trace::Bool = false)
     return MCI_Backend.sfmodel_MCI_opt(;
         warmstart_solver=warmstart_solver,
         warmstart_opt=warmstart_opt,
         main_solver=main_solver,
-        main_opt=main_opt)
+        main_opt=main_opt,
+        store_trace=store_trace)
 end
 
 # ============================================================================
@@ -883,6 +893,7 @@ function _to_mle_opt(opt)
         :main_solver      => opt.main_solver,
         :main_maxIT       => opt.main_opt.iterations,
         :tolerance        => opt.main_opt.g_abstol,
+        :store_trace      => opt.main_opt.store_trace,   # R-27: propagate trace request to MLE backend
         :verbose          => true,
         :banner           => true,
         :ineff_index      => true,
@@ -896,9 +907,10 @@ end
 # MLE order: [frontier(K), μ(1), hscale(L), σᵤ²(1), σᵥ²(1)]
 function _reorder_init_mci_to_mle(spec::UnifiedSpec, init)
     isnothing(init) && return nothing
+    init isa Dict && return init  # MLE backend handles Dicts natively; only reorder numeric vectors
     if spec.ineff == :TruncatedNormal && spec.hetero === :scaling
         K = spec.mci_spec.K
-        L = spec.mci_spec.L
+        L = spec.mci_spec.L_scaling  # true scaling-δ count; mci_spec.L is pinned to 1 for :scaling
         v = collect(init)
         return vcat(
             v[1:K],            # frontier
@@ -916,6 +928,7 @@ end
 # MLE   TN order: [frontier(K), μ(1), δ_hscale(L), lnσᵤ²(1), lnσᵥ²(1)]
 function _reorder_init_panel_to_mle(spec::UnifiedSpec, init)
     isnothing(init) && return nothing
+    init isa Dict && return init  # MLE backend handles Dicts natively; only reorder numeric vectors (FIX-14 sibling; re-audit R-16)
     spec.panel_spec === nothing && return init
     K = spec.panel_spec.K
     L = spec.panel_spec.L
@@ -937,20 +950,51 @@ end
 # Attach the X, y, and frontier-sign used at fit time to the MLE result so
 # that diagnostics (residuals, fitted, ...) can operate uniformly across
 # backends. MLE backends store data references only as symbols.
-function _attach_mle_data(spec::UnifiedSpec, result)
-    src = spec.mci_spec !== nothing ? spec.mci_spec :
-          spec.panel_spec !== nothing ? spec.panel_spec :
-          nothing
-    src === nothing && return result
-    return merge(result, (_sf_depvar   = src.depvar,
-                          _sf_frontier = src.frontier,
-                          _sf_sign     = src.sign))
+# Attach the fit-time X, y, and frontier sign to a backend result so the shared
+# diagnostics layer (residuals/fitted/skewness/plot) works uniformly across every
+# backend. Backends store data references only as symbols/specs, so we recover the
+# actual arrays here from whichever spec the fit used (re-audit R-03).
+function _attach_diagnostic_data(spec::UnifiedSpec, result)
+    # panel_TFE fit (via MLE *or* the MCI/MSLE simulation backends): the Wang–Ho
+    # likelihood is evaluated on the within-firm demeaned data (see getvar(PFEWHH/
+    # PFEWHT), SFgetvars.jl, and the panel-sim _PanelInternalSpec y_tilde/x_tilde).
+    # Attach the demeaned depvar/frontier — not the raw stacked NT data — so
+    # diagnostics operate on the same scale as the fit. Per-row within-firm
+    # demeaning is grouping-invariant, so it reproduces each backend's own
+    # transform. The frontier sign is preserved unchanged.
+    if spec.panel_spec !== nothing
+        ps = spec.panel_spec
+        # Attach the firm boundary offsets too: the Wang–Ho jlms uses the
+        # *non-demeaned* scaling h_it, so `residuals(:v)`/`fitted(:response)` must
+        # within-firm demean the inefficiency to stay on the demeaned scale
+        # (re-audit R-26); diagnostics uses these offsets to do that.
+        return merge(result, (_sf_depvar        = Panel_Backend.sf_panel_demean(ps.depvar, ps.offsets),
+                              _sf_frontier      = Panel_Backend.sf_panel_demean(ps.frontier, ps.offsets),
+                              _sf_sign          = ps.sign,
+                              _sf_panel_offsets = ps.offsets))
+    end
+    # Cross-sectional MLE/MCI/MSLE: the raw fit-time data live on the MCI spec.
+    src = spec.mci_spec
+    if src !== nothing
+        return merge(result, (_sf_depvar   = src.depvar,
+                              _sf_frontier = src.frontier,
+                              _sf_sign     = src.sign))
+    end
+    # panel_TFE_CSW / panel_TRE: MLE-only estimators with no mci_spec or panel_spec.
+    # Recover the raw stacked data from the MLE spec so their diagnostic surface is
+    # available too (re-audit R-03). These are not Wang–Ho within-demeaned models,
+    # so residuals are on the raw scale (`type_sign` is +1 prod / −1 cost).
+    ms = spec.mle_spec
+    ms === nothing && return result
+    return merge(result, (_sf_depvar   = ms.depvar,
+                          _sf_frontier = ms.frontier,
+                          _sf_sign     = ms.type_sign))
 end
 
 function _reorder_result_mle_to_mci(spec::UnifiedSpec, result)
     if spec.ineff == :TruncatedNormal && spec.hetero === :scaling
         K = spec.mci_spec.K
-        L = spec.mci_spec.L
+        L = spec.mci_spec.L_scaling  # true scaling-δ count; mci_spec.L is pinned to 1 for :scaling
         n = length(result.coeff)
         # perm: [1:K, (K+2):(K+1+L), K+1, (K+2+L):n]
         perm = vcat(1:K, (K+2):(K+1+L), K+1, (K+2+L):n)
@@ -958,10 +1002,22 @@ function _reorder_result_mle_to_mci(spec::UnifiedSpec, result)
         new_std_err  = result.std_err[perm]
         new_vcov     = result.var_cov_mat[perm, perm]
         new_hessian  = result.Hessian[perm, perm]
-        return merge(result, (coeff = new_coeff,
-                              std_err = new_std_err,
-                              var_cov_mat = new_vcov,
-                              Hessian = new_hessian))
+        merged = merge(result, (coeff = new_coeff,
+                                std_err = new_std_err,
+                                var_cov_mat = new_vcov,
+                                Hessian = new_hessian))
+        # `varnames` is consumed by accessors.jl `_row_names` → `coeftable(r)`.
+        # Published labels must be in MCI order. Auto-generated names come back from
+        # the MLE backend in MLE order and are permuted here. User-supplied names are
+        # copied verbatim by the backend and are already in canonical (MCI) order, so
+        # permuting them again would scramble the labels (re-audit R-02, regression
+        # from FIX-05) — skip the permute when they already match the MCI-spec names.
+        if hasproperty(result, :varnames) && length(result.varnames) >= n &&
+           result.varnames != spec.mci_spec.varnames
+            new_varnames = result.varnames[perm]
+            merged = merge(merged, (varnames = new_varnames,))
+        end
+        return merged
     end
     return result
 end
@@ -990,7 +1046,10 @@ function _reorder_result_mle_to_panel(spec::UnifiedSpec, result)
         # (The CoefTable stored at `result.table` was built by the MLE backend
         # before this reorder and intentionally left in MLE order — it is the
         # during-fit display artifact, not a public-API surface.)
-        if hasproperty(result, :varnames) && length(result.varnames) >= n
+        # User-supplied names are already in canonical (Panel) order; only permute the
+        # MLE-order auto names (re-audit R-02, mirrors the cross-sectional sibling).
+        if hasproperty(result, :varnames) && length(result.varnames) >= n &&
+           result.varnames != spec.panel_spec.varnames
             new_varnames = result.varnames[perm]
             merged = merge(merged, (varnames = new_varnames,))
         end
@@ -1061,7 +1120,7 @@ function sfmodel_fit(;
         reordered = (spec.datatype == :panel_TFE) ?
                     _reorder_result_mle_to_panel(spec, raw) :
                     _reorder_result_mle_to_mci(spec, raw)
-        return _wrap_result(_attach_mle_data(spec, reordered), :MLE, spec)
+        return _wrap_result(_attach_diagnostic_data(spec, reordered), :MLE, spec)
 
     # --- Panel TFE with simulation methods (MCI/MSLE → Panel_Backend) ---
     elseif spec.datatype == :panel_TFE && !(method isa MLEMethodSpec)
@@ -1074,8 +1133,11 @@ function sfmodel_fit(;
         end
         panel_opt    = _to_panel_opt(optim_options)
 
-        return _wrap_result(
-            Panel_Backend.sfmodel_panel_fit(;
+        # Attach demeaned fit-time data so residuals/fitted/plot work for panel-sim
+        # (MCI/MSLE) fits, whose result.model is a _PanelInternalSpec carrying only
+        # y_tilde/x_tilde — not the depvar/frontier the diagnostics layer expects
+        # (re-audit R-03).
+        panel_result = Panel_Backend.sfmodel_panel_fit(;
                 spec          = spec.panel_spec,
                 method        = panel_method,
                 init          = init,
@@ -1083,8 +1145,8 @@ function sfmodel_fit(;
                 jlms_bc_index = jlms_bc_index,
                 marginal      = marginal,
                 show_table    = show_table,
-                verbose       = verbose),
-            :Panel, spec)
+                verbose       = verbose)
+        return _wrap_result(_attach_diagnostic_data(spec, panel_result), :Panel, spec)
 
     # --- Cross-sectional MCI ---
     elseif method isa MCI_Backend.SFMethodSpec
@@ -1130,9 +1192,10 @@ end
 # --- Helper: list supported methods for a given spec ---
 function _get_supported_methods(spec::UnifiedSpec)
     methods = Symbol[]
-    spec.mci_spec  !== nothing && push!(methods, :MCI)
-    spec.msle_spec !== nothing && push!(methods, :MSLE)
-    spec.mle_spec  !== nothing && push!(methods, :MLE)
+    spec.mci_spec   !== nothing && push!(methods, :MCI)
+    spec.msle_spec  !== nothing && push!(methods, :MSLE)
+    spec.panel_spec !== nothing && push!(methods, :MCI, :MSLE)  # panel_TFE serves MCI/MSLE via panel_spec (re-audit R-17)
+    spec.mle_spec   !== nothing && push!(methods, :MLE)
     return methods
 end
 

@@ -1,6 +1,12 @@
 # Copyright (C) 2025 Hung-Jen Wang
 # SPDX-License-Identifier: GPL-3.0-or-later
 
+# NaN-safe standard errors from a var-cov matrix. A non-positive-diagonal vcov would
+# make `sqrt` throw a DomainError, so those entries become NaN instead — a degenerate
+# fit still returns its result, keeping `stderror(r)` NaN-consistent with
+# `sqrt.(diag(vcov(r)))`. See re-audit R-06 (matching the MCI/MSLE/panel backends).
+_stderr_from_vcov(V::AbstractMatrix) = map(d -> d < 0 ? oftype(d, NaN) : sqrt(d), diag(V))
+
 ########################################################
 ####                sfmodel_spec()                  ####
 ########################################################
@@ -394,7 +400,12 @@ function _sfmodel_spec_populate_dicM!(
     # Create the DataFrame
     _dicM[:sdf] = DataFrame(comDF, all_varnames)
     _dicM[:hasDF] = false
-    _dicM[:transfer] = false
+    # R-07: the fit-time data IS transferred into `_dicM[:sdf]` here (with the
+    # auto-generated column names that `_dicM[:frontier]`/`:μ`/… reference), so mark
+    # transfer=true. This lets `sfmodel_boot_marginal(result=res)` re-extract the
+    # design from the internal frame without the caller re-supplying a DataFrame
+    # whose columns would have to match the internal auto-names.
+    _dicM[:transfer] = true
 
     # Set tagD
     global tagD
@@ -812,6 +823,18 @@ function sfmodel_opt(;
     return _dicOPT
 end    # end of sfmodel_opt()
 
+# R-27: capture the main optimizer's iteration trace as a NamedTuple for
+# plot(:convergence). The MLE backend always runs Optim with store_trace=true, so
+# `_optres` carries a trace; expose it on the result only when the user requested
+# it (via the unified `sfmodel_opt(store_trace=true)`), else return `nothing`.
+function _sf_optim_trace(optres, want::Bool)
+    want || return nothing
+    fv = Optim.f_trace(optres)
+    return (iteration = collect(0:(length(fv) - 1)),
+            value     = fv,
+            g_norm    = Optim.g_norm_trace(optres))
+end
+
 
 
 
@@ -1131,20 +1154,29 @@ function sfmodel_fit(;
 
      #* ------ Check if the matrix is invertible. ----
 
+     hess_invertible = true
      var_cov_matrix = try
                          inv(numerical_hessian)
                       catch err
+                         # Non-invertible Hessian: return NaN SEs + redflag instead of
+                         # throwing, so a degenerate fit still returns its coefficients/
+                         # loglik/jlms/bc (parity with MCI/MSLE/panel; re-audit R-06).
+                         hess_invertible = false
                          redflag = 1
-                         checkCollinear(tagD[:modelid], xvar, zvar, qvar, wvar, vvar)
-                         throw("The Hessian matrix is not invertible, indicating the model does not converge properly. The estimation is abort.")
+                         printstyled("The Hessian matrix is not invertible, indicating the model does not converge properly. Standard errors are set to NaN.\n\n"; color = :red)
+                         try
+                             checkCollinear(tagD[:modelid], xvar, zvar, qvar, wvar, vvar)   # collinearity diagnostic
+                         catch   # non-fatal: keep the fit alive with NaN SEs
+                         end
+                         fill(NaN, size(numerical_hessian))
                       end
 
           #* In some cases the matrix is invertible but the resulting diagonal
           #*    elements are negative. Check.
 
-          if !all( diag(var_cov_matrix) .> 0 ) # not all are positive
+          if hess_invertible && !all( diag(var_cov_matrix) .> 0 ) # invertible but not all diagonal are positive
                redflag = 1
-               printstyled("Some of the diagonal elements of the var-cov matrix are non-positive, indicating problems in the convergence. The estimation is abort.\n\n"; color = :red)
+               printstyled("Some of the diagonal elements of the var-cov matrix are non-positive, indicating problems in the convergence. The affected standard errors are set to NaN.\n\n"; color = :red)
                checkCollinear(tagD[:modelid], xvar, zvar, qvar, wvar, vvar)
           end
 
@@ -1220,7 +1252,7 @@ function sfmodel_fit(;
 
      #* ------- Make Table ------------------
 
-     stddev  = sqrt.(diag(var_cov_matrix)) # standard error
+     stddev  = _stderr_from_vcov(var_cov_matrix) # standard error (NaN-safe: non-PD vcov ⇒ NaN, no DomainError; re-audit R-06)
      t_stats = _coevec ./ stddev          # t statistics
      p_value = zeros(num.nofpara)   # p values
      ci_low  = zeros(num.nofpara) # confidence interval
@@ -1407,6 +1439,7 @@ function sfmodel_fit(;
       _dicRES[:Hessian]           = [numerical_hessian][1]
       _dicRES[:gradient_norm]     = Optim.g_residual(_optres)
       _dicRES[:actual_iterations] = Optim.iterations(_optres)
+      _dicRES[:trace]             = _sf_optim_trace(_optres, get(_dicOPT, :store_trace, false))   # R-27
       _dicRES[:______________] = "______________________" #32
       _dicRES[:warmstart_solver] = sf_ini_algo_dic
       _dicRES[:warmstart_ini]    = sf_init_1st_dic
@@ -1619,6 +1652,11 @@ function sfmodel_boot_marginal(; result::Any=nothing,  data::Any=nothing,
     rng = Xoshiro(seed)
  end
 
+ # R-07: override _dicM equation names with common names so the replicate
+ # `get_marg` below merges same-variable channels exactly like `result.marginal`.
+ # getvar() already extracted the data above using the original names, so this
+ # affects only the marginal-effect column naming/merge. Restored after the loop.
+ _saved_marg_names = _boot_common_marg_names!()
 
  for i in 1:R
 
@@ -1726,7 +1764,16 @@ if (Optim.iteration_limit_reached(_optres) ) ||
 
    if sum(isnan.(theM)) != 0  # in this run some of the element is NaN
       @goto start1
-   end 
+   end
+
+   # R-07: a bootstrap resample can make a determinant column constant, so
+   # `nonConsDataFrame` inside get_marg purges it and `theM` ends up shorter than
+   # `result.marginal` (whose columns were fixed on the full, non-degenerate
+   # sample). Resample such a degenerate draw — like the inv/NaN guards above —
+   # instead of hitting an uncaught DimensionMismatch at the assignment below.
+   if length(theM) != size(sim_res, 1)
+      @goto start1
+   end
 
    sim_res[:, i] = theM
 
@@ -1744,12 +1791,17 @@ if (Optim.iteration_limit_reached(_optres) ) ||
 
 end   # for i=1:R
 
+ _boot_restore_marg_names!(_saved_marg_names)   # R-07: undo the common-name override
+
  sim_res = sim_res'  # nofobs x K; ith row = ith replication, column = statistics
 
  #*###### compute statistics for the mean marginal effect #####*#
 
-   theMean = mean.(eachcol(result.marginal))  # Kx1 vector
-   theSTD  = sqrt.( sum((sim_res .- theMean').^2, dims=1) ./(R-1)) # 1 x K
+   theMean = mean.(eachcol(result.marginal))  # Kx1 vector (original point estimate)
+   theBootMean = mean(sim_res, dims=1)  # 1 x K, bootstrap replicate mean
+   # SE = spread of replicates about their OWN mean (= std(sim_res, dims=1)),
+   # not about the point estimate theMean (which would add a bias² term).
+   theSTD  = sqrt.( sum((sim_res .- theBootMean).^2, dims=1) ./(R-1)) # 1 x K
 
    ci_mat = sfmodel_CI(bootdata=sim_res, observed=theMean, level=level, verbose=false);
 
@@ -1792,6 +1844,48 @@ end # sfmodel_boot_marginal
 # -----------------------------------------------#
 # --- utilities for sfmodel_boot_marginal -------#
 # -----------------------------------------------#
+
+# R-07: the fit-time marginal (sfmodel_fit) overrides the `_dicM` equation entries
+# (:μ/:σᵤ²/:λ/:hscale) with common names before calling `get_marg`, so that
+# `addDataFrame` merges same-variable channels across equations — `result.marginal`
+# therefore has the MERGED column set. `sfmodel_boot_marginal`'s replicate `get_marg`
+# must use the identical override or it produces the UNMERGED (wider) column set,
+# and `sim_res[:, i] = theM` then throws a DimensionMismatch for multi-channel fits.
+# These two helpers apply and undo that override (mirroring SFmainfun.jl:1200-1246).
+function _boot_common_marg_names!()
+    saved = Dict{Symbol, Any}()
+    for key in (:μ, :σᵤ², :λ, :hscale)
+        v = get(_dicM, key, nothing)
+        v !== nothing && (saved[key] = copy(v))
+    end
+    if get(_dicM, :_display_zvar, nothing) !== nothing
+        dnames_zv = get(_dicM, :_display_zvar, Symbol[])
+        for key in (:μ, :σᵤ², :λ, :hscale)
+            v = get(_dicM, key, nothing)
+            if v isa Vector{Symbol} && length(v) == length(dnames_zv)
+                _dicM[key] = dnames_zv
+            end
+        end
+    else
+        ref_len = 0
+        for key in (:μ, :σᵤ², :λ, :hscale)
+            v = get(_dicM, key, nothing)
+            v isa Vector{Symbol} && (ref_len = max(ref_len, length(v)))
+        end
+        if ref_len > 1
+            common_names = [Symbol("z_var$i") for i in 1:ref_len]
+            for key in (:μ, :σᵤ², :λ, :hscale)
+                v = get(_dicM, key, nothing)
+                if v isa Vector{Symbol} && length(v) == ref_len
+                    _dicM[key] = common_names
+                end
+            end
+        end
+    end
+    return saved
+end
+
+_boot_restore_marg_names!(saved) = (for (k, v) in saved; _dicM[k] = v; end; nothing)
 
 
 """

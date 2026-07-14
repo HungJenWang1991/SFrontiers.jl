@@ -332,7 +332,7 @@ function jlmsbc(::Type{PFECSWH}, PorC::Int64, pos::NamedTuple, coef::Array{Float
 
         @views ind = idt[i,1]
         @views αᵢᴹ = mean(αϵ[ind]) + PorC*( sqrt(2/π)*σᵤ )
-        @views ϵ   = αϵ[ind] .- αᵢᴹ
+        @views ϵ   = PorC .* (αϵ[ind] .- αᵢᴹ)   # ε in v−u form for both types (no-op for :prod)
                μₛ  = -(σᵤ²*ϵ) ./ (σᵤ² + σᵥ²)
                σₛ² = (σᵤ² * σᵥ²)/(σᵤ² + σᵥ²)
                r   =  μₛ ./ sqrt(σₛ²)

@@ -573,7 +573,7 @@ The JLMS inefficiency index and the Battese--Coelli efficiency index are compute
 
 ```julia
 julia> [result.jlms  result.bc]
-271×2 CuArray{Float64, 2, CUDA.DeviceMemory}:
+271×2 Matrix{Float64}:
  0.571107   0.574412
  0.510025   0.610202
  0.10391    0.904546
@@ -2089,6 +2089,8 @@ The package offers three estimation methods. MLE uses analytic (closed-form) log
 
 > For a given model supported by both MCI and MSLE, the two simulation methods typically produce similar estimates. Differences may arise because MCI and MSLE use different likelihood constructions, so they can respond differently to the choice of distribution, sample size, and starting values. In particular, when the data do not conform well to the assumed distributional shape, the finite set of simulation draws may cover the tails unevenly, causing the two methods to weight those observations differently.
 
+> **Caveat — MCI with a concentrated truncated-normal inefficiency.** MCI evaluates the likelihood by importance sampling with a fixed draw transformation. For the truncated-normal family (including the scaling property model) the transformation covers inefficiency values up to roughly $\sigma_u \times n_\text{draws}$; if the estimated distribution concentrates far above that range (large $\mu/\sigma_u$ — an almost deterministic inefficiency level, which some data can produce as a fitting corner), the draws miss the mass, and the likelihood, `jlms`, and `bc` near such parameter values can be far from converged even though the fit reports convergence. Symptoms: `bc` pinned at exactly 1.0 and implausibly small `jlms`. SFrontiers prints a warning when it detects this (the per-observation effective sample size of the jlms/bc weights falls below 10). If you see it, increase `n_draws` substantially or — usually better — refit with `method = :MSLE`, whose inverse-CDF draws follow the estimated distribution exactly and do not suffer from this. MLE (when the model is supported) is also immune.
+
 ### GPU Computation
 
 GPU acceleration is available for the simulation-based methods (MCI and MSLE) and is highly recommended when the number of draws or the sample size is large. MLE does not use GPU because its likelihood is analytic.
@@ -2118,6 +2120,10 @@ meth = sfmodel_method(
 **Managing GPU memory with `chunks`.** When $N$ or $S$ is large, the full $N \times S$ matrix may exceed GPU VRAM. The `chunks` option splits the $N$ observations into smaller batches of size $N/\text{chunks}$, processing each sequentially while accumulating the log-likelihood. This trades a small amount of overhead for significantly lower peak memory usage. Start with the default (`chunks = 10`) and increase if you encounter out-of-memory errors. On Windows, Task Manager can be used to monitor VRAM usage in real time.
 
 > **Tip:** The `chunks` option also works on CPU and can help with large datasets even without a GPU.
+
+**Numerical precision.** GPU computation uses double precision (`Float64`) throughout — the same precision as the CPU path, so enabling `GPU = true` does not trade accuracy for speed. For the same specification and draws, the likelihood evaluated on GPU matches the CPU value to machine precision (differences on the order of $10^{-13}$ or smaller; verified across all inefficiency distributions, chunk settings, copulas, and the panel model). Estimated coefficients and efficiency indices agree equally closely; in nearly flat regions of the likelihood (e.g., a copula dependence parameter near zero), a CPU and a GPU run may stop at slightly different coefficient values with identical log-likelihoods — this reflects the optimizer's stopping point, not GPU precision loss. Single precision (`Float32`) is not supported: estimation always promotes to `Float64`.
+
+**Results live on the CPU.** All fields of a GPU fit's result — coefficients, standard errors, `result.jlms`, `result.bc`, and marginal effects — are returned as ordinary CPU arrays. Post-estimation analysis (indexing, plotting, `DataFrame` construction, `predict`) therefore works exactly as after a CPU fit, with no GPU-to-CPU data transfers needed.
 
 ### Copula Models
 

@@ -736,7 +736,10 @@ function _to_device_array(target::AbstractArray, source::AbstractVector)
         CuArrayConstructor = typeof(target).name.wrapper
         return CuArrayConstructor(source)
     else
-        return source
+        # Host target: a device-resident source (e.g. user-supplied CuArray draws
+        # in a GPU=false fit) must come back to host or it device-mixes in the NLL
+        # broadcasts (GPU audit GPU-04). No-op for host arrays.
+        return source isa Array ? source : Array(source)
     end
 end
 
@@ -746,7 +749,8 @@ function _to_device_array(target::AbstractArray, source::AbstractMatrix)
         CuArrayConstructor = typeof(target).name.wrapper
         return CuArrayConstructor(source)
     else
-        return source
+        # Host target: pull device-resident sources back to host (GPU audit GPU-04).
+        return source isa Array ? source : Array(source)
     end
 end
 
@@ -1722,7 +1726,10 @@ function sfmodel_spec(data_spec::UseDataSpec, depvar_spec::DepvarSpec,
 
     # Handle scaling property model
     is_scaling = (hetero === :scaling)
-    hetero_vec = is_scaling ? Symbol[] : (hetero isa Symbol ? error("Invalid `hetero`: :$hetero.") : hetero)
+    hetero_vec = is_scaling ? Symbol[] :
+        (hetero isa Symbol ?
+            error("Invalid `hetero`: :$hetero. Use a Vector{Symbol} like [:$hetero], " *
+                  "or use :scaling for the scaling property model.") : hetero)
 
     # Build model to determine parameter count
     model = _build_model(noise, ineff; copula=copula)
@@ -1878,6 +1885,13 @@ function sfmodel_spec(data_spec::UseDataSpec, depvar_spec::DepvarSpec,
     # Scaling requires zvar
     hetero === :scaling && error("Scaling property model (`hetero=:scaling`) requires `@zvar(...)`. " *
                                  "Use the 4-argument form with @zvar.")
+    # Bare non-:scaling Symbol: fail with the keyword ctor's clean R-13 message —
+    # the varnames ternaries below (`:sigma_sq in hetero` etc.) otherwise throw a
+    # cryptic `MethodError: iterate(::Symbol)` first (gap closure GC-01).
+    if hetero isa Symbol
+        error("Invalid `hetero`: :$hetero. Use a Vector{Symbol} like [:$hetero], " *
+              "or use :scaling for the scaling property model.")
+    end
 
     # No zvar provided → call keyword version with zvar=nothing (auto-generates ones(N))
     # Pass frontier varnames so the output table has meaningful column names
@@ -4491,8 +4505,11 @@ function sfmodel_MSLE_fit(;
     # ========== JLMS and BC Indices ==========
     if jlms_bc_index
         eff_result = jlms_bc_indices(model, _coevec)
-        _jlms = eff_result.jlms
-        _bc = eff_result.bc
+        # Store jlms/bc on host: post-estimation analysis reads them repeatedly,
+        # so one bulk device→host copy here beats a transfer per use
+        # (GPU audit GPU-01; no-op for CPU fits).
+        _jlms = eff_result.jlms isa Array ? eff_result.jlms : Array(eff_result.jlms)
+        _bc   = eff_result.bc   isa Array ? eff_result.bc   : Array(eff_result.bc)
         _jlmsM = mean(_jlms)
         _bcM = mean(_bc)
     else

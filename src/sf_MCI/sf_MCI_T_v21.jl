@@ -830,6 +830,28 @@ Named tuple with:
 - `bc::Vector`: E(e^{-u}|ε) for each observation (efficiency index)
 - `likelihood::Vector`: f_ε(ε) for each observation (density value)
 """
+# OBS-1 (09_gap_closure_findings.md): MCI's fixed draw transformation can miss
+# the inefficiency distribution's mass entirely at extreme parameter corners
+# (e.g. TruncatedNormal with μ/σᵤ ≫ D — the logistic proposal only reaches
+# u ≈ σᵤ·(D−1)); jlms/bc are then dominated by a single draw and silently
+# biased (bc pins at exactly 1). The per-observation effective sample size
+# ESS_i = (Σ_d w_id)² / Σ_d w_id² detects this; values are never altered.
+const _JLMS_ESS_WARN_MIN = 10.0
+
+"Warn when any observation's jlms/bc importance sample is degenerate; returns the count."
+function _warn_low_ess(ess::AbstractVector, D::Integer)
+    n_low = Int(sum(ess .< _JLMS_ESS_WARN_MIN))
+    n_low == 0 && return n_low
+    printstyled("Warning: the jlms/bc importance sample is degenerate for $n_low " *
+                "observation(s) (min effective sample size " *
+                "$(round(Float64(minimum(ess)), sigdigits=3)) of $D draws). The " *
+                "inefficiency distribution concentrates outside the MCI draws' range, " *
+                "so jlms/bc (and the likelihood near these parameter values) may be " *
+                "far from converged. Increase n_draws substantially or prefer " *
+                "method=:MSLE for this model.\n"; color=:yellow)
+    return n_low
+end
+
 function _jlms_bc_mci_T(ε::AbstractVector{P}, draws_1D, model, c, n_obs, D,
                          sign, chunks, noise_vals, ineff_vals;
                          trans, jacob,
@@ -894,6 +916,14 @@ function _jlms_bc_mci_T(ε::AbstractVector{P}, draws_1D, model, c, n_obs, D,
         @. log_w_buffer = -u_buffer + z_buffer
         log_bc_num = logsumexp_rows(log_w_buffer) .- log(P(D))
 
+        # OBS-1 degeneracy diagnostic (skipped under AD dual numbers; no effect
+        # on returned values). ESS = exp(2·logΣw − logΣw²), logΣw = log_denom + log D.
+        if P <: AbstractFloat
+            @. log_w_buffer = 2 * z_buffer
+            ess = exp.(2 .* (log_denom .+ log(P(D))) .- logsumexp_rows(log_w_buffer))
+            _warn_low_ess(ess, D)
+        end
+
         return (jlms=exp.(log_jlms_num .- log_denom),
                 bc=exp.(log_bc_num .- log_denom),
                 likelihood=exp.(log_denom))
@@ -908,6 +938,9 @@ function _jlms_bc_mci_T(ε::AbstractVector{P}, draws_1D, model, c, n_obs, D,
         u_buffer = similar(ε, P, chunk_size, D)
         log_w_buffer = similar(ε, P, chunk_size, D)
         z_buffer = similar(ε, P, chunk_size, D)
+        # OBS-1 degeneracy diagnostic accumulator (diagnostics only; skipped
+        # under AD dual numbers)
+        ess_out = P <: AbstractFloat ? similar(ε, P, n_obs) : nothing
 
         # Pre-allocate copula buffers if needed
         has_copula_chunked = copula_plen(model.copula) > 0
@@ -979,7 +1012,15 @@ function _jlms_bc_mci_T(ε::AbstractVector{P}, draws_1D, model, c, n_obs, D,
             jlms_out[row_start:row_end] .= exp.(log_jlms_chunk .- log_denom_chunk)
             bc_out[row_start:row_end] .= exp.(log_bc_chunk .- log_denom_chunk)
             likelihood_out[row_start:row_end] .= exp.(log_denom_chunk)
+
+            # OBS-1 degeneracy diagnostic for this chunk (values unchanged)
+            if ess_out !== nothing
+                @. lw_buf = 2 * z_buf
+                ess_out[row_start:row_end] .= exp.(2 .* (log_denom_chunk .+ log(P(D))) .-
+                                                   logsumexp_rows(lw_buf))
+            end
         end
+        ess_out === nothing || _warn_low_ess(ess_out, D)
 
         return (jlms=jlms_out, bc=bc_out, likelihood=likelihood_out)
     end

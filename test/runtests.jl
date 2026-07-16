@@ -226,3 +226,16 @@ include("test_reaudit_G7.jl")
 # Regression tests for the 2026-07 predict re-review: MCI/MSLE predict reuses the
 # fit-time simulation kernel for HN/TN so predict==fit bit-for-bit on the estimation data.
 include("test_predict_sim_identity.jl")
+
+# GPU/CUDA CPU-vs-GPU equivalence smoke (2026-07 GPU audit, 07_gpu_audit_findings.md).
+# No-op unless CUDA.jl is installed and functional; runs in a subprocess because
+# `using CUDA` must precede `using SFrontiers`. Full sweep: test/gpu_sweep_runner.jl.
+include("test_gpu_equivalence.jl")
+
+# Regression test for the gap-closure fix GC-01 (09_gap_closure_findings.md):
+# bare-Symbol hetero errors cleanly on all DSL ctor paths (R-13 parity).
+include("test_gap_closure_GC01.jl")
+
+# Regression test for the gap-closure diagnostic OBS-1 (09_gap_closure_findings.md):
+# MCI jlms/bc warn when the importance sample is degenerate (low ESS).
+include("test_gap_closure_OBS1.jl")

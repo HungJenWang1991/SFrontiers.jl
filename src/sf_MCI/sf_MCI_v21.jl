@@ -804,7 +804,9 @@ function _prepare_draws(depvar_ref::AbstractVector{T}, N::Int, ::Type{T},
                 error("When multiRand=true, `draws` must be an N x D matrix with N=$N rows, got size $(size(user_draws))")
             end
         else
-            draws_vec = T.(vec(user_draws))
+            # Convert to the depvar's device like the N×D branch above and MSLE's
+            # 1×D twin — user draws must live where the data lives (GPU audit GPU-04).
+            draws_vec = _to_device_array(depvar_ref, T.(vec(user_draws)))
             draws_2D = reshape(draws_vec, 1, length(draws_vec))
         end
     end
@@ -1765,6 +1767,15 @@ function sfmodel_spec(data_spec::UseDataSpec, depvar_spec::DepvarSpec,
 
     df = data_spec.df
 
+    # A bare non-:scaling Symbol (e.g. hetero=:sigma_sq) must fail with the same
+    # clean message as the keyword ctor's R-13 guard — this ctor consumes the raw
+    # `hetero` (varnames ternaries, _validate_hetero, plen) before forwarding, so
+    # without this guard the user sees a cryptic MethodError (gap closure GC-01).
+    if hetero isa Symbol && hetero !== :scaling
+        error("Invalid `hetero`: :$hetero. Use a Vector{Symbol} like [:$hetero], " *
+              "or use :scaling for the scaling property model.")
+    end
+
     # Extract depvar from DataFrame
     depvar = Vector{Float64}(df[!, depvar_spec.name])
 
@@ -2060,6 +2071,12 @@ function sfmodel_spec(data_spec::UseDataSpec, depvar_spec::DepvarSpec,
 
     if hetero === :scaling
         error("Scaling property model (hetero=:scaling) requires @zvar(...) to specify the scaling variables.")
+    end
+    # Bare non-:scaling Symbol: fail with the keyword ctor's clean R-13 message
+    # before the raw `hetero` reaches _validate_hetero/plen (gap closure GC-01).
+    if hetero isa Symbol
+        error("Invalid `hetero`: :$hetero. Use a Vector{Symbol} like [:$hetero], " *
+              "or use :scaling for the scaling property model.")
     end
 
     df = data_spec.df
@@ -4961,8 +4978,11 @@ function sfmodel_MCI_fit(;
     # ========== JLMS and BC Indices ==========
     if jlms_bc_index
         eff_result = jlms_bc_indices(model, _coevec)
-        _jlms = eff_result.jlms
-        _bc = eff_result.bc
+        # Store jlms/bc on host: post-estimation analysis reads them repeatedly,
+        # so one bulk device→host copy here beats a transfer per use
+        # (GPU audit GPU-01; no-op for CPU fits).
+        _jlms = eff_result.jlms isa Array ? eff_result.jlms : Array(eff_result.jlms)
+        _bc   = eff_result.bc   isa Array ? eff_result.bc   : Array(eff_result.bc)
         _jlmsM = mean(_jlms)
         _bcM = mean(_bc)
     else

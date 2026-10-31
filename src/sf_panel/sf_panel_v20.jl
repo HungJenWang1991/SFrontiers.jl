@@ -17,7 +17,8 @@
     Supported distributions (extensible via dispatch):
         Noise: Normal
         Inefficiency: HalfNormal, TruncatedNormal, Exponential, Weibull,
-                      Lognormal, Lomax, Rayleigh, Gamma (MCI only)
+                      Lognormal, Lomax, Rayleigh, Gamma (MCI only),
+                      Erlang2, Erlang3, Erlang4
 
     Features:
         - Multiple dispatch for model combinations (no if-else logic)
@@ -28,11 +29,11 @@
 =#
 
 using HaltonSequences
-using SpecialFunctions: erfinv, erf, loggamma
+using SpecialFunctions: erfinv, erfcinv, erf, erfc, loggamma
 using Statistics: mean
 using LinearAlgebra: diag, inv, I
-using ForwardDiff: hessian, gradient
-using Distributions: Normal, cquantile, ccdf, normlogpdf
+using ForwardDiff: ForwardDiff, hessian, gradient
+using Distributions: Normal, cquantile, ccdf
 using PrettyTables: pretty_table, fmt__printf
 using Optim
 using ADTypes: AutoForwardDiff
@@ -59,7 +60,7 @@ struct HalfNormal_Panel <: PanelIneffModel end
 """Truncated Normal inefficiency: u* ~ TN(μ, σ_u²; lower=0)"""
 struct TruncatedNormal_Panel <: PanelIneffModel end
 
-"""Exponential inefficiency: u* ~ Exp(λ), where λ = Var(u*)"""
+"""Exponential inefficiency: u* ~ Exp(σᵤ) with scale σᵤ; the estimated parameter is σᵤ² = Var(u*)"""
 struct Exponential_Panel <: PanelIneffModel end
 
 """Weibull inefficiency: u* ~ Weibull(λ, k) with scale λ and shape k"""
@@ -76,6 +77,9 @@ struct Rayleigh_Panel <: PanelIneffModel end
 
 """Gamma inefficiency: u* ~ Gamma(k, θ) with shape k and scale θ. MCI only."""
 struct Gamma_Panel <: PanelIneffModel end
+
+"""Erlang inefficiency: u* ~ Erlang(M, θ) = Gamma(shape=M, scale=θ) with the integer shape M pinned. Registered orders M ∈ {2, 3, 4}."""
+struct Erlang_Panel{M} <: PanelIneffModel end
 
 """
     PanelModel{N<:PanelNoiseModel, U<:PanelIneffModel}
@@ -102,6 +106,9 @@ const PANEL_INEFF_MODELS = Dict{Symbol, Type{<:PanelIneffModel}}(
     :Lomax           => Lomax_Panel,
     :Rayleigh        => Rayleigh_Panel,
     :Gamma           => Gamma_Panel,
+    :Erlang2         => Erlang_Panel{2},
+    :Erlang3         => Erlang_Panel{3},
+    :Erlang4         => Erlang_Panel{4},
 )
 
 """
@@ -137,6 +144,7 @@ panel_plen(::Lognormal_Panel, K::Int, L::Int)        = K + L + 3
 panel_plen(::Lomax_Panel, K::Int, L::Int)            = K + L + 3
 panel_plen(::Rayleigh_Panel, K::Int, L::Int)         = K + L + 2
 panel_plen(::Gamma_Panel, K::Int, L::Int)            = K + L + 3
+panel_plen(::Erlang_Panel, K::Int, L::Int)           = K + L + 2
 
 # Backward-compatible convenience (defaults to HalfNormal)
 panel_plen(K::Int, L::Int) = panel_plen(HalfNormal_Panel(), K, L)
@@ -170,9 +178,9 @@ function _panel_param_ind(::Exponential_Panel, K::Int, L::Int)
     idx = 1
     beta = idx:(idx + K - 1);   idx += K
     delta = idx:(idx + L - 1);  idx += L
-    ln_lambda = idx;             idx += 1
+    ln_sigma_u_sq = idx;         idx += 1
     ln_sigma_v_sq = idx
-    return (beta=beta, delta=delta, ln_lambda=ln_lambda, ln_sigma_v_sq=ln_sigma_v_sq)
+    return (beta=beta, delta=delta, ln_sigma_u_sq=ln_sigma_u_sq, ln_sigma_v_sq=ln_sigma_v_sq)
 end
 
 function _panel_param_ind(::Weibull_Panel, K::Int, L::Int)
@@ -190,9 +198,9 @@ function _panel_param_ind(::Lognormal_Panel, K::Int, L::Int)
     beta = idx:(idx + K - 1);   idx += K
     delta = idx:(idx + L - 1);  idx += L
     mu = idx;                    idx += 1
-    ln_sigma_sq = idx;           idx += 1
+    ln_sigma_u_sq = idx;           idx += 1
     ln_sigma_v_sq = idx
-    return (beta=beta, delta=delta, mu=mu, ln_sigma_sq=ln_sigma_sq, ln_sigma_v_sq=ln_sigma_v_sq)
+    return (beta=beta, delta=delta, mu=mu, ln_sigma_u_sq=ln_sigma_u_sq, ln_sigma_v_sq=ln_sigma_v_sq)
 end
 
 function _panel_param_ind(::Lomax_Panel, K::Int, L::Int)
@@ -209,9 +217,9 @@ function _panel_param_ind(::Rayleigh_Panel, K::Int, L::Int)
     idx = 1
     beta = idx:(idx + K - 1);   idx += K
     delta = idx:(idx + L - 1);  idx += L
-    ln_sigma_sq = idx;           idx += 1
+    ln_sigma_u_sq = idx;           idx += 1
     ln_sigma_v_sq = idx
-    return (beta=beta, delta=delta, ln_sigma_sq=ln_sigma_sq, ln_sigma_v_sq=ln_sigma_v_sq)
+    return (beta=beta, delta=delta, ln_sigma_u_sq=ln_sigma_u_sq, ln_sigma_v_sq=ln_sigma_v_sq)
 end
 
 function _panel_param_ind(::Gamma_Panel, K::Int, L::Int)
@@ -222,6 +230,15 @@ function _panel_param_ind(::Gamma_Panel, K::Int, L::Int)
     ln_theta = idx;              idx += 1
     ln_sigma_v_sq = idx
     return (beta=beta, delta=delta, ln_k=ln_k, ln_theta=ln_theta, ln_sigma_v_sq=ln_sigma_v_sq)
+end
+
+function _panel_param_ind(::Erlang_Panel, K::Int, L::Int)
+    idx = 1
+    beta = idx:(idx + K - 1);   idx += K
+    delta = idx:(idx + L - 1);  idx += L
+    ln_theta = idx;              idx += 1
+    ln_sigma_v_sq = idx
+    return (beta=beta, delta=delta, ln_theta=ln_theta, ln_sigma_v_sq=ln_sigma_v_sq)
 end
 
 # Backward-compatible convenience (defaults to HalfNormal)
@@ -284,8 +301,18 @@ struct PanelMethodSpec
     multiRand::Bool                  # per-firm draws (N×D) vs shared draws (1D)
     GPU::Bool
     chunks::Int
-    distinct_Halton_length::Int      # max Halton sequence length for multiRand
+    recycling::Int  # 0 = no recycling; otherwise the length at which the Halton sequence restarts
+    halton_legacy::Bool  # true when that length came from distinct_Halton_length (the rule of versions before 2.0.0)
 end
+
+# The layout of versions before 2.0.0: an explicit length keeps the rule of those versions.
+PanelMethodSpec(method, transformation, draws, n_draws, multiRand, GPU, chunks, distinct_Halton_length::Integer) =
+    PanelMethodSpec(method, transformation, draws, n_draws, multiRand, GPU, chunks, Int(distinct_Halton_length), true)
+
+# A copy of the method `m` with `n_draws = D` and `chunks = chunks`, every other field unchanged: the method of
+# the integration check, whose draws are those of a fit with `n_draws = D` and the same settings.
+_with_draws(m::PanelMethodSpec, D, chunks) =
+    PanelMethodSpec(m.method, m.transformation, m.draws, D, m.multiRand, m.GPU, chunks, m.recycling, m.halton_legacy)
 
 """
     PanelOptSpec
@@ -609,8 +636,8 @@ end
 
 function get_panel_ineff_vals(::Exponential_Panel, p, idx, c)
     P = eltype(p)
-    lambda = clamp(exp(p[idx.ln_lambda]), P(c.sigma_floor), P(c.sigma_ceil))
-    return (lambda=lambda,)
+    sigma_sq = clamp(exp(p[idx.ln_sigma_u_sq]), P(c.sigma_floor), P(c.sigma_ceil))
+    return (sigma_sq=sigma_sq,)
 end
 
 function get_panel_ineff_vals(::Weibull_Panel, p, idx, c)
@@ -623,7 +650,7 @@ end
 function get_panel_ineff_vals(::Lognormal_Panel, p, idx, c)
     P = eltype(p)
     mu = p[idx.mu]
-    sigma_sq = clamp(exp(p[idx.ln_sigma_sq]), P(c.sigma_floor)^2, P(c.sigma_ceil)^2)
+    sigma_sq = clamp(exp(p[idx.ln_sigma_u_sq]), P(c.sigma_floor)^2, P(c.sigma_ceil)^2)
     sigma = sqrt(sigma_sq)
     return (mu=mu, sigma=sigma, sigma_sq=sigma_sq)
 end
@@ -637,7 +664,7 @@ end
 
 function get_panel_ineff_vals(::Rayleigh_Panel, p, idx, c)
     P = eltype(p)
-    sigma_sq = clamp(exp(p[idx.ln_sigma_sq]), P(c.sigma_floor)^2, P(c.sigma_ceil)^2)
+    sigma_sq = clamp(exp(p[idx.ln_sigma_u_sq]), P(c.sigma_floor)^2, P(c.sigma_ceil)^2)
     sigma = sqrt(sigma_sq)
     return (sigma=sigma, sigma_sq=sigma_sq)
 end
@@ -648,6 +675,14 @@ function get_panel_ineff_vals(::Gamma_Panel, p, idx, c)
     theta = clamp(exp(p[idx.ln_theta]), P(c.theta_floor), P(c.theta_ceil))
     lgk = loggamma(k)
     return (k=k, theta=theta, lgk=lgk)
+end
+
+function get_panel_ineff_vals(::Erlang_Panel{M}, p, idx, c) where {M}
+    P = eltype(p)
+    theta = clamp(exp(p[idx.ln_theta]), P(c.theta_floor), P(c.theta_ceil))
+    # The shape is pinned at the Erlang order; carrying (k, lgk) as constants lets
+    # every Gamma kernel below apply unchanged
+    return (k=P(M), theta=theta, lgk=P(loggamma(M)))
 end
 
 
@@ -686,6 +721,7 @@ default_panel_transformation(::Lognormal_Panel)        = :logistic_1_rule
 default_panel_transformation(::Lomax_Panel)            = :logistic_1_rule
 default_panel_transformation(::Rayleigh_Panel)         = :expo_rule
 default_panel_transformation(::Gamma_Panel)            = :expo_rule
+default_panel_transformation(::Erlang_Panel)           = :expo_rule
 
 """
     resolve_panel_transformation(rule, model) -> (trans_func, jacob_func)
@@ -711,18 +747,26 @@ f(u) = (2/(σ√(2π))) exp(-u²/(2σ²)) for u ≥ 0.
     return log(2 / (sigma_safe * sqrt(2π))) - (u / sigma_safe)^2 / 2
 end
 
-"""Log-PDF of truncated normal distribution TN(μ, σ²; lower=0)."""
+"""Log-PDF of truncated normal distribution TN(μ, σ²; lower=0).
+
+The normaliser log Φ(μ/σ): below μ/σ = -1 it is the stable `sf_normlogcdf_lowtail`
+(src/sf_numerics.jl), since `log(max(Φ, clamp_lo))` with Φ = (1 + erf)/2 cancels as μ/σ falls
+(errors of either sign, up to 0.037 just above -7.94) and is floored at 1e-15 below
+μ/σ ≈ -7.94. At μ/σ ≥ -1 it is `log(max(Φ, clamp_lo))`."""
 @inline function log_pdf_truncnormal_panel(u, mu, sigma, clamp_lo)
     sigma_safe = max(sigma, clamp_lo)
     z = (u - mu) / sigma_safe
-    log_Phi = log(max(oftype(z, 0.5) * (1 + erf(mu / (sigma_safe * sqrt(oftype(z, 2))))), clamp_lo))
+    a = mu / sigma_safe
+    log_Phi = a < -1 ? sf_normlogcdf_lowtail(a) :
+              log(max(oftype(z, 0.5) * (1 + erf(mu / (sigma_safe * sqrt(oftype(z, 2))))), clamp_lo))
     return oftype(z, -0.5) * log(oftype(z, 2π)) - log(sigma_safe) - oftype(z, 0.5) * z^2 - log_Phi
 end
 
-"""Log-PDF of Exponential distribution, λ = Var(u). f(u) = (1/√λ)·exp(-u/√λ)."""
-@inline function log_pdf_exponential_panel(u, lambda, clamp_lo)
-    lambda_safe = max(lambda, clamp_lo)
-    return -0.5 * log(lambda_safe) - u / sqrt(lambda_safe)
+"""Log-PDF of Exponential distribution with squared scale σᵤ² (= Var(u)); the scale is
+√σᵤ², so f(u) = (1/√σᵤ²)·exp(-u/√σᵤ²)."""
+@inline function log_pdf_exponential_panel(u, sigma_sq, clamp_lo)
+    sigma_sq_safe = max(sigma_sq, clamp_lo)
+    return -0.5 * log(sigma_sq_safe) - u / sqrt(sigma_sq_safe)
 end
 
 """Log-PDF of Weibull distribution Weibull(λ, k). f(u) = (k/λ)(u/λ)^{k-1} exp(-(u/λ)^k)."""
@@ -776,19 +820,28 @@ function mypan_gen_udraws_msle(::HalfNormal_Panel, ineff_vals, halton_P, c, ::Ty
     return sigma_u .* P(c.sqrt2) .* erfinv.(clamp.(halton_P, P(c.lo_erf), P(c.hi_erf)))
 end
 
+# One truncated-normal draw. Up to
+# y = -μ/(σ√2) = 8 this is the closed form, bit for bit; beyond, erfc(y) heads for underflow
+# (NaN derivatives from μ/σ ≈ -37.5, infinite draws below -38.5 in Float64) and μ cancels, so
+# the draw is σ√2·t with t from `sf_tn_quantile_tail` (src/sf_numerics.jl).
+@inline function _panel_tn_udraw(mu, sigma_u, s2, r)
+    y = -mu / (sigma_u * s2)
+    y > 8 && return sigma_u * s2 * sf_tn_quantile_tail(y, r + zero(y))   # r widened, as in _tn_quantile
+    return max(mu + sigma_u * s2 * erfcinv(erfc(y) * (1 - r)), zero(r))
+end
+
 function mypan_gen_udraws_msle(::TruncatedNormal_Panel, ineff_vals, halton_P, c, ::Type{P}) where P
     mu = ineff_vals.mu
     sigma_u = ineff_vals.sigma_u
     s2 = P(c.sqrt2)
-    erf_arg = erf(mu / (sigma_u * s2))
-    inner = halton_P .+ (halton_P .- 1) .* erf_arg
-    inner_clamped = clamp.(inner, P(c.lo_erf_signed), P(c.hi_erf))  # signed arg: floor at −1+32eps, not the HalfNormal [0,1) floor
-    return mu .+ sigma_u .* s2 .* erfinv.(inner_clamped)
+    # inverse CDF with no argument near 1; see myTruncatedNormalQuantile in sf_MCI_v21.jl.
+    # The clamped erfinv form would cap u at mu + 4.62*sigma_u in Float32.
+    return _panel_tn_udraw.(mu, sigma_u, s2, halton_P)
 end
 
 function mypan_gen_udraws_msle(::Exponential_Panel, ineff_vals, halton_P, c, ::Type{P}) where P
-    lambda = ineff_vals.lambda
-    return .-log.(max.(1 .- halton_P, P(c.exp_clamp))) .* sqrt(lambda)
+    sigma_sq = ineff_vals.sigma_sq
+    return .-log.(max.(1 .- halton_P, P(c.exp_clamp))) .* sqrt(sigma_sq)
 end
 
 function mypan_gen_udraws_msle(::Weibull_Panel, ineff_vals, halton_P, c, ::Type{P}) where P
@@ -819,17 +872,77 @@ function mypan_gen_udraws_msle(::Gamma_Panel, args...)
     error("`ineff=:Gamma` does not have a closed-form inverse CDF. Use `method=:MCI` instead.")
 end
 
+# Strip (possibly nested, for Hessians) ForwardDiff dual parts. The Halton draws are
+# data with zero partials, so this is exact; the standardized Erlang quantile is
+# parameter-free and must run on plain floats so no dual numbers enter its Newton
+# iteration (same design as the cross-sectional Erlang_MSLE backend).
+@inline _pan_primal(x::AbstractFloat) = x
+@inline _pan_primal(x::Real) = _pan_primal(ForwardDiff.value(x))
+
+function mypan_gen_udraws_msle(::Erlang_Panel{M}, ineff_vals, halton_P, c, ::Type{P}) where {M, P}
+    r = _pan_primal.(halton_P)
+    Tr = eltype(r)
+    # Q(p; M, θ) = θ·q_M(p): q_M depends only on the fixed draws, so dQ/dθ = q_M(p)
+    # is exact by construction (myErlangStdQuantile is the kernel imported
+    # from MSLE_Backend in load_Panel.jl)
+    # upper bound via _draw_clamp_hi (imported with the kernel): `1 - clamp_lo` is not
+    # representable below one in Float32, where a draw of exactly one would overflow
+    q = myErlangStdQuantile.(clamp.(r, Tr(c.clamp_lo), _draw_clamp_hi(Tr, c.clamp_lo)), M, Tr(loggamma(M)))
+    return ineff_vals.theta .* q
+end
+
+# In-place mypan_gen_udraws_msle: writes the draws u for the draw rows h into out.
+function mypan_gen_udraws_msle!(out, ::HalfNormal_Panel, ineff_vals, h, c, ::Type{P}) where P
+    out .= ineff_vals.sigma_u .* P(c.sqrt2) .* erfinv.(clamp.(P.(h), P(c.lo_erf), P(c.hi_erf)))
+end
+function mypan_gen_udraws_msle!(out, ::TruncatedNormal_Panel, ineff_vals, h, c, ::Type{P}) where P
+    out .= _panel_tn_udraw.(ineff_vals.mu, ineff_vals.sigma_u, P(c.sqrt2), P.(h))
+end
+function mypan_gen_udraws_msle!(out, ::Exponential_Panel, ineff_vals, h, c, ::Type{P}) where P
+    out .= .-log.(max.(1 .- P.(h), P(c.exp_clamp))) .* sqrt(ineff_vals.sigma_sq)
+end
+function mypan_gen_udraws_msle!(out, ::Weibull_Panel, ineff_vals, h, c, ::Type{P}) where P
+    out .= ineff_vals.lambda .* (.-log.(max.(1 .- P.(h), P(c.exp_clamp)))) .^ (1 / ineff_vals.k)
+end
+function mypan_gen_udraws_msle!(out, ::Lognormal_Panel, ineff_vals, h, c, ::Type{P}) where P
+    out .= clamp.(2 .* P.(h) .- 1, P(c.lo_erf_signed), P(c.hi_erf))        # the argument of erfinv
+    out .= exp.(ineff_vals.mu .+ ineff_vals.sigma .* P(c.sqrt2) .* erfinv.(out))
+end
+function mypan_gen_udraws_msle!(out, ::Lomax_Panel, ineff_vals, h, c, ::Type{P}) where P
+    out .= clamp.(ineff_vals.lambda .* expm1.((-1 / ineff_vals.alpha) .* log.(max.(1 .- P.(h), P(c.exp_clamp)))),
+                  zero(P), P(c.out_ceil))
+end
+function mypan_gen_udraws_msle!(out, ::Rayleigh_Panel, ineff_vals, h, c, ::Type{P}) where P
+    out .= ineff_vals.sigma .* sqrt.(-2 .* log.(max.(1 .- P.(h), P(c.exp_clamp))))
+end
+mypan_gen_udraws_msle!(out, ::Gamma_Panel, args...) = mypan_gen_udraws_msle(Gamma_Panel(), args...)   # the same error
+function mypan_gen_udraws_msle!(out, ::Erlang_Panel{M}, ineff_vals, h, c, ::Type{P}) where {M, P}
+    Tr = typeof(_pan_primal(one(P)))          # the plain-float type under P's dual layers
+    out .= ineff_vals.theta .* myErlangStdQuantile.(clamp.(_pan_primal.(P.(h)), Tr(c.clamp_lo),
+                                                           _draw_clamp_hi(Tr, c.clamp_lo)), M, Tr(loggamma(M)))
+end
+
 # --- MCI scale parameter extraction ---
 
 """Extract the scale parameter for MCI transformation. Dispatched by inefficiency distribution."""
 mypan_get_mci_scale(::HalfNormal_Panel, ineff_vals)      = ineff_vals.sigma_u
 mypan_get_mci_scale(::TruncatedNormal_Panel, ineff_vals)  = ineff_vals.sigma_u
-mypan_get_mci_scale(::Exponential_Panel, ineff_vals)      = sqrt(ineff_vals.lambda)
+mypan_get_mci_scale(::Exponential_Panel, ineff_vals)      = sqrt(ineff_vals.sigma_sq)
 mypan_get_mci_scale(::Weibull_Panel, ineff_vals)          = ineff_vals.lambda
 mypan_get_mci_scale(::Lognormal_Panel, ineff_vals)        = ineff_vals.sigma
-mypan_get_mci_scale(::Lomax_Panel, ineff_vals)            = ineff_vals.lambda
+# Lomax: the MEDIAN λ(2^(1/α) − 1), the cross-section's rule (get_scale_param(::Lomax_MCI) in
+# src/sf_MCI/sf_MCI_T_v21.jl). λ itself is far wider than the distribution once α is large (the median
+# is about λ·0.69/α), so most draws would land where the integrand is negligible.
+mypan_get_mci_scale(::Lomax_Panel, ineff_vals)            = ineff_vals.lambda * (exp2(1 / ineff_vals.alpha) - 1)
 mypan_get_mci_scale(::Rayleigh_Panel, ineff_vals)         = ineff_vals.sigma
-mypan_get_mci_scale(::Gamma_Panel, ineff_vals)            = ineff_vals.theta
+# Gamma: θ·√(1+k²). The mass of Gamma(k, θ) sits near kθ: with scale θ, for k > 1 the importance weight
+# of the expo_rule draws is proportional to u^(k−1), unbounded and increasing, so a few draws decide each
+# firm's integral (at k = 5 the log-likelihood of 200-firm panels comes out 8.3 to 55.0 nats too low).
+# For large k, θ·√(1+k²) is close to kθ; for k < 1 it lies between θ and √2·θ, where kθ is too narrow
+# for firms in the tail; and it is smooth in k (max(k, 1)·θ, the other candidate, has a kink at k = 1).
+mypan_get_mci_scale(::Gamma_Panel, ineff_vals)            = sqrt(1 + ineff_vals.k^2) * ineff_vals.theta
+# Mass of Erlang(M, θ) sits near M·θ — scale the expo_rule draws accordingly
+mypan_get_mci_scale(::Erlang_Panel{M}, ineff_vals) where {M} = M * ineff_vals.theta
 
 # --- MCI log-PDF evaluation ---
 
@@ -843,7 +956,7 @@ function mypan_logpdf_ineff(::TruncatedNormal_Panel, u_draws, ineff_vals, clamp_
 end
 
 function mypan_logpdf_ineff(::Exponential_Panel, u_draws, ineff_vals, clamp_lo)
-    return log_pdf_exponential_panel.(u_draws, ineff_vals.lambda, clamp_lo)
+    return log_pdf_exponential_panel.(u_draws, ineff_vals.sigma_sq, clamp_lo)
 end
 
 function mypan_logpdf_ineff(::Weibull_Panel, u_draws, ineff_vals, clamp_lo)
@@ -866,10 +979,64 @@ function mypan_logpdf_ineff(::Gamma_Panel, u_draws, ineff_vals, clamp_lo)
     return log_pdf_gamma_panel.(u_draws, ineff_vals.k, ineff_vals.theta, ineff_vals.lgk, clamp_lo)
 end
 
+# Erlang ineff_vals carries (k, theta, lgk) with the shape pinned at the Erlang
+# order, so the Gamma kernel applies unchanged
+mypan_logpdf_ineff(::Erlang_Panel, u_draws, ineff_vals, clamp_lo) =
+    mypan_logpdf_ineff(Gamma_Panel(), u_draws, ineff_vals, clamp_lo)
+
+# In-place mypan_logpdf_ineff: writes log f_u(u) into out.
+mypan_logpdf_ineff!(out, ::HalfNormal_Panel, u, iv, clamp_lo)      = (out .= log_pdf_halfnormal_panel.(u, iv.sigma_u, clamp_lo))
+mypan_logpdf_ineff!(out, ::TruncatedNormal_Panel, u, iv, clamp_lo) = (out .= log_pdf_truncnormal_panel.(u, iv.mu, iv.sigma_u, clamp_lo))
+mypan_logpdf_ineff!(out, ::Exponential_Panel, u, iv, clamp_lo)     = (out .= log_pdf_exponential_panel.(u, iv.sigma_sq, clamp_lo))
+mypan_logpdf_ineff!(out, ::Weibull_Panel, u, iv, clamp_lo)         = (out .= log_pdf_weibull_panel.(u, iv.lambda, iv.k, clamp_lo))
+mypan_logpdf_ineff!(out, ::Lognormal_Panel, u, iv, clamp_lo)       = (out .= log_pdf_lognormal_panel.(u, iv.mu, iv.sigma, clamp_lo))
+mypan_logpdf_ineff!(out, ::Lomax_Panel, u, iv, clamp_lo)           = (out .= log_pdf_lomax_panel.(u, iv.lambda, iv.alpha, clamp_lo))
+mypan_logpdf_ineff!(out, ::Rayleigh_Panel, u, iv, clamp_lo)        = (out .= log_pdf_rayleigh_panel.(u, iv.sigma, clamp_lo))
+mypan_logpdf_ineff!(out, ::Gamma_Panel, u, iv, clamp_lo)           = (out .= log_pdf_gamma_panel.(u, iv.k, iv.theta, iv.lgk, clamp_lo))
+mypan_logpdf_ineff!(out, ::Erlang_Panel, u, iv, clamp_lo)          = mypan_logpdf_ineff!(out, Gamma_Panel(), u, iv, clamp_lo)
+
 
 # ============================================================================
 # Section 8: Halton Sequence Generation
 # ============================================================================
+
+# User-supplied draws must be probabilities in [0, 1): a draw of exactly 1 maps to an
+# infinite inefficiency (MCI: u is capped at 1/clamp_lo while the Jacobian s/(1-t) is
+# infinite, so the firm's likelihood is NaN; MSLE: the quantile clamp silently moves
+# the draw to the upper bound). Zero is the support lower bound and harmless.
+# `minimum`/`maximum` are reductions, so the check also runs on CuArray draws.
+function _validate_panel_user_draws(user_draws)
+    isempty(user_draws) && error("`draws` is empty.")
+    dmin = minimum(user_draws)
+    dmax = maximum(user_draws)
+    (dmin >= 0 && dmax < 1) ||
+        error("`draws` must lie in [0, 1): found min = $dmin, max = $dmax. " *
+              "The contract is half-open: 0 is the lower bound of the support and is " *
+              "accepted, 1 is not. Under `method=:MCI` a draw of exactly 1 maps to an " *
+              "infinite inefficiency with an infinite Jacobian, so the likelihood is NaN; " *
+              "under `method=:MSLE` the quantile kernels clamp it to their upper bound " *
+              "instead, so the draw silently becomes a different draw. " *
+              "Note that a draw just below 1 can round to exactly 1 when converted to the " *
+              "data's element type — supply draws already in that type, or move them off 1.")
+    return nothing
+end
+
+# One rule for user-supplied draws, whatever `multiRand` was passed: supplying `draws` forces
+# multiRand=false at `sfmodel_panel_method`, and the ROW COUNT says how the draws are read.
+#   * a vector, a 1×D row, or a D×1 column -> one sequence of D draws shared by every firm;
+#   * an N×D matrix (N = number of FIRMS)  -> one row of D draws per firm;
+#   * anything else                        -> error (no way to split it at the firm level).
+# Returns a length-D vector (shared, the panel's storage for that case) or an N×D matrix.
+function _shape_user_panel_draws(user_draws, N::Int)
+    ndims(user_draws) == 1 && return vec(user_draws)
+    nr, nc = size(user_draws)
+    nc == 1 && return vec(user_draws)                # D×1 is the same sequence as 1×D
+    nr == 1 && return vec(user_draws)                # 1×D: shared
+    nr == N && return user_draws                     # N×D: one row per firm
+    error("`draws` has size $(size(user_draws)): the number of rows must be 1 (one sequence of " *
+          "draws shared by every firm) or N=$N (the number of firms, one row of draws per firm). " *
+          "A vector or a single-column matrix is read as a shared sequence.")
+end
 
 """
     make_panel_halton(D::Int; base::Int=2, T::Type=Float64) -> Vector{T}
@@ -885,14 +1052,16 @@ end
     make_panel_halton_wrap(N::Int, D::Int; base::Int=2, T::Type=Float64,
                            distinct_Halton_length::Int=2^15-1) -> Matrix{T}
 
-Generate a wrapped Halton quasi-random sequence matrix for multiRand mode.
-
-Returns an N × D matrix where each firm gets different consecutive
-Halton sequence elements, providing greater variation across firms.
+The N × D per-firm Halton draws of versions before 2.0.0: one base-2 Halton sequence shortened to 2^m − 1
+points, the largest such length not above N × D or `distinct_Halton_length`; row i takes the D points that
+follow row i − 1, and the sequence restarts from its first point when it runs out. Another prime `base` gives
+the Halton sequence in that base, built the same way. The estimation no longer uses this function; it is kept
+so that earlier scripts run. A fit reproduces these draws with the deprecated `distinct_Halton_length`. Throws
+`ArgumentError` when D exceeds that length.
 
 # Arguments
 - `N::Int`: Number of firms
-- `D::Int`: Number of draws per firm (must be ≤ `distinct_Halton_length`)
+- `D::Int`: Number of draws per firm
 - `base::Int=2`: Base for Halton sequence generation
 - `T::Type{<:AbstractFloat}=Float64`: Element type
 - `distinct_Halton_length::Int=2^15-1`: Maximum Halton sequence length
@@ -903,35 +1072,12 @@ Halton sequence elements, providing greater variation across firms.
 function make_panel_halton_wrap(N::Int, D::Int; base::Int=2, T::Type{<:AbstractFloat}=Float64, distinct_Halton_length::Int=2^15-1)
     N > 0 || throw(ArgumentError("N must be positive, got $N"))
     D > 0 || throw(ArgumentError("D (draws) must be positive, got $D"))
-
-    if D > distinct_Halton_length
-        throw(ArgumentError("`n_draws` (=$D, which is per firm draws) is too large for multiRand=true. " *
-                           "Three options. (1) Reduce it to ≤ $distinct_Halton_length . " *
-                           "(2) Set `multiRand=false` and each firm will use the same Halton draws. " *
-                           "(3) Increase `distinct_Halton_length` to be larger than your `n_draws`."))
-    end
-
-    # Compute sequence length: find largest n where 2^n - 1 <= total_needed, capped
-    total_needed = D * N
-    n = floor(Int, log2(total_needed + 1))
-    n_cap = floor(Int, log2(distinct_Halton_length + 1))
-    n = min(n, n_cap)
-    seq_len = 2^n - 1
-
-    # Generate base Halton sequence
-    myH = T.(collect(Halton(base, length=seq_len)))
-
-    # Recycle sequence to fill exactly D*N elements
-    if seq_len >= total_needed
-        wrapped = myH[1:total_needed]
-    else
-        n_full_repeats = total_needed ÷ seq_len
-        remainder = total_needed % seq_len
-        wrapped = vcat(repeat(myH, n_full_repeats), myH[1:remainder])
-    end
-
-    # Reshape to N × D matrix (Julia is column-major)
-    return copy(reshape(wrapped, D, N)')
+    D <= distinct_Halton_length ||
+        throw(ArgumentError("D = $D exceeds distinct_Halton_length = $distinct_Halton_length"))
+    L = sf_halton_period(N, D; recycling = distinct_Halton_length, legacy = true)
+    base == 2 && return sf_halton_draws(N, D; T = T, period = L)
+    h = T.(collect(Halton(base, length = L)))      # other prime bases, as in versions before 2.0.0
+    return [h[mod1((i - 1) * D + j, L)] for i in 1:N, j in 1:D]
 end
 
 
@@ -967,12 +1113,20 @@ if isdefined(Main, :CUDA)
     _sum_scalar_panel(v::Main.CUDA.AnyCuArray)     = sum(v)
     _to_device_panel(x::AbstractArray, ::Main.CUDA.AnyCuArray) = Main.CUDA.CuArray(x)
     _to_device_panel(x::Main.CUDA.AnyCuArray, ::Main.CUDA.AnyCuArray) = x  # already on GPU
+    _panel_draw_rows(draws::Main.CUDA.AnyCuArray, a::Int, b::Int) = Array(draws[a:b, :])
 end
 _to_device_panel(x::AbstractArray, ::AbstractArray) = x  # CPU ref: no-op
+
+# True when both arrays are of the same kind: both `Array`s, or both `CuArray`s.
+_same_array_kind(a, b) = typeof(a).name.wrapper === typeof(b).name.wrapper
 
 # Pull to CPU (no-op when already CPU)
 _to_cpu(x::Array) = x
 _to_cpu(x::AbstractArray) = Array(x)
+
+# Rows a:b of a per-firm draw block on the host: a view of a host array, a copy of those rows
+# (and only those) for a device array.
+_panel_draw_rows(draws::AbstractMatrix, a::Int, b::Int) = view(draws, a:b, :)
 
 """
     logsumexp_rows_panel(A::AbstractMatrix, clamp_lo=1e-300) -> Vector
@@ -983,6 +1137,18 @@ Returns a vector of length size(A, 1).
 function logsumexp_rows_panel(A::AbstractMatrix, clamp_lo=1e-300)
     max_vals = _maximum_panel(A; dims=2)
     sum_exp  = _sum_panel(exp.(A .- max_vals); dims=2)
+    fmin = oftype(zero(eltype(A)), clamp_lo)
+    @. sum_exp = max(sum_exp, fmin)
+    return vec(max_vals .+ log.(sum_exp))
+end
+
+"""In-place `logsumexp_rows_panel`: overwrites `A` with `exp.(A .- rowmax)` and returns the row log-sum-exp.
+`A` must be a dense array of its own, not a view, so that its row sums reduce the same input as
+`logsumexp_rows_panel` does."""
+function _logsumexp_rows_panel!(A::AbstractMatrix, clamp_lo=1e-300)
+    max_vals = _maximum_panel(A; dims=2)
+    A .= exp.(A .- max_vals)
+    sum_exp  = _sum_panel(A; dims=2)
     fmin = oftype(zero(eltype(A)), clamp_lo)
     @. sum_exp = max(sum_exp, fmin)
     return vec(max_vals .+ log.(sum_exp))
@@ -1014,6 +1180,10 @@ Negative log-likelihood for the panel model using MSLE (inverse CDF) draws.
 Draw generation is dispatched by inefficiency distribution via `mypan_gen_udraws_msle`.
 
 Log-likelihood per firm: log L_i = logsumexp_d[log f_v(ε_i + h̃_i · u_d)] - log(D)
+
+With `chunks >= 2` the firms are processed one group at a time in work arrays of one group
+(per-firm draws are converted and transformed group by group, shared draws once), so `chunks`
+bounds the memory of the likelihood and its derivatives; `chunks <= 1` processes all firms at once.
 """
 function _panel_nll_msle(spec::_PanelInternalSpec{T}, p::AbstractVector{P};
                           chunks::Int=4) where {T<:AbstractFloat, P<:Real}
@@ -1040,10 +1210,6 @@ function _panel_nll_msle(spec::_PanelInternalSpec{T}, p::AbstractVector{P};
     noise_vals = get_panel_noise_vals(model.noise, p, idx, c)
     ineff_vals = get_panel_ineff_vals(model.ineff, p, idx, c)
 
-    # 4. Generate u draws via inverse CDF (dispatched by inefficiency distribution)
-    halton_P = P.(halton)
-    u_draws = mypan_gen_udraws_msle(model.ineff, ineff_vals, halton_P, c, P)
-
     # 5. Pre-compute log-density constants
     inv_sigma_v_sq = noise_vals.inv_sigma_v_sq
     log_sigma_v_sq = noise_vals.log_sigma_v_sq
@@ -1052,10 +1218,14 @@ function _panel_nll_msle(spec::_PanelInternalSpec{T}, p::AbstractVector{P};
     frontier_sign = P(spec.sign)
 
     # Quadratic expansion: sum_t (E_ti + s*H_ti*u_d)^2 = A_i + 2s*B_i*u_d + C_i*u_d^2
-    u_row = ndims(u_draws) == 1 ? reshape(u_draws, 1, D) : u_draws   # 1×D or N×D
     two_s = P(2) * frontier_sign
 
     if chunks <= 1
+        # 4. Generate u draws via inverse CDF (dispatched by inefficiency distribution)
+        halton_P = P.(halton)
+        u_draws = mypan_gen_udraws_msle(model.ineff, ineff_vals, halton_P, c, P)
+        u_row = ndims(u_draws) == 1 ? reshape(u_draws, 1, D) : u_draws   # 1×D or N×D
+
         # --- Non-chunked: all firms at once ---
         quad_2D = A .+ two_s .* B .* u_row .+ C .* u_row .^ 2   # N × D
 
@@ -1066,26 +1236,36 @@ function _panel_nll_msle(spec::_PanelInternalSpec{T}, p::AbstractVector{P};
         log_likes = logsumexp_rows_panel(log_fv) .- log(P(D))
         return -_sum_scalar_panel(log_likes)
     else
-        # --- Chunked: process firms in chunks ---
+        # Each group of firms converts and transforms its own rows of the draws in a buffer of one
+        # group, so `chunks` bounds the memory of the likelihood and its derivatives. With per-firm
+        # draws the buffer holds u, then the log-weights, then their exponentials; a shorter last
+        # group gets an array of its own size, so every row reduction sees a dense array of the
+        # group's size.
+        per_firm = ndims(halton) == 2
+        u_row = per_firm ? nothing :      # shared draws: one row of D, transformed once for all groups
+                reshape(mypan_gen_udraws_msle(model.ineff, ineff_vals, P.(halton), c, P), 1, D)
         firm_chunk_size = cld(N, chunks)
+        w_buf = similar(halton, P, firm_chunk_size, D)
         total_nll = P(0)
-
         for ci in 1:chunks
             f_start = (ci - 1) * firm_chunk_size + 1
             f_end = min(ci * firm_chunk_size, N)
             f_start > f_end && continue
-
+            cN = f_end - f_start + 1
             A_c = @view A[f_start:f_end]
             B_c = @view B[f_start:f_end]
             C_c = @view C[f_start:f_end]
-            u_c = ndims(u_row) == 2 && size(u_row, 1) > 1 ? (@view u_row[f_start:f_end, :]) : u_row
-
-            quad_2D = A_c .+ two_s .* B_c .* u_c .+ C_c .* u_c .^ 2
-
             lc = log_const isa AbstractVector ? (@view log_const[f_start:f_end]) : log_const
-            log_fv = P(-0.5) .* quad_2D .* inv_sigma_v_sq .+ lc
-
-            log_likes = logsumexp_rows_panel(log_fv) .- log(P(D))
+            w_c = cN == firm_chunk_size ? w_buf : similar(halton, P, cN, D)
+            if per_firm
+                mypan_gen_udraws_msle!(w_c, model.ineff, ineff_vals, (@view halton[f_start:f_end, :]), c, P)
+                u_c = w_c
+            else
+                u_c = u_row
+            end
+            # log f_v for every firm and draw of the group (the within-firm quadratic form in u)
+            w_c .= P(-0.5) .* (A_c .+ two_s .* B_c .* u_c .+ C_c .* u_c .^ 2) .* inv_sigma_v_sq .+ lc
+            log_likes = _logsumexp_rows_panel!(w_c) .- log(P(D))
             total_nll -= _sum_scalar_panel(log_likes)
         end
         return total_nll
@@ -1101,6 +1281,10 @@ Draw generation, log-PDF, and scale parameter dispatched by inefficiency distrib
 
 Log-likelihood per firm:
   log L_i = logsumexp_d[log f_v(ε_i + h̃_i·g(t_d)) + log f_u(g(t_d)) + log|J(t_d)|] - log(D)
+
+With `chunks >= 2` the firms are processed one group at a time in work arrays of one group
+(per-firm draws are converted and transformed group by group, shared draws once), so `chunks`
+bounds the memory of the likelihood and its derivatives; `chunks <= 1` processes all firms at once.
 """
 function _panel_nll_mci(spec::_PanelInternalSpec{T}, p::AbstractVector{P};
                          chunks::Int=4) where {T<:AbstractFloat, P<:Real}
@@ -1131,28 +1315,28 @@ function _panel_nll_mci(spec::_PanelInternalSpec{T}, p::AbstractVector{P};
     scale = mypan_get_mci_scale(model.ineff, ineff_vals)
     trans, jacob = resolve_panel_transformation(spec.transformation, model)
 
-    halton_P = P.(halton)
-    u_draws = trans.(halton_P, scale)
-    u_draws = min.(u_draws, inv(P(c.clamp_lo)))                  # clamp upper
-
-    # 5. Log-PDF of inefficiency + log-Jacobian
-    log_fu = mypan_logpdf_ineff(model.ineff, u_draws, ineff_vals, P(c.clamp_lo))
-    log_J  = log.(max.(jacob.(halton_P, scale), P(c.clamp_lo)))
-    log_fu_J = log_fu .+ log_J
-
     # 6. Pre-compute log-density constants
     inv_sigma_v_sq = noise_vals.inv_sigma_v_sq
     log_sigma_v_sq = noise_vals.log_sigma_v_sq
     log_const = P(-0.5) .* spec.Tm1 .* (log(P(2π)) .+ log_sigma_v_sq)
 
     frontier_sign = P(spec.sign)
-
-    # Reshape for broadcasting: 1×D (shared) or N×D (multiRand)
-    log_fu_J_row = ndims(log_fu_J) == 1 ? reshape(log_fu_J, 1, D) : log_fu_J
-    u_row = ndims(u_draws) == 1 ? reshape(u_draws, 1, D) : u_draws
     two_s = P(2) * frontier_sign
 
     if chunks <= 1
+        halton_P = P.(halton)
+        u_draws = trans.(halton_P, scale)
+        u_draws = min.(u_draws, inv(P(c.clamp_lo)))                  # clamp upper
+
+        # 5. Log-PDF of inefficiency + log-Jacobian
+        log_fu = mypan_logpdf_ineff(model.ineff, u_draws, ineff_vals, P(c.clamp_lo))
+        log_J  = log.(max.(jacob.(halton_P, scale), P(c.clamp_lo)))
+        log_fu_J = log_fu .+ log_J
+
+        # Reshape for broadcasting: 1×D (shared) or N×D (multiRand)
+        log_fu_J_row = ndims(log_fu_J) == 1 ? reshape(log_fu_J, 1, D) : log_fu_J
+        u_row = ndims(u_draws) == 1 ? reshape(u_draws, 1, D) : u_draws
+
         # --- Non-chunked: all firms at once ---
         quad_2D = A .+ two_s .* B .* u_row .+ C .* u_row .^ 2   # N × D
 
@@ -1166,29 +1350,51 @@ function _panel_nll_mci(spec::_PanelInternalSpec{T}, p::AbstractVector{P};
         log_likes = logsumexp_rows_panel(log_lik) .- log(P(D))
         return -_sum_scalar_panel(log_likes)
     else
-        # --- Chunked: process firms in chunks ---
+        # As in _panel_nll_msle. With per-firm draws a second buffer holds log f_u, then
+        # log f_u + log|J|; the first holds u, then log|J|, then u again, so that log|J| is a
+        # finished array before it is added, as in the chunks <= 1 branch.
+        per_firm = ndims(halton) == 2
+        if !per_firm                     # shared draws: one row of D, transformed once
+            halton_P = P.(halton)
+            u_draws = trans.(halton_P, scale)
+            u_draws = min.(u_draws, inv(P(c.clamp_lo)))
+            log_fu = mypan_logpdf_ineff(model.ineff, u_draws, ineff_vals, P(c.clamp_lo))
+            log_J  = log.(max.(jacob.(halton_P, scale), P(c.clamp_lo)))
+            lfj_row = reshape(log_fu .+ log_J, 1, D)
+            u_row   = reshape(u_draws, 1, D)
+        end
         firm_chunk_size = cld(N, chunks)
+        w_buf = similar(halton, P, firm_chunk_size, D)
+        f_buf = per_firm ? similar(halton, P, firm_chunk_size, D) : nothing
         total_nll = P(0)
-
         for ci in 1:chunks
             f_start = (ci - 1) * firm_chunk_size + 1
             f_end = min(ci * firm_chunk_size, N)
             f_start > f_end && continue
-
+            cN = f_end - f_start + 1
             A_c = @view A[f_start:f_end]
             B_c = @view B[f_start:f_end]
             C_c = @view C[f_start:f_end]
-            u_c = ndims(u_row) == 2 && size(u_row, 1) > 1 ? (@view u_row[f_start:f_end, :]) : u_row
-            lfj_c = ndims(log_fu_J_row) == 2 && size(log_fu_J_row, 1) > 1 ? (@view log_fu_J_row[f_start:f_end, :]) : log_fu_J_row
-
-            quad_2D = A_c .+ two_s .* B_c .* u_c .+ C_c .* u_c .^ 2
-
             lc = log_const isa AbstractVector ? (@view log_const[f_start:f_end]) : log_const
-            log_fv = P(-0.5) .* quad_2D .* inv_sigma_v_sq .+ lc
-
-            log_lik = log_fv .+ lfj_c
-
-            log_likes = logsumexp_rows_panel(log_lik) .- log(P(D))
+            w_c = cN == firm_chunk_size ? w_buf : similar(halton, P, cN, D)
+            if per_firm
+                hc  = @view halton[f_start:f_end, :]
+                f_c = @view f_buf[1:cN, :]
+                w_c .= trans.(P.(hc), scale)
+                w_c .= min.(w_c, inv(P(c.clamp_lo)))                                    # u
+                mypan_logpdf_ineff!(f_c, model.ineff, w_c, ineff_vals, P(c.clamp_lo))   # log f_u
+                w_c .= log.(max.(jacob.(P.(hc), scale), P(c.clamp_lo)))                # log|J|
+                f_c .= f_c .+ w_c                                                       # log f_u + log|J|
+                w_c .= trans.(P.(hc), scale)                                            # u again
+                w_c .= min.(w_c, inv(P(c.clamp_lo)))
+                u_c = w_c
+            else
+                u_c = u_row
+                f_c = lfj_row
+            end
+            # log f_v + log f_u + log|J| for every firm and draw of the group
+            w_c .= P(-0.5) .* (A_c .+ two_s .* B_c .* u_c .+ C_c .* u_c .^ 2) .* inv_sigma_v_sq .+ lc .+ f_c
+            log_likes = _logsumexp_rows_panel!(w_c) .- log(P(D))
             total_nll -= _sum_scalar_panel(log_likes)
         end
         return total_nll
@@ -1214,30 +1420,19 @@ function _expand_jlms_obs(E_u_firm::AbstractVector{P}, h_raw::AbstractVector,
     return jlms
 end
 
-# Compute observation-level BC = E[exp(-h_it * u_i*) | data_i].
-function _compute_bc_obs(log_w::AbstractMatrix{P}, log_denom::AbstractVector{P},
-                          h_raw::AbstractVector, u_draws::AbstractVecOrMat,
-                          spec::_PanelInternalSpec) where P
-    NT = length(h_raw)
-    N  = spec.N
-    D  = ndims(u_draws) == 1 ? length(u_draws) : size(u_draws, 2)
-    bc = Vector{P}(undef, NT)
-
-    for i in 1:N
+# Observation-level BC = E[exp(-h_it u_i*) | data_i] for firms f_start:f_end, from the group's arrays.
+function _compute_bc_obs!(bc, log_w, log_denom, h_raw, u_c, shared::Bool, spec, f_start, f_end)
+    D = size(log_w, 2)
+    for i in f_start:f_end
+        r = i - f_start + 1
         s, e = spec.offsets[i] + 1, spec.offsets[i + 1]
         Ti = e - s + 1
-        h_firm = reshape(h_raw[s:e], Ti, 1)                  # Ti × 1
-
-        if ndims(u_draws) == 1
-            u_firm = reshape(u_draws, 1, D)                   # 1 × D (shared)
-        else
-            u_firm = reshape(u_draws[i, :], 1, D)            # 1 × D (firm i's draws)
-        end
-
-        log_w_firm = reshape(log_w[i, :], 1, D)              # 1 × D
-        log_bc_w_firm = .-h_firm .* u_firm .+ log_w_firm     # Ti × D
-        log_bc_num = logsumexp_rows_panel(log_bc_w_firm)      # Ti
-        bc[s:e] .= exp.(log_bc_num .- log_denom[i])
+        h_firm = reshape(h_raw[s:e], Ti, 1)
+        u_firm = shared ? u_c : reshape(u_c[r, :], 1, D)
+        log_w_firm = reshape(log_w[r, :], 1, D)
+        log_bc_w_firm = .-h_firm .* u_firm .+ log_w_firm
+        log_bc_num = logsumexp_rows_panel(log_bc_w_firm)
+        bc[s:e] .= exp.(log_bc_num .- log_denom[r])
     end
     return bc
 end
@@ -1254,8 +1449,8 @@ Since u_it = h_it * u_i*, where h_it = exp(z_it'δ) is deterministic:
 Both are NT-length vectors (one value per observation).
 h_it is the raw (un-demeaned) scaling function.
 
-Operates entirely on CPU (one-shot post-estimation call).
-The `chunks` keyword is accepted for API compatibility but unused.
+Firms are processed in `chunks` groups, so the memory of the computation is bounded by `chunks`;
+for a GPU fit each group's draws are copied to the host, where the indices are computed.
 """
 function panel_jlms_bc(spec::_PanelInternalSpec{T}, p::AbstractVector{P};
                         chunks::Int=1) where {T<:AbstractFloat, P<:Real}
@@ -1269,8 +1464,6 @@ function panel_jlms_bc(spec::_PanelInternalSpec{T}, p::AbstractVector{P};
     y_tilde = _to_cpu(spec.y_tilde)
     x_tilde = _to_cpu(spec.x_tilde)
     z_raw   = _to_cpu(spec.z_raw)
-    halton  = _to_cpu(spec.draws)
-    D       = ndims(halton) == 1 ? length(halton) : size(halton, 2)
 
     # 1. Residuals
     epsilon_tilde = y_tilde .- sum(P(p[idx.beta[j]]) .* (@view x_tilde[:, j]) for j in 1:K)
@@ -1284,50 +1477,61 @@ function panel_jlms_bc(spec::_PanelInternalSpec{T}, p::AbstractVector{P};
     # 4. Noise/inefficiency parameters and u draws (dispatched by distribution)
     noise_vals = get_panel_noise_vals(model.noise, p, idx, c)
     ineff_vals = get_panel_ineff_vals(model.ineff, p, idx, c)
-    halton_P   = P.(halton)
-
-    if spec.method == :MSLE
-        u_draws   = mypan_gen_udraws_msle(model.ineff, ineff_vals, halton_P, c, P)
-        log_extra = nothing
-    else
-        scale = mypan_get_mci_scale(model.ineff, ineff_vals)
-        trans, jacob = resolve_panel_transformation(spec.transformation, model)
-        u_draws   = min.(trans.(halton_P, scale), inv(P(c.clamp_lo)))
-        log_fu    = mypan_logpdf_ineff(model.ineff, u_draws, ineff_vals, P(c.clamp_lo))
-        log_J     = log.(max.(jacob.(halton_P, scale), P(c.clamp_lo)))
-        log_fu_J  = log_fu .+ log_J
-        log_extra = ndims(log_fu_J) == 1 ? reshape(log_fu_J, 1, D) : log_fu_J
-    end
-
-    # 5. Log-weights (N × D) and denominator
     inv_sigma_v_sq = noise_vals.inv_sigma_v_sq
     log_sigma_v_sq = noise_vals.log_sigma_v_sq
     Tm1_cpu        = _to_cpu(spec.Tm1)
     log_const      = P(-0.5) .* Tm1_cpu .* (log(P(2π)) .+ log_sigma_v_sq)
     frontier_sign  = P(spec.sign)
 
-    u_row   = ndims(u_draws) == 1 ? reshape(u_draws, 1, D) : u_draws  # 1×D or N×D
     two_s   = P(2) * frontier_sign
-    quad_2D = A .+ two_s .* B .* u_row .+ C .* u_row .^ 2       # N × D
-
-    log_w = P(-0.5) .* quad_2D .* inv_sigma_v_sq .+ log_const
-    if log_extra !== nothing
-        log_w = log_w .+ log_extra
+    shared = ndims(spec.draws) == 1
+    D = shared ? length(spec.draws) : size(spec.draws, 2)
+    if spec.method != :MSLE
+        scale = mypan_get_mci_scale(model.ineff, ineff_vals)
+        trans, jacob = resolve_panel_transformation(spec.transformation, model)
     end
-
-    log_denom = logsumexp_rows_panel(log_w)                       # N
-
-    # 6. JLMS: firm-level E[u_i*], then expand to obs-level via h_raw
-    log_u_row    = log.(max.(u_row, P(c.clamp_lo)))               # 1 × D (precomputed)
-    log_u_w      = log_u_row .+ log_w                             # N × D
-    log_jlms_num = logsumexp_rows_panel(log_u_w)                  # N
-    E_u_firm     = exp.(log_jlms_num .- log_denom)                # N
-
+    # u, the MCI weight term log f_u + log|J|, and log u for a set of draw rows
+    function draw_terms(h)
+        halton_P = P.(h)
+        if spec.method == :MSLE
+            u = mypan_gen_udraws_msle(model.ineff, ineff_vals, halton_P, c, P)
+            lx = nothing
+        else
+            u = min.(trans.(halton_P, scale), inv(P(c.clamp_lo)))
+            log_fu = mypan_logpdf_ineff(model.ineff, u, ineff_vals, P(c.clamp_lo))
+            log_J  = log.(max.(jacob.(halton_P, scale), P(c.clamp_lo)))
+            lx = log_fu .+ log_J
+            lx = ndims(lx) == 1 ? reshape(lx, 1, D) : lx
+        end
+        u_row = ndims(u) == 1 ? reshape(u, 1, D) : u
+        return u_row, lx, log.(max.(u_row, P(c.clamp_lo)))
+    end
+    shared_terms = shared ? draw_terms(_to_cpu(spec.draws)) : nothing
+    n_groups = max(chunks, 1)
+    firm_chunk_size = cld(N, n_groups)
+    E_u_firm = nothing
+    bc = nothing
+    for ci in 1:n_groups
+        f_start = (ci - 1) * firm_chunk_size + 1
+        f_end = min(ci * firm_chunk_size, N)
+        f_start > f_end && continue
+        u_c, lx_c, lu_c = shared ? shared_terms : draw_terms(_panel_draw_rows(spec.draws, f_start, f_end))
+        A_c = @view A[f_start:f_end]
+        B_c = @view B[f_start:f_end]
+        C_c = @view C[f_start:f_end]
+        quad  = A_c .+ two_s .* B_c .* u_c .+ C_c .* u_c .^ 2
+        log_w = P(-0.5) .* quad .* inv_sigma_v_sq .+ (@view log_const[f_start:f_end])
+        lx_c === nothing || (log_w = log_w .+ lx_c)
+        log_denom    = logsumexp_rows_panel(log_w)
+        log_jlms_num = logsumexp_rows_panel(lu_c .+ log_w)
+        if E_u_firm === nothing                     # outputs in the element type of the log-weights
+            E_u_firm = Vector{eltype(log_w)}(undef, N)
+            bc = Vector{eltype(log_w)}(undef, length(h_raw))
+        end
+        E_u_firm[f_start:f_end] .= exp.(log_jlms_num .- log_denom)
+        _compute_bc_obs!(bc, log_w, log_denom, h_raw, u_c, shared, spec, f_start, f_end)
+    end
     jlms = _expand_jlms_obs(E_u_firm, h_raw, spec)
-
-    # 7. BC: obs-level E[exp(-h_it * u_i*)]
-    bc = _compute_bc_obs(log_w, log_denom, h_raw, u_draws, spec)
-
     return (jlms=jlms, bc=bc)
 end
 
@@ -1353,7 +1557,8 @@ function _panel_uncondU_half(coef, idx, z_obs)
     return h_val * sigma_u * sqrt(oftype(z_delta, 2) / oftype(z_delta, π))
 end
 
-"""E(u_it) for TruncatedNormal: h(z) * σ_u * (Λ + φ(Λ)/Φ(Λ)), Λ = μ/σ_u"""
+"""E(u_it) for TruncatedNormal: h(z) * σ_u * m(Λ), m(Λ) = Λ + φ(Λ)/Φ(Λ), Λ = μ/σ_u. Below
+Λ = -4, m is `SFNumerics.sf_tn_mean`."""
 function _panel_uncondU_trun(coef, idx, z_obs)
     L = length(idx.delta)
     z_delta = sum(coef[idx.delta[j]] * z_obs[j] for j in 1:L)
@@ -1362,24 +1567,30 @@ function _panel_uncondU_trun(coef, idx, z_obs)
     sigma_u = clamp(exp(oftype(z_delta, 0.5) * coef[idx.ln_sigma_u_sq]),
                     oftype(z_delta, 1e-12), oftype(z_delta, 1e12))
     Lambda = mu / sigma_u
+    # Φ(Λ) formed from 1 + erf loses digits as Λ falls
+    # (E(u) off by up to 2e-10 relative on [-4.5, -4], 4e-9 near Λ = -5 and 1.2e-3 near -7)
+    # and, floored at 1e-15, gives E(u) of the wrong sign from Λ ≈ -7.93 (E(u) → μ below -10),
+    # for every observation, since Λ is a scalar in this model. Below Λ = -4, E(u*) = σ_u·m(Λ)
+    # with the stable m of SFNumerics.sf_tn_mean; above, the expression below, bit for bit.
+    Lambda < -4 && return h_val * sigma_u * sf_tn_mean(Lambda)
     phi_Lambda = exp(oftype(z_delta, -0.5) * Lambda^2) / sqrt(oftype(z_delta, 2π))
     Phi_Lambda = max(oftype(z_delta, 0.5) * (1 + erf(Lambda / sqrt(oftype(z_delta, 2)))),
                      oftype(z_delta, 1e-15))
     return h_val * sigma_u * (Lambda + phi_Lambda / Phi_Lambda)
 end
 
-"""E(u_it) for Exponential (λ=Var(u*)): h(z) * √λ"""
+"""E(u_it) for Exponential (σᵤ²=Var(u*)): h(z) * √σᵤ²"""
 function _panel_uncondU_expo(coef, idx, z_obs)
     L = length(idx.delta)
     z_delta = sum(coef[idx.delta[j]] * z_obs[j] for j in 1:L)
     h_val = exp(z_delta)
-    lambda = clamp(exp(coef[idx.ln_lambda]),
-                   oftype(z_delta, 1e-12), oftype(z_delta, 1e12))
-    return h_val * sqrt(lambda)
+    sigma_sq = clamp(exp(coef[idx.ln_sigma_u_sq]),
+                     oftype(z_delta, 1e-12), oftype(z_delta, 1e12))
+    return h_val * sqrt(sigma_sq)
 end
 
-"""E(u_it) for Weibull(λ, k): h(z) * λ * Γ(1 + 1/k). Clamps use the FIX-15 kernel
-constants `c` so the marginal effect uses the same effective parameters as the NLL (R-14)."""
+"""E(u_it) for Weibull(λ, k): h(z) * λ * Γ(1 + 1/k). Clamps use the kernel
+constants `c` so the marginal effect uses the same effective parameters as the NLL."""
 function _panel_uncondU_weibull(coef, idx, z_obs, c)
     L = length(idx.delta)
     z_delta = sum(coef[idx.delta[j]] * z_obs[j] for j in 1:L)
@@ -1397,13 +1608,13 @@ function _panel_uncondU_lognorm(coef, idx, z_obs)
     z_delta = sum(coef[idx.delta[j]] * z_obs[j] for j in 1:L)
     h_val = exp(z_delta)
     mu = coef[idx.mu]
-    sigma_sq = clamp(exp(coef[idx.ln_sigma_sq]),
+    sigma_sq = clamp(exp(coef[idx.ln_sigma_u_sq]),
                      oftype(z_delta, 1e-24), oftype(z_delta, 1e24))
     return h_val * exp(mu + sigma_sq / 2)
 end
 
-"""E(u_it) for Lomax(α, λ): h(z) * λ / (α - 1). Requires α > 1. Clamps use the FIX-15
-kernel constants `c` so the marginal effect uses the same effective parameters as the NLL (R-14)."""
+"""E(u_it) for Lomax(α, λ): h(z) * λ / (α - 1); undefined (NaN) for α ≤ 1. Clamps use the kernel
+constants `c`, so the marginal effect uses the same effective parameters as the likelihood."""
 function _panel_uncondU_lomax(coef, idx, z_obs, c)
     L = length(idx.delta)
     z_delta = sum(coef[idx.delta[j]] * z_obs[j] for j in 1:L)
@@ -1412,8 +1623,13 @@ function _panel_uncondU_lomax(coef, idx, z_obs, c)
                    oftype(z_delta, c.xm_floor), oftype(z_delta, c.xm_ceil))
     alpha = clamp(exp(coef[idx.ln_alpha]),
                   oftype(z_delta, c.alpha_floor), oftype(z_delta, c.alpha_ceil))
+    # E(u_it) = h(z)·λ/(α − 1) does not exist for α ≤ 1 (α's floor of 0.1 lies below 1, so this
+    # branch is reachable). The h(z) factor carries NaN into the value and every partial, so the
+    # marginal effect reads NaN, never a finite number. α is built from the coefficients and
+    # constants only, so its partials are zero and the comparison is decided by its value, also
+    # at α = 1.
     if alpha <= 1
-        return oftype(z_delta, Inf)
+        return h_val * oftype(z_delta, NaN)
     end
     return h_val * lambda / (alpha - 1)
 end
@@ -1423,13 +1639,13 @@ function _panel_uncondU_rayleigh(coef, idx, z_obs)
     L = length(idx.delta)
     z_delta = sum(coef[idx.delta[j]] * z_obs[j] for j in 1:L)
     h_val = exp(z_delta)
-    sigma = clamp(exp(oftype(z_delta, 0.5) * coef[idx.ln_sigma_sq]),
+    sigma = clamp(exp(oftype(z_delta, 0.5) * coef[idx.ln_sigma_u_sq]),
                   oftype(z_delta, 1e-12), oftype(z_delta, 1e12))
     return h_val * sigma * sqrt(oftype(z_delta, π) / 2)
 end
 
-"""E(u_it) for Gamma(k, θ): h(z) * k * θ. Clamps use the FIX-15 kernel constants `c`
-so the marginal effect uses the same effective parameters as the NLL (R-14)."""
+"""E(u_it) for Gamma(k, θ): h(z) * k * θ. Clamps use the kernel constants `c`
+so the marginal effect uses the same effective parameters as the NLL."""
 function _panel_uncondU_gamma(coef, idx, z_obs, c)
     L = length(idx.delta)
     z_delta = sum(coef[idx.delta[j]] * z_obs[j] for j in 1:L)
@@ -1439,6 +1655,17 @@ function _panel_uncondU_gamma(coef, idx, z_obs, c)
     theta = clamp(exp(coef[idx.ln_theta]),
                   oftype(z_delta, c.theta_floor), oftype(z_delta, c.theta_ceil))
     return h_val * k_val * theta
+end
+
+"""E(u_it) for Erlang(M, θ): h(z) * M * θ. Clamps use the kernel constants `c`
+so the marginal effect uses the same effective parameters as the NLL."""
+function _panel_uncondU_erlang(coef, idx, z_obs, c, M)
+    L = length(idx.delta)
+    z_delta = sum(coef[idx.delta[j]] * z_obs[j] for j in 1:L)
+    h_val = exp(z_delta)
+    theta = clamp(exp(coef[idx.ln_theta]),
+                  oftype(z_delta, c.theta_floor), oftype(z_delta, c.theta_ceil))
+    return h_val * M * theta
 end
 
 # --- Post-processing helpers for marginal effects ---
@@ -1508,8 +1735,8 @@ get_panel_marg(::TruncatedNormal_Panel, spec::_PanelInternalSpec, coef::Abstract
     _panel_marg_generic(_panel_uncondU_trun, spec, coef)
 get_panel_marg(::Exponential_Panel, spec::_PanelInternalSpec, coef::AbstractVector) =
     _panel_marg_generic(_panel_uncondU_expo, spec, coef)
-# Weibull/Lomax/Gamma marginal helpers take the FIX-15 kernel constants `c` so their
-# clamps stay aligned with the NLL. Build `c` once here and close over it (R-14).
+# Weibull/Lomax/Gamma/Erlang marginal helpers take the kernel constants `c` so their
+# clamps stay aligned with the NLL. Build `c` once here and close over it.
 function get_panel_marg(::Weibull_Panel, spec::_PanelInternalSpec, coef::AbstractVector)
     c = make_panel_constants(spec.model, Float64, spec.T_max)
     _panel_marg_generic((cf, ix, z) -> _panel_uncondU_weibull(cf, ix, z, c), spec, coef)
@@ -1525,6 +1752,10 @@ get_panel_marg(::Rayleigh_Panel, spec::_PanelInternalSpec, coef::AbstractVector)
 function get_panel_marg(::Gamma_Panel, spec::_PanelInternalSpec, coef::AbstractVector)
     c = make_panel_constants(spec.model, Float64, spec.T_max)
     _panel_marg_generic((cf, ix, z) -> _panel_uncondU_gamma(cf, ix, z, c), spec, coef)
+end
+function get_panel_marg(::Erlang_Panel{M}, spec::_PanelInternalSpec, coef::AbstractVector) where {M}
+    c = make_panel_constants(spec.model, Float64, spec.T_max)
+    _panel_marg_generic((cf, ix, z) -> _panel_uncondU_erlang(cf, ix, z, c, M), spec, coef)
 end
 
 """
@@ -1542,49 +1773,106 @@ function panel_marginal_effects(spec::_PanelInternalSpec, coef::AbstractVector)
 end
 
 
+# ---------------------------------------------------------------------------
+# The boundary verdict. The get_panel_*_vals functions return CLAMPED scalars, and `clamp`
+# returns the bound itself when it binds, so the verdict tests the values the likelihood uses
+# against the bounds (within SF_BOUND_RTOL, src/sf_redflag.jl), formed as the value functions
+# form them (P = Float64 at the estimate). Beyond a bound the likelihood is flat in that
+# parameter, and its Hessian row is then exactly zero. The μ of the truncated normal and the
+# lognormal and the scaling function have no bound and are not listed.
+
+# One bounded quantity (each is one value for all observations, and the likelihood clamps it):
+# its name and label, the coefficient it is formed from (exp(θ)), its bounds, and where the
+# value functions return its clamped value (`vals`: :noise or :ineff, and its `field`).
+_panel_bound_item(parameter, label, coefficient, keyword, block, lo, hi, vals, field) =
+    (parameter = parameter, label = label, coefficient = coefficient, keyword = keyword,
+     block = Vector{Int}(vcat(block)), lo = Float64(lo), hi = Float64(hi), scalar = true, form = :exp,
+     offset = 0.0, movable = true, vals = vals, field = field)
+
+_panel_noise_bound_items(::NormalNoise_Panel, idx, c) =
+    (_panel_bound_item(:sigma_v_sq, "σᵥ²", "ln_σᵥ²", :ln_sigma_v_sq, idx.ln_sigma_v_sq,
+                       Float64(c.sigma_floor)^2, Float64(c.sigma_ceil)^2, :noise, :sigma_v_sq),)
+
+_panel_ineff_bound_items(::Union{HalfNormal_Panel, TruncatedNormal_Panel}, idx, c) =
+    (_panel_bound_item(:sigma_u_sq, "σᵤ²", "ln_σᵤ²", :ln_sigma_u_sq, idx.ln_sigma_u_sq,
+                       Float64(c.sigma_floor)^2, Float64(c.sigma_ceil)^2, :ineff, :sigma_u_sq),)
+_panel_ineff_bound_items(::Union{Lognormal_Panel, Rayleigh_Panel}, idx, c) =
+    (_panel_bound_item(:sigma_u_sq, "σᵤ²", "ln_σᵤ²", :ln_sigma_u_sq, idx.ln_sigma_u_sq,
+                       Float64(c.sigma_floor)^2, Float64(c.sigma_ceil)^2, :ineff, :sigma_sq),)
+_panel_ineff_bound_items(::Exponential_Panel, idx, c) =
+    (_panel_bound_item(:sigma_u_sq, "σᵤ²", "ln_σᵤ²", :ln_sigma_u_sq, idx.ln_sigma_u_sq, c.sigma_floor,
+                       c.sigma_ceil, :ineff, :sigma_sq),)
+_panel_ineff_bound_items(::Weibull_Panel, idx, c) =
+    (_panel_bound_item(:lambda, "λ", "ln_λ", :ln_lambda, idx.ln_lambda, c.sigma_floor, c.sigma_ceil, :ineff,
+                       :lambda),
+     _panel_bound_item(:k, "k", "ln_k", :ln_k, idx.ln_k, c.k_floor, c.weibull_k_ceil, :ineff, :k))
+_panel_ineff_bound_items(::Lomax_Panel, idx, c) =
+    (_panel_bound_item(:lambda, "λ", "ln_λ", :ln_lambda, idx.ln_lambda, c.xm_floor, c.xm_ceil, :ineff, :lambda),
+     _panel_bound_item(:alpha, "α", "ln_α", :ln_alpha, idx.ln_alpha, c.alpha_floor, c.alpha_ceil, :ineff, :alpha))
+_panel_ineff_bound_items(::Gamma_Panel, idx, c) =
+    (_panel_bound_item(:k, "k", "ln_k", :ln_k, idx.ln_k, c.k_floor, c.gamma_k_ceil, :ineff, :k),
+     _panel_bound_item(:theta, "θ", "ln_θ", :ln_theta, idx.ln_theta, c.theta_floor, c.theta_ceil, :ineff, :theta))
+_panel_ineff_bound_items(::Erlang_Panel, idx, c) =
+    (_panel_bound_item(:theta, "θ", "ln_θ", :ln_theta, idx.ln_theta, c.theta_floor, c.theta_ceil, :ineff, :theta),)
+
+"""
+    _panel_bound_list(ispec::_PanelInternalSpec) -> Vector
+
+The quantities the panel likelihood clamps to numerical bounds, σᵥ² first and then the
+inefficiency's: one NamedTuple per quantity with `parameter`, `label`, `coefficient`, `keyword`
+(the `sfmodel_init` keyword of its coefficient), `block` (its index), `lo` and `hi` (formed from
+the model's constants as the value functions form them), `scalar`, `form`, `offset`, `movable`,
+and `vals` and `field` (where the value functions return its clamped value).
+"""
+function _panel_bound_list(ispec::_PanelInternalSpec)
+    c = ispec.constants; idx = ispec.idx; m = ispec.model
+    return [_panel_noise_bound_items(m.noise, idx, c)..., _panel_ineff_bound_items(m.ineff, idx, c)...]
+end
+
+"""
+    _panel_bound_verdict(ispec::_PanelInternalSpec, p, nobs) -> Vector{SFBoundEntry}
+
+The boundary verdict at the coefficient vector `p`: the entries of every quantity of
+`_panel_bound_list(ispec)` at or beyond its bound, from the clamped values of
+`get_panel_noise_vals` and `get_panel_ineff_vals`, each counted over `nobs` observations; empty
+when there is none.
+"""
+function _panel_bound_verdict(ispec::_PanelInternalSpec, p::AbstractVector, nobs::Integer)
+    c = ispec.constants; idx = ispec.idx; m = ispec.model
+    vals = (noise = get_panel_noise_vals(m.noise, p, idx, c), ineff = get_panel_ineff_vals(m.ineff, p, idx, c))
+    bc = SFBoundEntry[]
+    for it in _panel_bound_list(ispec)
+        sf_bound_entries!(bc, getproperty(getproperty(vals, it.vals), it.field), it.lo, it.hi, nobs;
+                          parameter = it.parameter, label = it.label, coefficient = it.coefficient,
+                          scalar = it.scalar)
+    end
+    return bc
+end
+
 # ============================================================================
 # Section 12: Variance-Covariance Matrix & Hessian
 # ============================================================================
 
 """
-    _panel_invert_hessian(H; message=true) -> NamedTuple
+    _panel_invert_hessian(H; at_clamp=false, message=true) -> NamedTuple
 
 Invert Hessian matrix for variance-covariance computation.
-Returns (var_cov_matrix=..., redflag=Int).
+Returns (var_cov_matrix=..., redflag=Int, hessian_flag=Int). It applies the rule shared by
+all four backends, `sf_classify_hessian` (src/sf_redflag.jl): 1 when the
+Hessian is not invertible or is numerically singular (all-NaN matrix); 2 for a
+non-positive diagonal; otherwise 1 when the Hessian is not positive definite (the
+matrix is kept as computed); 1 when `at_clamp`, whatever the Hessian says (also over
+2); else 0.
 """
-function _panel_invert_hessian(H::AbstractMatrix{TT};
-                                message::Bool=true) where {TT<:Real}
-    redflag = 0
-    # Defined fallback: if inv(H) throws below (redflag=1), the returned matrix must be a
-    # well-defined NaN matrix, not an uninitialized `similar(H)` whose garbage diagonal can
-    # crash the downstream sqrt-based SE line. See re-audit R-06.
-    var_cov_matrix = fill!(similar(H, float(TT)), NaN)
-
-    try
-        var_cov_matrix = inv(H)
-    catch err
-        redflag = 1
-        if message
-            printstyled("The Hessian matrix is not invertible, indicating the model does not converge properly.\n"; color=:red)
-        end
-        return (var_cov_matrix=var_cov_matrix, redflag=redflag)
-    end
-
-    if !all(diag(var_cov_matrix) .> 0)
-        redflag = 2
-        if message
-            printstyled("Some diagonal elements of the var-cov matrix are non-positive, indicating convergence problems.\n"; color=:red)
-        end
-    end
-
-    return (var_cov_matrix=var_cov_matrix, redflag=redflag)
-end
+_panel_invert_hessian(H::AbstractMatrix{<:Real}; at_clamp::Bool=false, message::Bool=true) =
+    sf_classify_hessian(H; at_clamp=at_clamp, message=message)
 
 # NaN-safe standard errors from a var-cov matrix. A non-positive-diagonal (redflag>0) vcov
 # would make `sqrt` throw a DomainError, so those entries become NaN instead — a degenerate
 # fit still returns its coefficients/loglik/jlms/bc, and `stderror(r)` stays NaN-consistent
-# with `sqrt.(diag(vcov(r)))`. See re-audit R-06 (regression from FIX-20).
-_stderr_from_vcov(V::AbstractMatrix) = map(d -> d < 0 ? oftype(d, NaN) : sqrt(d), diag(V))
+# with `sqrt.(diag(vcov(r)))`. The test is `<= 0`, so an exactly zero diagonal (redflag 2)
+# also gives NaN, not 0.
+_stderr_from_vcov(V::AbstractMatrix) = map(d -> d <= 0 ? oftype(d, NaN) : sqrt(d), diag(V))
 
 """
     panel_var_cov_mat(nll_func, coef; message=true) -> NamedTuple
@@ -1619,7 +1907,7 @@ end
 
 function _panel_aux_table(::Exponential_Panel, coef, idx, stddev)
     aux = Matrix{Any}(undef, 2, 3)
-    aux[1, :] = ["λ", exp(coef[idx.ln_lambda]), exp(coef[idx.ln_lambda]) * stddev[idx.ln_lambda]]
+    aux[1, :] = ["σᵤ²", exp(coef[idx.ln_sigma_u_sq]), exp(coef[idx.ln_sigma_u_sq]) * stddev[idx.ln_sigma_u_sq]]
     aux[2, :] = ["σᵥ²", exp(coef[idx.ln_sigma_v_sq]), exp(coef[idx.ln_sigma_v_sq]) * stddev[idx.ln_sigma_v_sq]]
     return aux
 end
@@ -1634,7 +1922,7 @@ end
 
 function _panel_aux_table(::Lognormal_Panel, coef, idx, stddev)
     aux = Matrix{Any}(undef, 2, 3)
-    aux[1, :] = ["σ²", exp(coef[idx.ln_sigma_sq]), exp(coef[idx.ln_sigma_sq]) * stddev[idx.ln_sigma_sq]]
+    aux[1, :] = ["σᵤ²", exp(coef[idx.ln_sigma_u_sq]), exp(coef[idx.ln_sigma_u_sq]) * stddev[idx.ln_sigma_u_sq]]
     aux[2, :] = ["σᵥ²", exp(coef[idx.ln_sigma_v_sq]), exp(coef[idx.ln_sigma_v_sq]) * stddev[idx.ln_sigma_v_sq]]
     return aux
 end
@@ -1649,7 +1937,7 @@ end
 
 function _panel_aux_table(::Rayleigh_Panel, coef, idx, stddev)
     aux = Matrix{Any}(undef, 2, 3)
-    aux[1, :] = ["σ²", exp(coef[idx.ln_sigma_sq]), exp(coef[idx.ln_sigma_sq]) * stddev[idx.ln_sigma_sq]]
+    aux[1, :] = ["σᵤ²", exp(coef[idx.ln_sigma_u_sq]), exp(coef[idx.ln_sigma_u_sq]) * stddev[idx.ln_sigma_u_sq]]
     aux[2, :] = ["σᵥ²", exp(coef[idx.ln_sigma_v_sq]), exp(coef[idx.ln_sigma_v_sq]) * stddev[idx.ln_sigma_v_sq]]
     return aux
 end
@@ -1662,21 +1950,36 @@ function _panel_aux_table(::Gamma_Panel, coef, idx, stddev)
     return aux
 end
 
-"""
-    panel_print_table(spec, coef, var_cov_matrix; optim_result=nothing, table_format=:text)
+function _panel_aux_table(::Erlang_Panel, coef, idx, stddev)
+    aux = Matrix{Any}(undef, 2, 3)
+    aux[1, :] = ["θ", exp(coef[idx.ln_theta]), exp(coef[idx.ln_theta]) * stddev[idx.ln_theta]]
+    aux[2, :] = ["σᵥ²", exp(coef[idx.ln_sigma_v_sq]), exp(coef[idx.ln_sigma_v_sq]) * stddev[idx.ln_sigma_v_sq]]
+    return aux
+end
 
-Print formatted estimation results table for panel SF model.
+"""
+    panel_print_table(spec, coef, var_cov_matrix; optim_result=nothing, loglik=nothing, integration=nothing,
+                      table_format=:text)
+
+Print formatted estimation results table for panel SF model. `loglik` is the log-likelihood
+to print, `-optim_result.minimum` when not given; the fit passes the value at the reported
+coefficients.
+
+`integration` is the result of the integration check (`result.integration_check`); when it is
+given, the line "Integration check: …" is printed after "Converged:".
 """
 function panel_print_table(spec::_PanelInternalSpec{T}, coef::AbstractVector,
                             var_cov_matrix::AbstractMatrix;
                             optim_result=nothing,
+                            loglik=nothing,
+                            integration=nothing,
                             table_format::Symbol=:text) where {T}
 
     nofpara = length(coef)
     N_total = sum(spec.T_periods)
 
     # Compute statistics (asymptotic Normal, standard for MLE)
-    stddev = _stderr_from_vcov(var_cov_matrix)  # non-PD vcov ⇒ NaN SEs (no DomainError); keeps stderror(r) NaN-consistent with sqrt.(diag(vcov(r))). Re-audit R-06.
+    stddev = _stderr_from_vcov(var_cov_matrix)  # non-PD vcov ⇒ NaN SEs (no DomainError); keeps stderror(r) NaN-consistent with sqrt.(diag(vcov(r))).
     t_stats = coef ./ stddev
     tt = cquantile(Normal(0, 1), 0.025)  # ~1.96
 
@@ -1718,7 +2021,15 @@ function panel_print_table(spec::_PanelInternalSpec{T}, coef::AbstractVector,
         print("Number of iterations: "); printstyled(optim_result.iterations; color=:yellow); println()
         converged = Optim.converged(optim_result)
         print("Converged: "); printstyled(converged; color=converged ? :yellow : :red); println()
-        print("Log-likelihood: "); printstyled(round(-optim_result.minimum; digits=5); color=:yellow); println()
+        if integration !== nothing
+            print("Integration check: ")
+            printstyled(sf_integration_line(integration);
+                        color = integration.status in (:OK, :not_available) ? :yellow : :red)
+            println()
+        end
+        # The fit passes the log-likelihood at the reported coefficients.
+        ll_show = loglik === nothing ? -optim_result.minimum : loglik
+        print("Log-likelihood: "); printstyled(round(ll_show; digits=5); color=:yellow); println()
     end
     println()
 
@@ -1756,12 +2067,13 @@ end
 # Return distribution-specific variable name suffixes (after frontier and h(z) names).
 _panel_ineff_varnames(::HalfNormal_Panel)      = ["ln_σᵤ²", "ln_σᵥ²"]
 _panel_ineff_varnames(::TruncatedNormal_Panel)  = ["μ", "ln_σᵤ²", "ln_σᵥ²"]
-_panel_ineff_varnames(::Exponential_Panel)      = ["ln_λ", "ln_σᵥ²"]
+_panel_ineff_varnames(::Exponential_Panel)      = ["ln_σᵤ²", "ln_σᵥ²"]
 _panel_ineff_varnames(::Weibull_Panel)          = ["ln_λ", "ln_k", "ln_σᵥ²"]
-_panel_ineff_varnames(::Lognormal_Panel)        = ["μ", "ln_σ²", "ln_σᵥ²"]
+_panel_ineff_varnames(::Lognormal_Panel)        = ["μ", "ln_σᵤ²", "ln_σᵥ²"]
 _panel_ineff_varnames(::Lomax_Panel)            = ["ln_λ", "ln_α", "ln_σᵥ²"]
-_panel_ineff_varnames(::Rayleigh_Panel)         = ["ln_σ²", "ln_σᵥ²"]
+_panel_ineff_varnames(::Rayleigh_Panel)         = ["ln_σᵤ²", "ln_σᵥ²"]
 _panel_ineff_varnames(::Gamma_Panel)            = ["ln_k", "ln_θ", "ln_σᵥ²"]
+_panel_ineff_varnames(::Erlang_Panel)           = ["ln_θ", "ln_σᵥ²"]
 
 """Return distribution-specific equation names and indices."""
 function _panel_ineff_eqinfo(::HalfNormal_Panel, K, L)
@@ -1771,22 +2083,25 @@ function _panel_ineff_eqinfo(::TruncatedNormal_Panel, K, L)
     return ["μ", "ln_σᵤ²", "ln_σᵥ²"], [K + L + 1, K + L + 2, K + L + 3]
 end
 function _panel_ineff_eqinfo(::Exponential_Panel, K, L)
-    return ["ln_λ", "ln_σᵥ²"], [K + L + 1, K + L + 2]
+    return ["ln_σᵤ²", "ln_σᵥ²"], [K + L + 1, K + L + 2]
 end
 function _panel_ineff_eqinfo(::Weibull_Panel, K, L)
     return ["ln_λ", "ln_k", "ln_σᵥ²"], [K + L + 1, K + L + 2, K + L + 3]
 end
 function _panel_ineff_eqinfo(::Lognormal_Panel, K, L)
-    return ["μ", "ln_σ²", "ln_σᵥ²"], [K + L + 1, K + L + 2, K + L + 3]
+    return ["μ", "ln_σᵤ²", "ln_σᵥ²"], [K + L + 1, K + L + 2, K + L + 3]
 end
 function _panel_ineff_eqinfo(::Lomax_Panel, K, L)
     return ["ln_λ", "ln_α", "ln_σᵥ²"], [K + L + 1, K + L + 2, K + L + 3]
 end
 function _panel_ineff_eqinfo(::Rayleigh_Panel, K, L)
-    return ["ln_σ²", "ln_σᵥ²"], [K + L + 1, K + L + 2]
+    return ["ln_σᵤ²", "ln_σᵥ²"], [K + L + 1, K + L + 2]
 end
 function _panel_ineff_eqinfo(::Gamma_Panel, K, L)
     return ["ln_k", "ln_θ", "ln_σᵥ²"], [K + L + 1, K + L + 2, K + L + 3]
+end
+function _panel_ineff_eqinfo(::Erlang_Panel, K, L)
+    return ["ln_θ", "ln_σᵥ²"], [K + L + 1, K + L + 2]
 end
 
 """
@@ -1835,7 +2150,7 @@ _panel_gen_names(K::Int, L::Int, idx, varnames, eqnames, eq_indices) =
 # Section 15a: DSL Marker Types
 # ============================================================================
 
-"""Marker types for DSL-style model specification using DataFrames."""
+# Marker types for DSL-style model specification using DataFrames.
 
 if !@isdefined(UseDataSpec)
     struct UseDataSpec
@@ -1950,7 +2265,9 @@ function sfmodel_panel_spec(data_spec::UseDataSpec, depvar_spec::DepvarSpec,
                               id_spec::IdSpec;
                               noise::Symbol=:Normal,
                               ineff::Symbol=:HalfNormal,
-                              type::Symbol=:prod)
+                              type::Symbol=:prod,
+                              eqnames::Union{Nothing, Vector{String}}=nothing,
+                              eq_indices::Union{Nothing, Vector{Int}}=nothing)
     df = data_spec.df
     depvar, frontier, frontier_names = _panel_dsl_extract(df, depvar_spec, frontier_spec)
     zvar, zvar_names = _panel_dsl_extract_zvar(df, zvar_spec)
@@ -1958,9 +2275,14 @@ function sfmodel_panel_spec(data_spec::UseDataSpec, depvar_spec::DepvarSpec,
     model_temp = _build_panel_model(noise, ineff)
     varnames = vcat(frontier_names, zvar_names, _panel_ineff_varnames(model_temp.ineff))
 
+    # `varnames` comes from the DataFrame column names, but `eqnames`/`eq_indices` are the
+    # caller's and have no DSL macro — the unified DSL takes them as keywords and forwards
+    # them here, so the DSL honours them as the keyword form does (without them it would
+    # fall back to the panel defaults).
     return sfmodel_panel_spec(; depvar=depvar, frontier=frontier, zvar=zvar,
                                  id=id_col, noise=noise, ineff=ineff, type=type,
-                                 varnames=varnames)
+                                 varnames=varnames,
+                                 eqnames=eqnames, eq_indices=eq_indices)
 end
 
 """
@@ -1968,7 +2290,7 @@ end
 
 DSL form without @zvar. NOT SUPPORTED: a constant scaling h(z)=exp(δ₀) is
 unidentified in the Wang-Ho panel model (within-group demeaning eliminates it),
-so this variant errors at spec time (FIX-09). Provide `@zvar(...)` with a
+so this variant errors at spec time. Provide `@zvar(...)` with a
 regressor that varies within firms.
 """
 function sfmodel_panel_spec(data_spec::UseDataSpec, depvar_spec::DepvarSpec,
@@ -1980,7 +2302,7 @@ function sfmodel_panel_spec(data_spec::UseDataSpec, depvar_spec::DepvarSpec,
           "for the scaling function h(z)=exp(z'δ). A spec without @zvar uses a constant " *
           "scaling h(z)=exp(δ₀), which is unidentified: within-group demeaning eliminates " *
           "it, the likelihood is flat in δ₀ and the inefficiency parameters, and jlms/bc " *
-          "carry no information from the data (FIX-09). Add `@zvar(...)` with a regressor " *
+          "carry no information from the data. Add `@zvar(...)` with a regressor " *
           "that varies within firms.")
 end
 
@@ -2007,7 +2329,7 @@ Construct panel model specification. Panel structure is specified via the `id` c
 - `T_periods=nothing`: Deprecated; raises an error if provided. Use `id` instead.
 - `id`: Unit identifier column (required)
 - `noise::Symbol=:Normal`: Noise distribution
-- `ineff::Symbol=:HalfNormal`: Inefficiency distribution (:HalfNormal, :TruncatedNormal, :Exponential, :Weibull, :Lognormal, :Lomax, :Rayleigh, :Gamma)
+- `ineff::Symbol=:HalfNormal`: Inefficiency distribution (:HalfNormal, :TruncatedNormal, :Exponential, :Weibull, :Lognormal, :Lomax, :Rayleigh, :Gamma, :Erlang2, :Erlang3, :Erlang4)
 - `type::Symbol=:prod`: Frontier type (`:prod`, `:production`, or `:cost`)
 - `varnames=nothing`: Variable names (auto-generated if not provided)
 - `eqnames=nothing`: Equation names (auto-generated if not provided)
@@ -2042,7 +2364,7 @@ function sfmodel_panel_spec(; depvar, frontier, zvar=nothing,
                               eqnames::Union{Nothing, Vector{String}}=nothing,
                               eq_indices::Union{Nothing, Vector{Int}}=nothing)
 
-    # FIX-09: a panel spec without `zvar` implies a constant scaling h(z)=exp(δ₀),
+    # A panel spec without `zvar` implies a constant scaling h(z)=exp(δ₀),
     # which is unidentified in the Wang-Ho model (within-group demeaning eliminates
     # it). Give the informative identification error instead of the generic
     # "Unsupported matrix input type: Nothing" that `_to_matrix_panel(nothing)`
@@ -2053,7 +2375,7 @@ function sfmodel_panel_spec(; depvar, frontier, zvar=nothing,
         "scaling function h(z)=exp(z'δ). A panel spec without `zvar` uses a constant " *
         "scaling h(z)=exp(δ₀), which is unidentified: within-group demeaning eliminates " *
         "it, the likelihood is flat in δ₀ and the inefficiency parameters, and jlms/bc " *
-        "carry no information from the data (FIX-09). Provide `zvar=...` with a regressor " *
+        "carry no information from the data. Provide `zvar=...` with a regressor " *
         "that varies within firms.")
 
     # Normalize inputs
@@ -2093,12 +2415,12 @@ function sfmodel_panel_spec(; depvar, frontier, zvar=nothing,
 
     # Reject constant columns (unidentifiable after within-demeaning).
     _check_no_constant_column(frontier_norm, "frontier")
-    _check_no_constant_column(zvar_norm, "zvar")   # incl. the DSL all-ones column (FIX-09: exemption removed)
+    _check_no_constant_column(zvar_norm, "zvar")   # incl. the DSL all-ones column
     # Scaling h(z)=exp(z'δ) is identified only if z varies WITHIN firms. If every
     # zvar column is constant within every firm (e.g. a time-invariant industry
     # dummy, or the no-@zvar ones column), the within-demeaned h̃ ≡ 0 for all δ, the
     # likelihood is flat in δ and the inefficiency parameters, and jlms/bc reduce to
-    # uninformative prior means (FIX-09). Error at spec time rather than silently
+    # uninformative prior means. Error at spec time rather than silently
     # return arbitrary scores.
     let z_has_within_variation = false
         for j in axes(zvar_norm, 2), i in 1:N
@@ -2149,43 +2471,82 @@ end
 
 """
     sfmodel_panel_method(; method=:MSLE, transformation=nothing,
-                           draws=nothing, n_draws=1024, multiRand=true,
-                           GPU=false, chunks=10, distinct_Halton_length=2^15-1)
+                           draws=nothing, n_draws=4096, multiRand=true,
+                           GPU=false, chunks=10, recycling=false, distinct_Halton_length=nothing)
 
 Specify the numerical estimation method for panel SF model.
 
 # Arguments
 - `method::Symbol=:MSLE`: Estimation method (`:MSLE` or `:MCI`)
-- `transformation=nothing`: MCI transformation rule. Ignored for MSLE. Options:
+- `transformation=nothing`: MCI transformation rule. MCI only; `method = :MSLE` refuses it. Under the
+  default rule, MCI fits whose estimated shape lies in a range where that rule is unreliable (Gamma k,
+  Weibull k, Lomax α below a threshold) print a warning (unless the fit passes `shape_warning = false`)
+  and store the verdict in `result.shape_check`. Options:
   - `:logistic_1_rule` — `u = s · t/(1-t)` (default for HalfNormal, TruncatedNormal, Lognormal, Lomax)
   - `:logistic_2_rule` — `u = σ_u · (t/(1-t))²`
-  - `:expo_rule` — `u = s · (-log(1-t))` (default for Exponential, Weibull, Rayleigh, Gamma)
+  - `:expo_rule` — `u = s · (-log(1-t))` (default for Exponential, Weibull, Rayleigh, Gamma, Erlang2/3/4)
   - `nothing` — use distribution-specific default
-- `draws=nothing`: User-supplied Halton draws. Auto-generated if `nothing`.
-- `n_draws::Int=1024`: Number of quasi-random draws
-- `multiRand::Bool=true`: Per-firm draws (`true`: N×D matrix) or shared draws (`false`: 1D vector).
-  When `true`, `n_draws` must be ≤ `distinct_Halton_length`.
+- `draws=nothing`: User-supplied draws in [0, 1); auto-generated Halton if `nothing`. The ROW COUNT
+  decides how they are read, and `multiRand` is not part of it: a length-D vector, a 1×D row matrix or
+  a D×1 column matrix is one sequence of D draws shared by every firm; an N×D matrix is one row of D
+  draws per firm. Any other row count is an error. Supplying `draws` forces `multiRand=false` and makes
+  `n_draws` irrelevant (D comes from the draws themselves). The fit keeps the draws for `predict()`. When
+  the array already has the data's element type and lives where the data live (a host `Array`, or a
+  `CuArray` with `GPU = true`), the fit uses the array itself, not a copy, so changing the array afterwards
+  changes what `predict()` computes.
+- `n_draws::Int=4096`: Number of Halton draws per firm (2^12; used only when `draws` is not provided). Use
+  powers of two.
+- `multiRand::Bool=true`: generation mode, used only when `draws` is not supplied. `true` gives observation i
+  (firm i in panel models) the `n_draws` consecutive points (i − 1)·n_draws + 1, …, i·n_draws of one base-2
+  Halton sequence of N × `n_draws` points, so no point is used twice unless `recycling` or the deprecated
+  `distinct_Halton_length` is given; `false` gives every observation the same first `n_draws` points.
 - `GPU::Bool=false`: Use GPU acceleration
-- `chunks::Int=10`: Number of chunks for memory management
-- `distinct_Halton_length::Int=2^15-1`: Maximum Halton sequence length for multiRand mode.
-  Increase if `n_draws` exceeds this limit.
+- `chunks::Int=10`: Number of groups of observations (firms, for panel models) processed at a time (MCI/MSLE
+  only). The memory of the likelihood, its derivatives and the efficiency indices is proportional to
+  N × `n_draws` / `chunks`, on the CPU and on the GPU.
+- `recycling=false`: reuse of Halton points across firms, for generated per-firm draws only
+  (`multiRand = true`, no `draws`). `false` (default): no point is reused. `true`: the sequence is capped at
+  L = 2^24 − 1 = 16,777,215 points and restarts from its first point when N × `n_draws` exceeds L; firm i
+  receives the points at positions mod1((i − 1)·n_draws + j, L), j = 1, …, n_draws. An integer L with
+  `n_draws` ≤ L ≤ 2^24 − 1 sets another cap. When N × `n_draws` exceeds L, firms i and i + L/g receive
+  identical draws, where g is the greatest common divisor of `n_draws` and L; the fit warns when the sample
+  has more than L/g firms. With `recycling = true` (L = 2^24 − 1, an odd number) any power of two for
+  `n_draws` gives g = 1. With `draws` or `multiRand = false`, `recycling` is an error.
+- `distinct_Halton_length=nothing`: deprecated; it gives a warning. Earlier `:MCI` and `:MSLE` scripts that set
+  it still run and, with the same `n_draws`, get the draws they got before 2.0.0. To reproduce the draws of a
+  fit of those versions that used the default length, give `recycling = 2^15 - 1` and that fit's `n_draws`
+  (1,024 by default): the draws are identical whenever N × `n_draws` is at least 32,767. Use `recycling` for
+  new work; giving both is an error.
 """
 function sfmodel_panel_method(;
     method::Symbol=:MSLE,
     transformation::Union{Symbol,Nothing}=nothing,
     draws::Union{Nothing, AbstractVecOrMat{<:AbstractFloat}}=nothing,
-    n_draws::Int=1024,
+    n_draws::Int=2^12,
     multiRand::Bool=true,
     GPU::Bool=false,
     chunks::Int=10,
-    distinct_Halton_length::Int=2^15-1)
+    recycling::Union{Bool,Integer}=false,
+    distinct_Halton_length::Union{Int,Nothing}=nothing)
 
     method in (:MSLE, :MCI) || error("method must be :MSLE or :MCI, got :$method")
+    # Twin of the unified constructor's guard. `transformation` reparameterizes the MCI
+    # inefficiency integral; the panel MSLE likelihood has no such integral, and at fixed
+    # parameters base and `:expo_rule` give the identical NLL. The value would be stored on
+    # the method spec and never read, so it is refused, not warned about.
     if method == :MSLE && !isnothing(transformation)
-        @warn "`transformation` is only used with method=:MCI. Ignored for :MSLE."
+        error("`transformation` is only effective with `method=:MCI`: it reparameterizes the MCI " *
+              "inefficiency integral, and the panel `:MSLE` likelihood has no such integral. " *
+              "Remove `transformation`, or use `method=:MCI`.")
     end
 
-    return PanelMethodSpec(method, transformation, draws, n_draws, multiRand, GPU, chunks, distinct_Halton_length)
+    # Supplying `draws` means the Halton generator is not used, so there is no generation mode left
+    # to choose: `multiRand` is forced false and the draws' own row count decides whether they are
+    # shared by every firm (1 row) or per firm (N rows).
+    _multiRand = isnothing(draws) ? multiRand : false
+
+    _rec, _legacy = sf_recycling_request(recycling, distinct_Halton_length, n_draws, isnothing(draws) && multiRand)
+    return PanelMethodSpec(method, transformation, draws, n_draws, _multiRand, GPU, chunks, _rec, _legacy)
 end
 
 
@@ -2194,12 +2555,16 @@ end
 # ============================================================================
 
 """
-    _assemble_panel_spec(spec::PanelModelSpec, method::PanelMethodSpec) -> _PanelInternalSpec
+    _assemble_panel_spec(spec::PanelModelSpec, method::PanelMethodSpec; warn_repeated = true)
+        -> _PanelInternalSpec
 
 Assemble internal spec from model specification and method specification.
-Performs within-transformation (demeaning), GPU conversion, and Halton draw generation.
+Performs within-transformation (demeaning), GPU conversion, and Halton draw generation. With
+`warn_repeated = false`, generated draws bring no warning when two firms receive identical draws
+(the integration check builds its draws this way).
 """
-function _assemble_panel_spec(spec::PanelModelSpec{T}, method::PanelMethodSpec) where {T}
+function _assemble_panel_spec(spec::PanelModelSpec{T}, method::PanelMethodSpec;
+                              warn_repeated::Bool = true) where {T}
 
     # Validate: Gamma is MCI-only
     if spec.ineff == :Gamma && method.method == :MSLE
@@ -2226,12 +2591,23 @@ function _assemble_panel_spec(spec::PanelModelSpec{T}, method::PanelMethodSpec) 
 
     # 3. Generate or use provided Halton draws
     if method.draws !== nothing
-        halton_raw = method.multiRand ? Matrix{T}(method.draws) : vec(T.(method.draws))
+        _validate_panel_user_draws(method.draws)
+        # `multiRand` is not consulted: supplying `draws` forces it false, and the row count decides
+        # shared (1 row) versus per-firm (N_firms rows)
+        shaped = _shape_user_panel_draws(method.draws, spec.N)
+        if eltype(shaped) === T && _same_array_kind(shaped, y_tilde)
+            halton_raw = shaped                  # the user's array: already the data's element type and device
+        else
+            halton_raw = ndims(shaped) == 1 ? vec(T.(shaped)) : Matrix{T}(shaped)
+            _validate_panel_user_draws(halton_raw)   # again after narrowing to T (see the note there)
+        end
     elseif method.multiRand
-        halton_raw = make_panel_halton_wrap(spec.N, method.n_draws;
-                         T=T, distinct_Halton_length=method.distinct_Halton_length)
+        period = sf_halton_period(spec.N, method.n_draws; recycling = method.recycling,
+                                  legacy = method.halton_legacy)
+        warn_repeated && sf_warn_repeated_rows(spec.N, method.n_draws, period)
+        halton_raw = sf_halton_draws(spec.N, method.n_draws; T = T, period = period)
     else
-        halton_raw = make_panel_halton(method.n_draws; T=T)
+        halton_raw = vec(sf_halton_draws(1, method.n_draws; T = T))   # D-vector, as before
     end
     draws = _to_device_panel(halton_raw, y_tilde)
 
@@ -2259,10 +2635,23 @@ end
 # Section 18: sfmodel_panel_init()
 # ============================================================================
 
+# Every starting-value block has a width fixed by the specification: K for the frontier,
+# L for the scaling function, one for each distribution parameter. A block of the wrong
+# width is refused by name -- matching `sfmodel_MCI_init` / `sfmodel_MSLE_init` -- instead
+# of being broadcast over the block (a short one) or truncated to its first element (a
+# long one), either of which silently starts the optimizer somewhere the user did not ask
+# for. A bare scalar is a one-element block, as the manual documents.
+function _panel_init_block(name::AbstractString, x, n::Int)
+    v = x isa Real ? [Float64(x)] : Float64.(vec(x))
+    length(v) == n || error("Length mismatch in sfmodel_panel_init(): " *
+                            "$name: expected $n, got $(length(v)).")
+    return v
+end
+
 """
     sfmodel_panel_init(; spec::PanelModelSpec, init=nothing, frontier=nothing, scaling=nothing,
                          ln_sigma_v_sq=nothing, mu=nothing, ln_lambda=nothing, ln_k=nothing,
-                         ln_sigma_sq=nothing, ln_alpha=nothing, ln_theta=nothing)
+                         ln_sigma_u_sq=nothing, ln_alpha=nothing, ln_theta=nothing)
 
 Create initial parameter vector for panel estimation.
 
@@ -2272,12 +2661,12 @@ Create initial parameter vector for panel estimation.
 - `frontier=nothing`: Initial values for frontier coefficients (default: OLS on demeaned data)
 - `scaling=nothing`: Initial values for h(z) coefficients (default: 0.1)
 - Distribution-specific keyword arguments (used when matching the distribution):
-  - `ln_sigma_sq`: HalfNormal, TruncatedNormal, Lognormal, Rayleigh
+  - `ln_sigma_u_sq`: HalfNormal, TruncatedNormal, Lognormal, Rayleigh, Exponential
   - `mu`: TruncatedNormal, Lognormal
-  - `ln_lambda`: Exponential, Weibull, Lomax
+  - `ln_lambda`: Weibull, Lomax
   - `ln_k`: Weibull, Gamma
   - `ln_alpha`: Lomax
-  - `ln_theta`: Gamma
+  - `ln_theta`: Gamma, Erlang2/3/4
   - `ln_sigma_v_sq`: all distributions
 
 # Returns
@@ -2291,7 +2680,7 @@ function sfmodel_panel_init(; spec::PanelModelSpec,
                               mu=nothing,
                               ln_lambda=nothing,
                               ln_k=nothing,
-                              ln_sigma_sq=nothing,
+                              ln_sigma_u_sq=nothing,
                               ln_alpha=nothing,
                               ln_theta=nothing)
 
@@ -2310,17 +2699,17 @@ function sfmodel_panel_init(; spec::PanelModelSpec,
     # Component mode: reject kwargs that do not apply to the current distribution,
     # matching the strict "error on extras" behavior of sfmodel_MCI_init /
     # sfmodel_MSLE_init. Without this check, e.g. `mu=0.5` passed to a HalfNormal
-    # spec (no μ parameter) would be silently dropped (Bug 11 pattern).
+    # spec (no μ parameter) would be silently dropped.
     _unused = String[]
     mu        !== nothing && !haskey(idx, :mu)        && push!(_unused, "mu")
     ln_lambda !== nothing && !haskey(idx, :ln_lambda) && push!(_unused, "ln_lambda")
     ln_k      !== nothing && !haskey(idx, :ln_k)      && push!(_unused, "ln_k")
-    # `ln_sigma_sq` sets the ineff variance for HalfNormal/TN (idx key :ln_sigma_u_sq)
-    # and Lognormal/Rayleigh (idx key :ln_sigma_sq); reject it only for the four
-    # distributions that have neither key (Exp/Weibull/Lomax/Gamma), where it was
-    # previously dropped silently (R-24).
-    ln_sigma_sq !== nothing && !haskey(idx, :ln_sigma_sq) && !haskey(idx, :ln_sigma_u_sq) &&
-        push!(_unused, "ln_sigma_sq")
+    # `ln_sigma_u_sq` sets the inefficiency-distribution squared-scale parameter, which
+    # HalfNormal, TruncatedNormal, Lognormal, Rayleigh and Exponential all own; reject it
+    # only for the distributions that have no such parameter (Weibull/Lomax/Gamma/Erlang),
+    # where it would otherwise be dropped silently.
+    ln_sigma_u_sq !== nothing && !haskey(idx, :ln_sigma_u_sq) &&
+        push!(_unused, "ln_sigma_u_sq")
     ln_alpha  !== nothing && !haskey(idx, :ln_alpha)  && push!(_unused, "ln_alpha")
     ln_theta  !== nothing && !haskey(idx, :ln_theta)  && push!(_unused, "ln_theta")
     isempty(_unused) ||
@@ -2328,9 +2717,12 @@ function sfmodel_panel_init(; spec::PanelModelSpec,
               join(_unused, ", ") *
               ". Not part of the current distribution (:$(spec.ineff)).")
 
-    # Component mode: start with OLS + defaults
-    y_t = sf_panel_demean(spec.depvar, spec.offsets)
-    x_t = sf_panel_demean(spec.frontier, spec.offsets)
+    # Component mode: start with OLS + defaults. The within-transform is done in
+    # Float64 whatever the specification's element type, matching
+    # getvar(::Type{PFEWHH}) in SFgetvars.jl, which converts to Float64 and then
+    # demeans -- so that this default is the number the analytic fit computes for itself.
+    y_t = sf_panel_demean(Float64.(spec.depvar), spec.offsets)
+    x_t = sf_panel_demean(Float64.(spec.frontier), spec.offsets)
     beta_ols = x_t \ y_t
     init_vec = vcat(beta_ols, fill(0.1, n_total - K))
 
@@ -2347,44 +2739,31 @@ function sfmodel_panel_init(; spec::PanelModelSpec,
 
     # Apply component overrides
     if frontier !== nothing
-        init_vec[idx.beta] .= Float64.(vec(frontier))
+        init_vec[idx.beta] .= _panel_init_block("frontier", frontier, length(idx.beta))
     end
     if scaling !== nothing
-        init_vec[idx.delta] .= Float64.(vec(scaling))
+        init_vec[idx.delta] .= _panel_init_block("scaling", scaling, length(idx.delta))
     end
     if ln_sigma_v_sq !== nothing
-        val = ln_sigma_v_sq isa Number ? ln_sigma_v_sq : first(ln_sigma_v_sq)
-        init_vec[idx.ln_sigma_v_sq] = Float64(val)
+        init_vec[idx.ln_sigma_v_sq] = _panel_init_block("ln_sigma_v_sq", ln_sigma_v_sq, 1)[1]
     end
     if mu !== nothing && haskey(idx, :mu)
-        val = mu isa Number ? mu : first(mu)
-        init_vec[idx.mu] = Float64(val)
+        init_vec[idx.mu] = _panel_init_block("mu", mu, 1)[1]
     end
     if ln_lambda !== nothing && haskey(idx, :ln_lambda)
-        val = ln_lambda isa Number ? ln_lambda : first(ln_lambda)
-        init_vec[idx.ln_lambda] = Float64(val)
+        init_vec[idx.ln_lambda] = _panel_init_block("ln_lambda", ln_lambda, 1)[1]
     end
     if ln_k !== nothing && haskey(idx, :ln_k)
-        val = ln_k isa Number ? ln_k : first(ln_k)
-        init_vec[idx.ln_k] = Float64(val)
+        init_vec[idx.ln_k] = _panel_init_block("ln_k", ln_k, 1)[1]
     end
-    if ln_sigma_sq !== nothing
-        if haskey(idx, :ln_sigma_sq)
-            val = ln_sigma_sq isa Number ? ln_sigma_sq : first(ln_sigma_sq)
-            init_vec[idx.ln_sigma_sq] = Float64(val)
-        end
-        if haskey(idx, :ln_sigma_u_sq)
-            val = ln_sigma_sq isa Number ? ln_sigma_sq : first(ln_sigma_sq)
-            init_vec[idx.ln_sigma_u_sq] = Float64(val)
-        end
+    if ln_sigma_u_sq !== nothing && haskey(idx, :ln_sigma_u_sq)
+        init_vec[idx.ln_sigma_u_sq] = _panel_init_block("ln_sigma_u_sq", ln_sigma_u_sq, 1)[1]
     end
     if ln_alpha !== nothing && haskey(idx, :ln_alpha)
-        val = ln_alpha isa Number ? ln_alpha : first(ln_alpha)
-        init_vec[idx.ln_alpha] = Float64(val)
+        init_vec[idx.ln_alpha] = _panel_init_block("ln_alpha", ln_alpha, 1)[1]
     end
     if ln_theta !== nothing && haskey(idx, :ln_theta)
-        val = ln_theta isa Number ? ln_theta : first(ln_theta)
-        init_vec[idx.ln_theta] = Float64(val)
+        init_vec[idx.ln_theta] = _panel_init_block("ln_theta", ln_theta, 1)[1]
     end
 
     return init_vec
@@ -2397,20 +2776,26 @@ end
 
 """
     sfmodel_panel_opt(; warmstart_solver=nothing, warmstart_opt=nothing,
-                        main_solver, main_opt)
+                        main_solver, main_opt, store_trace=false)
 
 Specify optimization options for panel estimation.
 
 # Arguments
 - `warmstart_solver=nothing`: Warmstart optimizer (e.g., `NelderMead()`)
-- `warmstart_opt=nothing`: Warmstart options as NamedTuple (e.g., `(iterations=200, g_abstol=1e-3)`)
+- `warmstart_opt=nothing`: Warmstart options as NamedTuple (e.g., `(iterations=200, g_abstol=1e-3)`).
+  Requires `warmstart_solver`; an orphan `warmstart_opt` is refused, not discarded.
 - `main_solver`: Main optimizer (e.g., `Newton()`). Required.
 - `main_opt`: Main options as NamedTuple. Required.
+- `store_trace=false`: When `true`, or when `main_opt` itself sets `store_trace = true`, the main optimizer's
+  iteration trace (iterations, objective values and gradient norms) is stored in the result as `trace`;
+  otherwise `trace` is `nothing`. `plot(result, :convergence)` draws it from the result of `sfmodel_fit` or
+  of the exported `sfmodel_panel_fit`.
 """
 function sfmodel_panel_opt(; warmstart_solver=nothing,
                              warmstart_opt=nothing,
                              main_solver,
-                             main_opt)
+                             main_opt,
+                             store_trace::Bool=false)
 
     # Validate NamedTuple types
     if !(main_opt isa NamedTuple)
@@ -2423,10 +2808,16 @@ function sfmodel_panel_opt(; warmstart_solver=nothing,
               "Hint: For single-element options, use a trailing comma.")
     end
 
-    # Convert NamedTuple to Optim.Options for main_opt
-    m_opt = Optim.Options(; main_opt...)
+    # Convert NamedTuple to Optim.Options for main_opt. When store_trace is requested, Optim's
+    # `store_trace=true` is forced so the main-solver trace is kept (a later `store_trace` key wins over
+    # one in main_opt); the fit reads this flag off `main_opt.store_trace` and copies the trace onto the
+    # result.
+    m_opt = store_trace ? Optim.Options(; main_opt..., store_trace = true) :
+                          Optim.Options(; main_opt...)
 
-    # Convert NamedTuple to Optim.Options for warmstart_opt if provided
+    # Convert NamedTuple to Optim.Options for warmstart_opt if provided.
+    # Twin of the MCI builder's guard: an orphan `warmstart_opt` is refused, since it would
+    # otherwise be replaced by `nothing` and the fit would run with no warmstart stage at all.
     if warmstart_solver !== nothing
         if warmstart_opt === nothing
             ws_opt = Optim.Options(iterations = 100, g_abstol = 1e-3)
@@ -2434,15 +2825,19 @@ function sfmodel_panel_opt(; warmstart_solver=nothing,
             ws_opt = Optim.Options(; warmstart_opt...)
         end
     else
+        warmstart_opt === nothing ||
+            error("`warmstart_opt` needs a `warmstart_solver`: without a solver there is no " *
+              "warmstart stage to configure. Add a solver (e.g. `warmstart_solver = NelderMead()`), " *
+              "or remove `warmstart_opt`.")
         ws_opt = nothing
     end
 
     return PanelOptSpec(warmstart_solver, ws_opt, main_solver, m_opt)
 end
 
-# R-27: capture the main optimizer's iteration trace as a NamedTuple for
+# Capture the main optimizer's iteration trace as a NamedTuple for
 # plot(:convergence). Returns `nothing` unless the fit's Optim.Options carried
-# store_trace=true (set by the unified `sfmodel_opt(store_trace=true)`).
+# store_trace=true (set by `store_trace=true` in `sfmodel_panel_opt` or in the unified `sfmodel_opt`).
 function _sf_optim_trace(optres, want::Bool)
     want || return nothing
     fv = Optim.f_trace(optres)
@@ -2465,7 +2860,7 @@ function _mypan_extract_result_coefs!(::TruncatedNormal_Panel, d, coef, idx)
     d[:ln_sigma_u_sq] = coef[idx.ln_sigma_u_sq]
 end
 function _mypan_extract_result_coefs!(::Exponential_Panel, d, coef, idx)
-    d[:ln_lambda] = coef[idx.ln_lambda]
+    d[:ln_sigma_u_sq] = coef[idx.ln_sigma_u_sq]
 end
 function _mypan_extract_result_coefs!(::Weibull_Panel, d, coef, idx)
     d[:ln_lambda] = coef[idx.ln_lambda]
@@ -2473,38 +2868,75 @@ function _mypan_extract_result_coefs!(::Weibull_Panel, d, coef, idx)
 end
 function _mypan_extract_result_coefs!(::Lognormal_Panel, d, coef, idx)
     d[:mu] = coef[idx.mu]
-    d[:ln_sigma_sq] = coef[idx.ln_sigma_sq]
+    d[:ln_sigma_u_sq] = coef[idx.ln_sigma_u_sq]
 end
 function _mypan_extract_result_coefs!(::Lomax_Panel, d, coef, idx)
     d[:ln_lambda] = coef[idx.ln_lambda]
     d[:ln_alpha] = coef[idx.ln_alpha]
 end
 function _mypan_extract_result_coefs!(::Rayleigh_Panel, d, coef, idx)
-    d[:ln_sigma_sq] = coef[idx.ln_sigma_sq]
+    d[:ln_sigma_u_sq] = coef[idx.ln_sigma_u_sq]
 end
 function _mypan_extract_result_coefs!(::Gamma_Panel, d, coef, idx)
     d[:ln_k] = coef[idx.ln_k]
     d[:ln_theta] = coef[idx.ln_theta]
 end
+function _mypan_extract_result_coefs!(::Erlang_Panel, d, coef, idx)
+    d[:ln_theta] = coef[idx.ln_theta]
+end
 
 """
     sfmodel_panel_fit(; spec, method, init=nothing, optim_options=nothing,
-                       jlms_bc_index=true, show_table=true, verbose=true)
+                       jlms_bc_index=true, integration_check=false, show_table=true,
+                       shape_warning=true, verbose=true)
 
 Estimate the Wang and Ho (2010) panel stochastic frontier model.
 
 # Arguments
 - `spec::PanelModelSpec`: Model specification from `sfmodel_panel_spec()`
 - `method::PanelMethodSpec`: Method specification from `sfmodel_panel_method()`
-- `init=nothing`: Initial parameter vector from `sfmodel_panel_init()`
+- `init=nothing`: Initial parameter vector from `sfmodel_panel_init()`. Starting values at or
+  beyond a parameter's numerical bounds are refused (an error) for a homoscedastic parameter and
+  give a warning for a heteroscedastic one; a fit held at its starting values (no warmstart stage
+  and `iterations = 0` in the main stage) is not checked.
 - `optim_options=nothing`: Optimization options from `sfmodel_panel_opt()`
 - `jlms_bc_index::Bool=true`: Compute JLMS and BC efficiency indices
+- `integration_check=false`: Run the integration check after the fit: at the estimate, the simulated
+  log-likelihood is evaluated again with four times the draws, and the one-step shift −V·(g_4S − g_S)
+  is reported in standard errors; each part reads OK, CAUTION or FAIL and the result is stored in
+  `result.integration_check`, separately from `converged` and `redflag`. `true` uses the default
+  thresholds (0.1 and 1 for the change in the log-likelihood, 0.1 and 0.5 standard errors for the
+  shift); a NamedTuple with any of `ll_caution`, `ll_fail`, `shift_caution`, `shift_fail` changes
+  them. The thresholds are heuristics.
 - `show_table::Bool=true`: Print formatted estimation table
+- `shape_warning::Bool=true`: Print the warning of the shape-range check and the warning that a Lomax
+  fit's marginal effects are undefined where α ≤ 1; `false` prints neither (`shape_check` is stored
+  either way)
 - `verbose::Bool=true`: Print progress information
 
 # Returns
-NamedTuple with fields including `converged`, `loglikelihood`, `coeff`, `std_err`,
-`jlms` (observation-level, length Σ T_i), `bc` (observation-level, length Σ T_i), and more. All results also accessible via `result.list`.
+NamedTuple with fields including `converged`, `loglikelihood`, `coeff` (a homoscedastic coefficient that
+ended beyond its numerical bound is reported at the bound; see `bound_check`), `std_err`,
+`jlms` (observation-level, length Σ T_i), `bc` (observation-level, length Σ T_i),
+`redflag` (0, 1 or 2; 1 also for a boundary solution), `hessian_flag` (the Hessian part of
+`redflag`), `bound_check` (each parameter at or beyond its numerical bound; see Parameter
+Bounds in the manual), and more. All results also accessible via `result.list`.
+
+`integration_check` is the result of the integration check (the option `integration_check`), or
+`nothing` when the check is off: a NamedTuple with `status` (`:OK`, `:CAUTION`, `:FAIL`,
+`:not_available` or `:error`), `reason`, `n_draws` and `n_draws_check` (the fit's draws and
+four times as many), `loglik`, `loglik_check`, `delta_loglik`, `delta_loglik_per_obs`,
+`ll_verdict`, `shift_available`, `shift_note`, `shift`, `shift_se`, `max_shift_se`,
+`max_shift_param`, `max_shift_estimate`, `max_shift_onestep` (the largest shift in standard
+errors, the parameter it belongs to, its estimate and its value after the shift),
+`shift_verdict`, `thresholds` and `seconds`. It is separate from `converged` and `redflag`.
+
+`shape_check` is the verdict of the shape-range check, or `nothing` for the models that it does not
+cover: a NamedTuple with `method`, `family`, `parameter`, `rule`, `threshold`, `in_range`, `n_below`,
+`n` (1: one shape per model), `share` and `min_value`. MCI Gamma, Weibull and Lomax fits under the
+default transformation rule, and MSLE Lomax fits, print a warning when the estimated shape lies below
+`threshold` (`in_range` is then `true`), unless the fit passes `shape_warning = false`. It is separate
+from `converged`, `redflag` and `integration_check`.
 """
 function sfmodel_panel_fit(;
     spec::PanelModelSpec,
@@ -2513,8 +2945,14 @@ function sfmodel_panel_fit(;
     optim_options=nothing,
     jlms_bc_index::Bool=true,
     marginal::Bool=true,
+    integration_check=false,
     show_table::Bool=true,
+    shape_warning::Bool=true,
     verbose::Bool=true)
+
+    # The thresholds of the integration check after the fit, or `nothing` when it is off; an invalid
+    # value is an error before anything is computed.
+    _ic_settings = sf_integration_settings(integration_check)
 
     # 1. Assemble internal spec (demean, generate draws, GPU convert)
     ispec = _assemble_panel_spec(spec, method)
@@ -2553,8 +2991,14 @@ function sfmodel_panel_fit(;
     beta_ols = x_t_cpu \ y_t_cpu
 
     if init === nothing
+        # Starting value only: within-transformed in Float64, matching
+        # getvar(::Type{PFEWHH}) in SFgetvars.jl, which converts to Float64 and then
+        # demeans. The OLS residual statistics below keep `beta_ols`, which stays
+        # element-type-native.
+        beta_ols_init = sf_panel_demean(Float64.(spec.frontier), spec.offsets) \
+                        sf_panel_demean(Float64.(spec.depvar), spec.offsets)
         n_total = panel_plen(spec.model.ineff, spec.K, spec.L)
-        sf_init = vcat(beta_ols, fill(0.1, n_total - K))
+        sf_init = vcat(beta_ols_init, fill(0.1, n_total - K))
         # Distribution-specific default overrides
         _idx = spec.idx
         if haskey(_idx, :mu);       sf_init[_idx.mu] = 0.0;       end
@@ -2576,10 +3020,10 @@ function sfmodel_panel_fit(;
     resid = y_t_cpu - x_t_cpu * beta_ols
     sse = sum(resid .^ 2)
     ssd = sqrt(sse / NT)
-    ll_ols = sum(normlogpdf.(0, ssd, resid))
     sk_ols = sum(resid .^ 3) / ((ssd^3) * NT)
 
-    # 5. Prepare optimization options
+    # 5. Prepare optimization options (the default is the one sfmodel_fit uses for every
+    #    method)
     if optim_options === nothing
         myopt = sfmodel_panel_opt(
             warmstart_solver = NelderMead(),
@@ -2594,6 +3038,25 @@ function sfmodel_panel_fit(;
     do_warmstart = myopt.warmstart_solver !== nothing &&
                    myopt.warmstart_opt !== nothing &&
                    myopt.warmstart_opt.iterations > 0
+
+    # Starting values at or beyond a bound (`sf_start_check`, src/sf_redflag.jl): a warning for each heteroscedastic
+    # parameter there, then an error when a homoscedastic coefficient is there. A fit held at its starting values (no
+    # warmstart stage, no main iteration) is not checked.
+    held = !do_warmstart && myopt.main_opt.iterations == 0
+    if !held
+        start_error, start_warnings = sf_start_check(_panel_bound_list(ispec),
+                                                     _panel_bound_verdict(ispec, sf_init, NT), sf_init)
+        foreach(w -> sf_print_warning("Warning: " * w), start_warnings)
+        isempty(start_error) || throw(ArgumentError(start_error))
+    end
+
+    # GPU fits: warn before the optimizer when one Hessian evaluation is estimated to need
+    # more device memory than is free.
+    if ispec.GPU
+        sf_check_gpu_memory(ispec.method === :MCI ? SF_WORK_ARRAYS.panel_mci : SF_WORK_ARRAYS.panel_msle,
+                            ispec.N, ndims(ispec.draws) == 1 ? length(ispec.draws) : size(ispec.draws, 2),
+                            ispec.chunks, length(sf_init); unit = "firms")
+    end
 
     # 6. NLL closure
     _lik = p -> panel_nll(ispec, p; chunks=ispec.chunks)
@@ -2648,6 +3111,12 @@ function sfmodel_panel_fit(;
 
         sf_total_iter += Optim.iterations(_optres)
 
+        # The objective and gradient norm at the point the result reports: after a
+        # line-search failure Optim's own values describe the previous iterate (sf_final_fg,
+        # src/sf_redflag.jl). For a gradient-free main solver (NelderMead,
+        # ParticleSwarm, SimulatedAnnealing) the gradient norm is the ForwardDiff gradient there.
+        _fmin, _gnorm = sf_final_fg(_optres, _lik)
+
         if verbose
             println()
             println(_optres)
@@ -2657,31 +3126,78 @@ function sfmodel_panel_fit(;
         end
 
         # Check convergence
-        if isnan(Optim.g_residual(_optres)) || (Optim.g_residual(_optres) > 0.1)
+        if isnan(_gnorm) || (_gnorm > 0.1)
             redflag = 1
             printstyled("Note that the estimation may not have converged properly. The gradients are problematic (too large, > 0.1, or NaN).\n\n"; color=:red)
         end
 
-        if Optim.iteration_limit_reached(_optres)
-            redflag = 1
-            printstyled("Caution: The number of iterations reached the limit.\n\n"; color=:red)
-        end
+        # "Optim did not report convergence" counts, whatever stopped the run.
+        # The iteration limit counts only through it: a fit that converges on exactly its
+        # last allowed iteration is not flagged. A failed line search counts too,
+        # even when Optim reports convergence. The rule and its messages are shared by the
+        # four backends (sf_convergence_flag, src/sf_redflag.jl).
+        redflag = max(redflag, sf_convergence_flag(_optres))
     end
 
     # 9. Post-estimation
     _coevec = Optim.minimizer(_optres)
 
-    # Variance-covariance matrix
-    vcov_result = panel_var_cov_mat(_lik, _coevec; message=verbose)
+    # Hessian, computed once: the matrix classified below is the one stored on the result.
+    # Variance-covariance matrix and the Hessian part of redflag, by the rule shared with
+    # the other backends. A parameter at or beyond its numerical bound (a variance, scale or
+    # shape parameter) makes the fit a boundary solution: redflag 1, whatever the Hessian says,
+    # and the message names each such parameter. The verdict is taken at the optimizer's point
+    # and stored as `bound_check`.
+    # The Hessian is computed and classified by sf_classify_hessian(f, x) (src/sf_redflag.jl),
+    # so an error while computing it does not end the fit and discard the estimate: the fit
+    # reads as one whose Hessian cannot be inverted (redflag 1, all-NaN Hessian and var-cov
+    # matrix), and a message, printed whatever `verbose` is, gives the error. Ctrl-C, out of
+    # memory, a stack overflow and CUDA's out-of-GPU-memory error still end the fit.
+    bc = _panel_bound_verdict(ispec, _coevec, NT)
+    # A coefficient beyond its bound is moved to the bound (`sf_bound_move`, src/sf_redflag.jl), where the likelihood
+    # and its derivatives equal those at the optimizer's point; the moved vector is reported from JLMS/BC on, and
+    # the entry in `bound_check` keeps the optimizer's value.
+    bc, coef_moved = sf_bound_move(_panel_bound_list(ispec), bc, _coevec)
+    vcov_result = sf_classify_hessian(_lik, _coevec; at_clamp = !isempty(bc), message = verbose,
+                                      bound_text = isempty(bc) ? "" : sf_bound_message(bc))
+    numerical_hessian = vcov_result.hessian
     var_cov_matrix = vcov_result.var_cov_matrix
-    if vcov_result.redflag > 0
-        redflag = max(redflag, vcov_result.redflag)
-    end
+    redflag = max(redflag, vcov_result.redflag)
 
-    stddev = _stderr_from_vcov(var_cov_matrix)  # non-PD vcov ⇒ NaN SEs (no DomainError); keeps stderror(r) NaN-consistent with sqrt.(diag(vcov(r))). Re-audit R-06.
+    stddev = _stderr_from_vcov(var_cov_matrix)  # non-PD vcov ⇒ NaN SEs (no DomainError); keeps stderror(r) NaN-consistent with sqrt.(diag(vcov(r))).
 
-    # Hessian
-    numerical_hessian = hessian(_lik, _coevec)
+    # 9a. Shape-range check: under the default MCI transformation rule (an `ispec.transformation` of
+    #     `nothing` stands for it), and for MSLE Lomax fits, a warning when the estimated shape lies where
+    #     the simulated likelihood is unreliable (SF_SHAPE_RANGES, src/sf_accuracy.jl); the verdict is
+    #     stored and no number changes.
+    _sc_rule = ispec.method === :MCI ?
+        something(ispec.transformation, default_panel_transformation(ispec.model.ineff)) : nothing
+    _sc_entry = sf_shape_entry(ispec.method, ispec.ineff, _sc_rule)
+    _sc = _sc_entry === nothing ? nothing :
+        sf_shape_check(_sc_entry, getproperty(get_panel_ineff_vals(ispec.model.ineff, _coevec, ispec.idx,
+                                                                   ispec.constants), _sc_entry.parameter);
+                       shape_warning = shape_warning)
+
+    # 9b. Integration check (optional): at the estimate, the simulated log-likelihood again with four times
+    #     the draws, and the one-step shift that they imply, in standard errors (src/sf_accuracy.jl). The
+    #     4S draws are those of a fit with `n_draws = 4S` and the same settings, in min(firms, 4 × `chunks`)
+    #     groups of firms. The 4S draws are built without the warning about identical draws, which would
+    #     name the check's number of draws rather than the fit's.
+    _ic = _ic_settings === nothing ? nothing :
+        sf_run_integration_check(_ic_settings;
+            S = ndims(ispec.draws) == 1 ? length(ispec.draws) : size(ispec.draws, 2),
+            n_obs = sum(ispec.T_periods), ll = -_fmin, theta = _coevec, nll_S = _lik,
+            build_nll_4S = () -> begin
+                isp4 = _assemble_panel_spec(spec, _with_draws(method, 4 * method.n_draws, min(ispec.N, 4 * method.chunks));
+                                            warn_repeated = false)
+                p -> panel_nll(isp4, p; chunks = isp4.chunks)
+            end,
+            V = var_cov_matrix, se = stddev, hessian_flag = vcov_result.hessian_flag,
+            names = ispec.varnames, unavailable = sf_integration_unavailable(method, ispec.N))
+
+    # The reported coefficients from here on: a coefficient beyond its bound at the bound. The Hessian, the
+    # standard errors and the checks above are those at the optimizer's point.
+    _coevec = coef_moved
 
     # 10. JLMS/BC indices (observation-level)
     if jlms_bc_index
@@ -2704,18 +3220,23 @@ function sfmodel_panel_fit(;
         margeff = nothing
         margMinfo = NamedTuple()
     end
+    # A Lomax fit's marginal effects are NaN where α ≤ 1, since E(u_it) = h(z)·λ/(α − 1) does not exist
+    # there (every row with a NaN counts): one warning per fit, whatever `show_table` and `verbose` are,
+    # unless `shape_warning = false`.
+    if margeff !== nothing && ispec.model.ineff isa Lomax_Panel
+        M = Matrix(margeff)
+        n_nan = count(i -> any(isnan, view(M, i, :)), axes(M, 1))
+        sf_warn_lomax_mean(n_nan, size(M, 1); shape_warning = shape_warning, after_fit = true)
+    end
 
     # 11. Print results table
     table_result = nothing
     if show_table
         table_result = panel_print_table(ispec, _coevec, var_cov_matrix;
-                                          optim_result=_optres, table_format=:text)
+                                          optim_result=_optres, loglik=-_fmin,
+                                          integration=_ic, table_format=:text)
 
         printstyled("***** Additional Information *********\n"; color=:cyan)
-
-        print("* OLS (frontier-only) log-likelihood: ")
-        printstyled(round(ll_ols; digits=5); color=:yellow)
-        println("")
 
         print("* Skewness of OLS residuals: ")
         printstyled(round(sk_ols; digits=5); color=:yellow)
@@ -2735,7 +3256,7 @@ function sfmodel_panel_fit(;
             printstyled(margMinfo; color=:yellow)
             println("")
             println("* Marginal effects of the inefficiency determinants at the observational")
-            println("  level are saved in the return. See the follows.\n")
+            println("  level are saved in the return. See below.\n")
         end
 
         println("* Use `name.list` to see saved results (keys and values).")
@@ -2756,14 +3277,13 @@ function sfmodel_panel_fit(;
     _dicRES[:n_firms] = spec.N
     _dicRES[:T_periods] = spec.T_periods
     _dicRES[:n_observations] = NT
-    _dicRES[:loglikelihood] = -Optim.minimum(_optres)
+    _dicRES[:loglikelihood] = -_fmin          # at the reported coefficients
     _dicRES[:table] = table_result !== nothing ? table_result.table : nothing
     _dicRES[:coeff] = _coevec
     _dicRES[:std_err] = stddev
     _dicRES[:var_cov_mat] = var_cov_matrix
     _dicRES[:jlms] = _jlms
     _dicRES[:bc] = _bc
-    _dicRES[:OLS_loglikelihood] = ll_ols
     _dicRES[:OLS_resid_skew] = sk_ols
     _dicRES[:marginal] = margeff
     _dicRES[:marginal_mean] = margMinfo
@@ -2771,7 +3291,7 @@ function sfmodel_panel_fit(;
     _dicRES[:model] = ispec
     _dicRES[:________________] = "___________________"
     _dicRES[:Hessian] = numerical_hessian
-    _dicRES[:gradient_norm] = Optim.g_residual(_optres)
+    _dicRES[:gradient_norm] = _gnorm
     _dicRES[:actual_iterations] = sf_total_iter
     _dicRES[:______________] = "______________________"
     _dicRES[:warmstart_solver] = sf_warmstart_algo
@@ -2781,14 +3301,24 @@ function sfmodel_panel_fit(;
     _dicRES[:main_ini] = sf_init_2nd
     _dicRES[:main_maxIT] = sf_main_maxit
     _dicRES[:main_tolerance] = myopt.main_opt.g_abstol
-    _dicRES[:trace] = _sf_optim_trace(_optres, myopt.main_opt.store_trace)   # R-27: main-solver trace for plot(:convergence)
+    _dicRES[:trace] = _sf_optim_trace(_optres, myopt.main_opt.store_trace)   # main-solver trace for plot(:convergence)
     _dicRES[:redflag] = redflag
+    _dicRES[:hessian_flag] = vcov_result.hessian_flag   # the Hessian part of redflag
+    _dicRES[:bound_check] = bc                # each parameter at or beyond its numerical bound
+    _dicRES[:integration_check] = _ic         # nothing when the option is off
+    _dicRES[:shape_check] = _sc               # nothing for the families and rules SF_SHAPE_RANGES does not cover
     _dicRES[:______________________] = "___________________"
     _dicRES[:GPU] = method.GPU
-    _dicRES[:n_draws] = method.draws !== nothing ? (ndims(method.draws) == 1 ? length(method.draws) : size(method.draws, 2)) : method.n_draws
+    # the draws actually used (ispec.draws): a 1-D `draws` with multiRand=true is replaced by
+    # the wrapped Halton matrix at assembly, so method.draws is not what the fit consumed
+    _dicRES[:n_draws] = ndims(ispec.draws) == 1 ? length(ispec.draws) : size(ispec.draws, 2)
     _dicRES[:multiRand] = method.multiRand
     _dicRES[:chunks] = method.chunks
-    _dicRES[:distinct_Halton_length] = method.distinct_Halton_length
+    _scheme, _hlen = sf_draw_scheme(spec.N, _dicRES[:n_draws]; user = method.draws !== nothing,
+                                    multiRand = method.multiRand, recycling = method.recycling,
+                                    legacy = method.halton_legacy)
+    _dicRES[:draw_scheme] = _scheme                # :halton, :halton_recycled, :halton_shared or :user
+    _dicRES[:distinct_Halton_length] = _hlen       # length of the Halton sequence the draws came from
     _dicRES[:estimation_method] = method.method
     _dicRES[:user_draws_supplied] = method.draws !== nothing
     _dicRES[:firm_ids] = spec.firm_ids
@@ -2817,7 +3347,6 @@ function sfmodel_panel_fit(;
         bc = _dicRES[:bc],
         marginal = _dicRES[:marginal],
         marginal_mean = _dicRES[:marginal_mean],
-        OLS_loglikelihood = _dicRES[:OLS_loglikelihood],
         OLS_resid_skew = _dicRES[:OLS_resid_skew],
         model = _dicRES[:model],
         Hessian = _dicRES[:Hessian],
@@ -2832,10 +3361,15 @@ function sfmodel_panel_fit(;
         main_tolerance = _dicRES[:main_tolerance],
         trace = _dicRES[:trace],
         redflag = _dicRES[:redflag],
+        hessian_flag = _dicRES[:hessian_flag],
+        bound_check = _dicRES[:bound_check],
+        integration_check = _dicRES[:integration_check],
+        shape_check = _dicRES[:shape_check],
         GPU = _dicRES[:GPU],
         n_draws = _dicRES[:n_draws],
         multiRand = _dicRES[:multiRand],
         chunks = _dicRES[:chunks],
+        draw_scheme = _dicRES[:draw_scheme],
         distinct_Halton_length = _dicRES[:distinct_Halton_length],
         estimation_method = _dicRES[:estimation_method],
         user_draws_supplied = _dicRES[:user_draws_supplied],
@@ -2997,7 +3531,7 @@ init = sfmodel_panel_init(
     spec          = spec,
     frontier      = [0.8, -0.3],   # override OLS-based β
     scaling       = [0.2],         # override default δ
-    ln_sigma_sq   = 0.5,           # override default ln(σ²)
+    ln_sigma_u_sq   = 0.5,           # override default ln(σ²)
     ln_sigma_v_sq = -0.5           # override default ln(σ_v²)
 )
 
@@ -3034,14 +3568,14 @@ spec_bal = sfmodel_panel_spec(
 )
 
 
-## Example 8: DSL — Without @zvar → REJECTED at spec time (FIX-09)
+## Example 8: DSL — Without @zvar → REJECTED at spec time
 ##
 ## A panel spec without @zvar implies a constant scaling h(z)=exp(δ₀), which is
-## unidentified in the Wang-Ho model (within-group demeaning eliminates it). As of
-## FIX-09 both the DSL and keyword paths raise an explanatory identification error
-## instead of manufacturing an all-ones zvar and publishing prior-mean jlms/bc. The
-## call below is retained only to document that it is now rejected — copying it
-## yields an instructive error, not a silent (mis)fit. Use Example 6/7 with @zvar.
+## unidentified in the Wang-Ho model (within-group demeaning eliminates it). Both
+## the DSL and keyword paths raise an explanatory identification error instead of
+## manufacturing an all-ones zvar and publishing prior-mean jlms/bc. The call below
+## documents that it is rejected — copying it yields an instructive error, not a
+## silent (mis)fit. Use Example 6/7 with @zvar.
 
 spec_no_z = sfmodel_panel_spec(   # <-- raises: requires @zvar with within-firm variation
     @useData(df),

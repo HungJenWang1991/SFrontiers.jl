@@ -195,8 +195,18 @@ function Base.show(io::IO, ::MIME"text/plain", r::SFResult)
     if hasproperty(r, :converged)
         println(io, "  converged     : ", r.converged)
     end
+    if hasproperty(r, :finish) && r.finish !== nothing
+        println(io, "  finish        : BFGS (converged = ", r.finish.converged, ")")
+    end
+    if hasproperty(r, :integration_check) && r.integration_check !== nothing
+        println(io, "  integration   : ", r.integration_check.status === :not_available ? "not available" :
+                                         string(r.integration_check.status))
+    end
     if hasproperty(r, :gradient_norm) && r.gradient_norm !== nothing
         println(io, "  gradient norm : ", round(r.gradient_norm; digits = 6))
+    end
+    if hasproperty(r, :vcov_type) && r.vcov_type === :OPG
+        println(io, "  std. errors   : OPG (outer product of gradients)")
     end
     print(io, "\n")
     print(io, StatsAPI.coeftable(r))

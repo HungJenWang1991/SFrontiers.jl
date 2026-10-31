@@ -272,7 +272,7 @@ function getvar(::Type{Expo}, dat::DataFrame)
     yvar = dat[:, _dicM[:depvar]]   # still a DataFrame
     xvar = dat[:, _dicM[:frontier]]
   # zvar = dat[:, _dicM[:μ]]
-    wvar = dat[:, _dicM[:λ]]
+    wvar = dat[:, _dicM[:σᵤ²]]
     vvar = dat[:, _dicM[:σᵥ²]]
 
     #* --- model info printout ---------
@@ -288,9 +288,10 @@ function getvar(::Type{Expo}, dat::DataFrame)
      where vᵢ ∼ N(0, σᵥ²),
                 σᵥ² = exp(log_σᵥ²)
                     = exp($(_dicM[:σᵥ²]));
-           uᵢ ∼ Exp(λ),
-                λ = exp(0.5 * log_λ²)
-                    = exp(0.5 * $(_dicM[:λ]));
+           uᵢ ∼ Exp(σᵤ),
+                σᵤ² = exp(log_σᵤ²)
+                    = exp($(_dicM[:σᵤ²])),
+                σᵤ  = sqrt(σᵤ²) = E(uᵢ);
      """
     end
 
@@ -330,13 +331,13 @@ function getvar(::Type{Expo}, dat::DataFrame)
     #* create equation names and mark positions for making tables
     eqvec = (frontier = begx + 1, 
            #        μ = begz + 1,
-              log_λ² = begw + 1,
+              log_σᵤ² = begw + 1,
               log_σᵥ² = begv + 1)
 
 
     #* create equation names and mark positions
     eqvec2 = (coeff_frontier = (begx:endx),
-              coeff_log_λ²  = (begw:endw),
+              coeff_log_σᵤ²  = (begw:endw),
               coeff_log_σᵥ²  = (begv:endv))
 
     #* retrieve variable names for making tables

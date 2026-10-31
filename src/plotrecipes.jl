@@ -40,7 +40,7 @@ using Measures: mm
         vhat  = vec(StatsAPI.residuals(r; type = :v))
         std_v = _standardize(vhat)
         theo  = _normal_quantiles(length(std_v))
-        # R-28: v̂ is self-standardized (sample mean/std) and compared to N(0,1),
+        # v̂ is self-standardized (sample mean/std) and compared to N(0,1),
         # so location and scale are forced — this is a normality *shape* check,
         # not a scale-aware "N(0, σ̂_v²)" comparison. Label it as such.
         p4_title  = "QQ: standardized v̂ vs N(0,1)"

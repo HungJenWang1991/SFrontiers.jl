@@ -4,8 +4,116 @@
 # NaN-safe standard errors from a var-cov matrix. A non-positive-diagonal vcov would
 # make `sqrt` throw a DomainError, so those entries become NaN instead — a degenerate
 # fit still returns its result, keeping `stderror(r)` NaN-consistent with
-# `sqrt.(diag(vcov(r)))`. See re-audit R-06 (matching the MCI/MSLE/panel backends).
-_stderr_from_vcov(V::AbstractMatrix) = map(d -> d < 0 ? oftype(d, NaN) : sqrt(d), diag(V))
+# `sqrt.(diag(vcov(r)))`, matching the MCI/MSLE/panel backends. The test is `<= 0`, so an
+# exactly zero diagonal (redflag 2) also gives NaN, not 0.
+_stderr_from_vcov(V::AbstractMatrix) = map(d -> d <= 0 ? oftype(d, NaN) : sqrt(d), diag(V))
+
+#* ---- The boundary verdict of the analytic models ----
+# The simulation backends clamp every variance and scale parameter (src/sf_redflag.jl):
+#   noise, HalfNormal, TruncatedNormal:  σ   = exp(ln σ² / 2) ∈ [1e-12, 1e12]
+#   Exponential:                         σᵤ² = exp(ln σᵤ²)    ∈ [1e-12, 1e12]  (the clamp is on σᵤ²)
+# Beyond a bound their likelihood is flat in that parameter; for a homoscedastic parameter
+# their Hessian row is then exactly zero. The analytic likelihoods (all but panel TRE and
+# panel_TFE_CSW, below) have no clamp; the verdict tests their variance and scale parameters
+# at the same bounds, on the unclamped values formed as LL_T forms them (W * δ2 and V * γ per
+# observation in the cross section, the scalar coefficient in the panels), so that :MLE calls
+# such a fit what it is, a boundary solution, whatever its Hessian says. The scaling function
+# h(z) is clamped by no backend and is not tested. Panel TRE clamps its three variances, and
+# panel_TFE_CSW its σᵤ² and σᵥ², inside their own likelihoods at [1e-12, 1e12] (SFloglikefun.jl,
+# _MLE_CLAMP), so both are tested at that bound, on the variance itself; theirs are the movable
+# quantities (the likelihood clamps them).
+
+# One bounded quantity: its name and label, the coefficient block it is formed from (in the
+# backend's own order `pos`), its bounds, whether it has one value for all observations, its form
+# (`:exp`: exp(θ); `:exp_half`: exp(θ/2)), whether the likelihood clamps it, and the design matrix
+# it is formed with (`design`: :W, :V, or :none for a scalar coefficient).
+_mle_bound_item(parameter, label, coefficient, keyword, block, form, design, scalar, movable) =
+    (parameter = parameter, label = label, coefficient = coefficient, keyword = keyword,
+     block = Vector{Int}(vcat(block)), lo = SF_SCALE_FLOOR, hi = SF_SCALE_CEIL, scalar = scalar, form = form,
+     offset = 0.0, movable = movable, design = design)
+
+# A W or V block has one value for all observations when it has one column whose entries are all equal.
+_mle_scalar_block(M::AbstractMatrix) = size(M, 2) == 1 && all(==(M[1, 1]), view(M, :, 1))
+
+"""
+    _mle_bound_list(modelid, pos, wvar, vvar) -> Vector
+
+The variance and scale parameters of the analytic model `modelid` that the boundary verdict tests,
+the noise first: one NamedTuple per quantity with `parameter`, `label`, `coefficient`, `keyword`
+(the `sfmodel_init` keyword of its coefficients), `block` (the coefficient indices in the backend's
+order `pos`), `lo` and `hi` (`SF_SCALE_FLOOR` and `SF_SCALE_CEIL`), `scalar`, `form`, `offset`,
+`movable` (`true` where the likelihood itself clamps the quantity) and `design`. The methods for
+the models with scalar coefficients do not touch `wvar` or `vvar`; a model id not listed has none.
+"""
+_mle_bound_list(::Union{Type{Trun}, Type{Half}, Type{Trun_Scale}}, pos::NamedTuple, wvar, vvar) =
+    [_mle_bound_item(:sigma_v, "σᵥ", "log_σᵥ²", :ln_sigma_v_sq, pos.begv:pos.endv, :exp_half, :V,
+                     _mle_scalar_block(vvar), false),
+     _mle_bound_item(:sigma_u, "σᵤ", "log_σᵤ²", :ln_sigma_u_sq, pos.begw:pos.endw, :exp_half, :W,
+                     _mle_scalar_block(wvar), false)]
+_mle_bound_list(::Type{Expo}, pos::NamedTuple, wvar, vvar) =
+    [_mle_bound_item(:sigma_v, "σᵥ", "log_σᵥ²", :ln_sigma_v_sq, pos.begv:pos.endv, :exp_half, :V,
+                     _mle_scalar_block(vvar), false),
+     _mle_bound_item(:sigma_u_sq, "σᵤ²", "log_σᵤ²", :ln_sigma_u_sq, pos.begw:pos.endw, :exp, :W,
+                     _mle_scalar_block(wvar), false)]
+_mle_bound_list(::Union{Type{PFEWHH}, Type{PFEWHT}, Type{PanDecay}, Type{PanKumb90}}, pos::NamedTuple,
+                wvar, vvar) =
+    [_mle_bound_item(:sigma_v, "σᵥ", "log_σᵥ²", :ln_sigma_v_sq, pos.begv, :exp_half, :none, true, false),
+     _mle_bound_item(:sigma_u, "σᵤ", "log_σᵤ²", :ln_sigma_u_sq, pos.begw, :exp_half, :none, true, false)]
+_mle_bound_list(::Type{PFECSWH}, pos::NamedTuple, wvar, vvar) =
+    [_mle_bound_item(:sigma_v_sq, "σᵥ²", "log_σᵥ²", :ln_sigma_v_sq, pos.begv, :exp, :none, true, true),
+     _mle_bound_item(:sigma_u_sq, "σᵤ²", "log_σᵤ²", :ln_sigma_u_sq, pos.begw, :exp, :none, true, true)]
+_mle_bound_list(::Union{Type{PTREH}, Type{PTRET}}, pos::NamedTuple, wvar, vvar) =
+    [_mle_bound_item(:sigma_v_sq, "σᵥ²", "log_σᵥ²", :ln_sigma_v_sq, pos.begv, :exp, :none, true, true),
+     _mle_bound_item(:sigma_a_sq, "σₐ²", "log_σₐ²", :sigma_a_sq, pos.begq, :exp, :none, true, true),
+     _mle_bound_item(:sigma_u_sq, "σᵤ²", "log_σᵤ²", :ln_sigma_u_sq, pos.begw, :exp, :none, true, true)]
+_mle_bound_list(::Any, pos, wvar, vvar) = NamedTuple[]
+
+# The entries of the quantities `items` at the coefficients `coef`, from the natural values formed
+# on the host: exp(θ/2) or exp(θ), with θ = W * coef[block] or V * coef[block] per observation, or
+# the scalar coefficient (counted over `nobs` observations).
+function _mle_bound_entries(items, coef::AbstractVector, wvar, vvar, nobs::Integer)
+    bc = SFBoundEntry[]
+    for it in items
+        θ = it.design === :W ? wvar * coef[it.block] :
+            it.design === :V ? vvar * coef[it.block] : coef[it.block[1]]
+        v = it.form === :exp_half ? exp.(0.5 .* θ) : exp.(θ)
+        sf_bound_entries!(bc, v, it.lo, it.hi, nobs; parameter = it.parameter, label = it.label,
+                          coefficient = it.coefficient, scalar = it.scalar)
+    end
+    return bc
+end
+
+"""
+    _mle_bound_verdict(modelid, pos, coef, wvar, vvar, nobs) -> Vector{SFBoundEntry}
+
+The boundary verdict of an analytic fit at the coefficients `coef` (in the backend's own order
+`pos`, before any unified-API reordering): the entries of every quantity of `_mle_bound_list` at
+or beyond its bound, with the natural values computed on the host from the coefficients; empty
+when there is none, and for a model id not listed.
+"""
+_mle_bound_verdict(m::Union{Type{Trun}, Type{Half}, Type{Trun_Scale}}, pos::NamedTuple, coef::AbstractVector,
+                   wvar, vvar, nobs::Integer) =
+    _mle_bound_entries(_mle_bound_list(m, pos, wvar, vvar), coef, wvar, vvar, nobs)
+_mle_bound_verdict(m::Type{Expo}, pos::NamedTuple, coef::AbstractVector, wvar, vvar, nobs::Integer) =
+    _mle_bound_entries(_mle_bound_list(m, pos, wvar, vvar), coef, wvar, vvar, nobs)
+_mle_bound_verdict(m::Union{Type{PFEWHH}, Type{PFEWHT}, Type{PanDecay}, Type{PanKumb90}}, pos::NamedTuple,
+                   coef::AbstractVector, wvar, vvar, nobs::Integer) =
+    _mle_bound_entries(_mle_bound_list(m, pos, wvar, vvar), coef, wvar, vvar, nobs)
+_mle_bound_verdict(m::Type{PFECSWH}, pos::NamedTuple, coef::AbstractVector, wvar, vvar, nobs::Integer) =
+    _mle_bound_entries(_mle_bound_list(m, pos, wvar, vvar), coef, wvar, vvar, nobs)
+_mle_bound_verdict(m::Union{Type{PTREH}, Type{PTRET}}, pos::NamedTuple, coef::AbstractVector, wvar, vvar,
+                   nobs::Integer) =
+    _mle_bound_entries(_mle_bound_list(m, pos, wvar, vvar), coef, wvar, vvar, nobs)
+_mle_bound_verdict(::Any, pos, coef, wvar, vvar, nobs) = SFBoundEntry[]
+
+"""
+    _mle_scale_at_clamp(modelid, pos, coef, wvar, vvar) -> Bool
+
+`true` when a parameter of the fitted analytic model is at or beyond its numerical bound (a
+variance or scale parameter): `_mle_bound_verdict` finds an entry. `coef` is in the backend's own
+parameter order (`pos`), before any unified-API reordering.
+"""
+_mle_scale_at_clamp(modelid, pos, coef, wvar, vvar) = !isempty(_mle_bound_verdict(modelid, pos, coef, wvar, vvar, 1))
 
 ########################################################
 ####                sfmodel_spec()                  ####
@@ -28,9 +136,9 @@ Specify a stochastic frontier model for analytic MLE estimation.
   or `:Exponential`.
 - `hetero=Symbol[]`: Which inefficiency parameters are heteroscedastic (functions
   of `zvar`). Valid options depend on `ineff`:
-  - `:HalfNormal` → `[:sigma_sq]`
-  - `:TruncatedNormal` → `[:mu]`, `[:sigma_sq]`, or both
-  - `:Exponential` → `[:lambda]`
+  - `:HalfNormal` → `[:sigma_u_sq]`
+  - `:TruncatedNormal` → `[:mu]`, `[:sigma_u_sq]`, or both
+  - `:Exponential` → `[:sigma_u_sq]`
   - Use `hetero=:scaling` for the scaling-property model (requires `zvar`).
 - `type::Symbol=:prod`: `:prod` or `:production` (production frontier) or
   `:cost` (cost frontier).
@@ -117,11 +225,11 @@ function sfmodel_spec(;
     #* ---- Validate hetero options against ineff ----
     if hetero isa Vector{Symbol} && !isempty(hetero)
         valid_hetero = if ineff == :HalfNormal
-            [:sigma_sq]
+            [:sigma_u_sq]
         elseif ineff == :TruncatedNormal
-            [:mu, :sigma_sq]
+            [:mu, :sigma_u_sq]
         elseif ineff == :Exponential
-            [:lambda]
+            [:sigma_u_sq]
         else
             Symbol[]
         end
@@ -176,18 +284,32 @@ function sfmodel_spec(;
     local depvar_vec::Vector{Float64}
     local frontier_mat::Matrix{Float64}
 
-    if depvar isa Vector
+    # The test is `isa AbstractVector`, not `isa Vector`. `CSV.read` returns a
+    # `SentinelArrays.ChainedVector` for any file above its chunking threshold, which is an
+    # `AbstractVector` but not a `Vector`, so a large data file — cross-sectional as well as
+    # panel — was refused here with "`depvar` must be a Vector or Matrix." from code copied
+    # verbatim out of the manual. The list form `frontier = [v1, v2, ...]`, documented in the
+    # manual (the `frontier` row of `sfmodel_spec()`) and implemented in the simulation backends by
+    # `_to_matrix(x::AbstractVector{<:AbstractVector}) = reduce(hcat, x)`, is accepted here
+    # too; it used to fail for exactly the three distributions this backend supports.
+
+    if depvar isa AbstractVector{<:AbstractVector}
+        length(depvar) == 1 || throw("`depvar` must be a single vector, not a list of $(length(depvar)).")
+        depvar_vec = convert(Vector{Float64}, only(depvar))
+    elseif depvar isa AbstractVector
         depvar_vec = convert(Vector{Float64}, depvar)
-    elseif depvar isa Matrix
+    elseif depvar isa AbstractMatrix
         size(depvar, 2) == 1 || throw("`depvar` must be a vector or single-column matrix.")
         depvar_vec = convert(Vector{Float64}, vec(depvar))
     else
         throw("`depvar` must be a Vector or Matrix.")
     end
 
-    if frontier isa Vector
+    if frontier isa AbstractVector{<:AbstractVector}
+        frontier_mat = convert(Matrix{Float64}, reduce(hcat, frontier))
+    elseif frontier isa AbstractVector
         frontier_mat = reshape(convert(Vector{Float64}, frontier), :, 1)
-    elseif frontier isa Matrix
+    elseif frontier isa AbstractMatrix
         frontier_mat = convert(Matrix{Float64}, frontier)
     else
         throw("`frontier` must be a Vector or Matrix.")
@@ -202,9 +324,11 @@ function sfmodel_spec(;
     local L::Int
 
     if zvar !== nothing
-        if zvar isa Vector
+        if zvar isa AbstractVector{<:AbstractVector}
+            zvar_mat = convert(Matrix{Float64}, reduce(hcat, zvar))
+        elseif zvar isa AbstractVector
             zvar_mat = reshape(convert(Vector{Float64}, zvar), :, 1)
-        elseif zvar isa Matrix
+        elseif zvar isa AbstractMatrix
             zvar_mat = convert(Matrix{Float64}, zvar)
         else
             throw("`zvar` must be a Vector or Matrix.")
@@ -283,7 +407,7 @@ function _sfmodel_spec_populate_dicM!(
 
     # Initialize all keys to nothing
     for k in (:panel, :idvar, :dist, :type, :depvar, :frontier,
-              :μ, :hscale, :gamma, :σᵤ², :λ, :σᵥ², :σₐ², :hasDF, :transfer, :misc, :sdf)
+              :μ, :hscale, :gamma, :σᵤ², :σᵥ², :σₐ², :hasDF, :transfer, :misc, :sdf)
         _dicM[k] = nothing
     end
 
@@ -340,17 +464,10 @@ function _sfmodel_spec_populate_dicM!(
             end
         end
 
-        # σᵤ² / λ equation
-        if ineff == :Exponential
-            if :lambda in hetero_vec
-                z_names_lam = [Symbol("λ_var$i") for i in 1:size(zvar_mat, 2)]
-                comDF = hcat(comDF, zvar_mat)
-                append!(all_varnames, z_names_lam)
-                _dicM[:λ] = z_names_lam
-            else
-                _dicM[:λ] = [:_cons]
-            end
-        elseif :sigma_sq in hetero_vec
+        # σᵤ² equation.  The Exponential's squared scale is this same parameter and uses
+        # this same slot; in versions before 2.0.0 it had a slot of its own called :λ, which made
+        # one symbol mean the scale here and the variance in the simulation backends.
+        if :sigma_u_sq in hetero_vec
             z_names_su = [Symbol("σᵤ²_var$i") for i in 1:size(zvar_mat, 2)]
             comDF = hcat(comDF, zvar_mat)
             append!(all_varnames, z_names_su)
@@ -400,17 +517,68 @@ function _sfmodel_spec_populate_dicM!(
     # Create the DataFrame
     _dicM[:sdf] = DataFrame(comDF, all_varnames)
     _dicM[:hasDF] = false
-    # R-07: the fit-time data IS transferred into `_dicM[:sdf]` here (with the
+    # The fit-time data IS transferred into `_dicM[:sdf]` here (with the
     # auto-generated column names that `_dicM[:frontier]`/`:μ`/… reference), so mark
     # transfer=true. This lets `sfmodel_boot_marginal(result=res)` re-extract the
     # design from the internal frame without the caller re-supplying a DataFrame
     # whose columns would have to match the internal auto-names.
     _dicM[:transfer] = true
 
+    # Marker: this dictionary was built from an `SFModelSpec_MLE` object, so `sfmodel_fit`
+    # may rebuild it from the spec it is handed. The deprecated Vararg `sfmodel_spec` writes
+    # `_dicM` directly and returns no spec object; it leaves this key absent/false, and the
+    # fit then reads the state that path wrote, unchanged.
+    _dicM[:_spec_built] = true
+
     # Set tagD
     global tagD
     tagD = Dict{Symbol, Type{<:Sfmodeltype}}()
     tagD[:modelid] = modelid
+
+    return nothing
+end
+
+
+#* ---- Internal: rebuild _dicM and tagD from a spec object ----
+#
+# `sfmodel_fit` derives the estimation frame, the model id, the frontier sign, the panel
+# flag and the entire equation layout from `_dicM`/`tagD`, which `sfmodel_spec` writes when
+# a spec is CONSTRUCTED. Those globals therefore described the last spec constructed rather
+# than the spec handed to `sfmodel_fit`, so constructing a second spec before fitting the
+# first silently estimated the second model. Rebuilding them at the top of every fit makes
+# this backend derive its inputs from its own argument, as the MCI, MSLE and panel backends
+# already do.
+#
+# Every argument below is a field of `SFModelSpec_MLE`. Only `dist_code` and `type_sym` are
+# derived, and both are pure functions of fields the struct carries, using the same mappings
+# `sfmodel_spec` itself applies (`ineff` and `hetero=:scaling` give the dist code; `type`
+# gives the sign).
+function _sfmodel_rebuild_dicM_from_spec!(spec::SFModelSpec_MLE)
+
+    dist_code = if spec.scaling
+        :s
+    elseif spec.ineff == :HalfNormal
+        :h
+    elseif spec.ineff == :TruncatedNormal
+        :t
+    elseif spec.ineff == :Exponential
+        :e
+    else
+        # INTERNAL INVARIANT, not a user-facing path: the public analytic-spec builder only
+        # ever produces HalfNormal, TruncatedNormal or Exponential, so no specification that
+        # reaches here can carry anything else. Kept as a named failure in case a future route
+        # builds one that does.
+        throw("Unsupported `ineff=:$(spec.ineff)` in the specification passed to sfmodel_fit().")
+    end
+
+    type_sym = spec.type_sign == -1 ? :cost : :prod
+
+    _sfmodel_spec_populate_dicM!(
+        spec.depvar, spec.frontier, spec.zvar, spec.scaling_zvar,
+        dist_code, type_sym, spec.type_sign, spec.panel, spec.modelid,
+        spec.hetero, spec.scaling, spec.ineff,
+        spec.idvar, spec.N, spec.K, spec.L;
+        frontier_names=spec.display_frontier, zvar_names=spec.display_zvar)
 
     return nothing
 end
@@ -525,6 +693,9 @@ function sfmodel_spec(arg::Vararg; message::Bool=false)
 
     global _dicM
            _dicM = Dict{Symbol, Any}()
+
+        # Not built from a spec object: sfmodel_fit must not rebuild this dictionary.
+        _dicM[:_spec_built] = false
 
         for k in (:panel, :idvar, :dist, :type, :depvar, :frontier, :μ, :hscale, :gamma, :σᵤ², :σᵥ², :σₐ², :hasDF, :transfer, :misc)
             _dicM[k] = nothing
@@ -659,7 +830,9 @@ Creates a global dictionary `_dicINI` consumed by `sfmodel_fit()`. Optional.
 - `mu`: Initial values for the μ equation (truncated normal models).
 - `ln_sigma_u_sq`: Initial values for log σᵤ² equation.
 - `ln_sigma_v_sq`: Initial values for log σᵥ² equation.
-- `hscale`: Initial values for the scaling-property hscale equation.
+- `hscale` (or `scaling`): Initial values for the scaling-property hscale equation. `scaling`
+  is the name the unified API documents; the two are synonyms and supplying both conflicting
+  values is refused.
 - `gamma`: Initial values for the gamma equation (TimeDecay/Kumbhakar1990).
 - `sigma_a_sq`: Initial values for σₐ² (TRE panel models).
 - `message::Bool=false`: Print confirmation message.
@@ -685,12 +858,29 @@ function sfmodel_init(;
     ln_sigma_u_sq = nothing,
     ln_sigma_v_sq = nothing,
     hscale = nothing,
+    scaling = nothing,
     gamma = nothing,
     sigma_a_sq = nothing,
     message::Bool = false)
 
     global _dicINI
     _dicINI = Dict{Symbol, Any}()
+
+    # `scaling` is the name the unified API documents and `hscale` the one this backend has
+    # always used; they address the same coefficients. Only `hscale` was a keyword here, so a
+    # caller who wrote the canonical `scaling` — including through
+    # `sfmodel_init_vec`, which the unified route uses for the two MLE-only panel models —
+    # got a raw `MethodError` naming the whole signature instead of the guards below. Accept
+    # both, refuse two conflicting values, and remember the spelling that was used so the
+    # no-scaling-function guard can name it.
+    local _scal_name::String = "hscale"
+    if scaling !== nothing
+        hscale === nothing || throw(ArgumentError(
+            "Give either `scaling` or `hscale`, not both: they are two names for the " *
+            "coefficients of the same scaling function."))
+        hscale = scaling
+        _scal_name = "scaling"
+    end
 
     # Mode 1: Full vector — bypass component assembly
     if init !== nothing
@@ -704,7 +894,7 @@ function sfmodel_init(;
     # Mode 2: validate kwarg-to-model compatibility before any writes.
     # (a) sigma_a_sq is only meaningful for panel TRE models (Greene 2005),
     #     where σₐ² occupies the q-position. Passing it to any other spec
-    #     would silently corrupt some other parameter's slot (Bug 11 pattern).
+    #     would silently corrupt some other parameter's slot.
     if sigma_a_sq !== nothing && spec.panel !== :TRE
         throw(ArgumentError(
             "`sigma_a_sq` is only valid for panel TRE models. " *
@@ -716,7 +906,19 @@ function sfmodel_init(;
     #     model families (scaling vs TimeDecay/Kumbhakar1990).
     if hscale !== nothing && gamma !== nothing
         throw(ArgumentError(
-            "Cannot specify both `hscale` and `gamma`; they target the same parameter slot."))
+            "Cannot specify both `$(_scal_name)` and `gamma`; they target the same parameter slot."))
+    end
+    # (c) Neither MLE-only panel model has a scaling function, so `hscale` and `gamma` are
+    #     not parameters of either. They write the q-position, which for panel TRE is σₐ²:
+    #     `hscale=0.77` and `sigma_a_sq=0.77` produced the identical starting vector,
+    #     so `hscale` silently set the random-effect variance. Panel
+    #     TFE_CSW has no q-position at all and the fit then failed on a length mismatch.
+    if spec.panel in (:TRE, :TFE_CSW2014) && (hscale !== nothing || gamma !== nothing)
+        _bad = hscale !== nothing ? _scal_name : "gamma"
+        throw(ArgumentError(
+            "`$(_bad)` is not a parameter of this model (panel=$(spec.panel)): it has no " *
+            "scaling function." *
+            (spec.panel === :TRE ? " If you meant σₐ², use `sigma_a_sq` instead." : "")))
     end
 
     # Mode 2: Component-by-component
@@ -735,7 +937,7 @@ function sfmodel_init(;
     end
     if sigma_a_sq !== nothing
         # σₐ² lives at the q-position for panel TRE (PTREH/PTRET);
-        # see SFgetvars.jl getvar(::Type{PTREH}/{PTRET}) lines 1080-1085.
+        # see getvar(::Type{PTREH}) and getvar(::Type{PTRET}) in SFgetvars.jl.
         v = _to_init_vec(sigma_a_sq)
         _dicINI[:σₐ²] = v
         _dicINI[:eqq] = v
@@ -762,6 +964,124 @@ function sfmodel_init(;
     return _dicINI
 end
 
+# The value an omitted starting-value component takes, matching the `ones(nof*) * 0.1`
+# defaults `sfmodel_fit` uses below when a component is absent from `_dicINI`.
+const _MLE_INIT_COMPONENT_DEFAULT = 0.1
+
+"""
+    sfmodel_init_vec(; spec::SFModelSpec_MLE, kwargs...)
+
+Starting values for one of the two MLE-only panel models as a plain `Vector{Float64}`,
+in the order `sfmodel_fit` assembles the parameter vector:
+
+    panel=:TFE_CSW2014, HalfNormal       [frontier(K), ln_sigma_u_sq, ln_sigma_v_sq]
+    panel=:TRE,         HalfNormal       [frontier(K), sigma_a_sq, ln_sigma_u_sq, ln_sigma_v_sq]
+    panel=:TRE,         TruncatedNormal  [frontier(K), mu, sigma_a_sq, ln_sigma_u_sq, ln_sigma_v_sq]
+
+It lets the unified `sfmodel_init` return one shape for every model. It takes the same
+keyword arguments as `sfmodel_init` above and is built on it; the `Dict` of that
+component-keyed function is also accepted by `sfmodel_fit`.
+
+Every component is optional. One that is omitted takes exactly what the fit would have
+used had no starting values been supplied at all: the OLS estimate for the frontier, and
+`_MLE_INIT_COMPONENT_DEFAULT` for every other parameter. The OLS is computed on the same
+data the likelihood sees — within-firm demeaned for `panel=:TFE_CSW2014`, matching
+`getvar(::Type{PFECSWH})` in SFgetvars.jl, and raw for `panel=:TRE`.
+
+The block widths below are fixed by `(panel, ineff)` because neither model accepts
+`hetero` or `zvar`. `sfmodel_fit` checks the assembled length against `num.nofpara`, so a
+drift between this layout and `getvar` is a loud error rather than a wrong answer, and
+`test/test_init_one_shape.jl` pins all three layouts against a real fit.
+"""
+function sfmodel_init_vec(; spec::SFModelSpec_MLE, kwargs...)
+
+    # This builder is a pure function of its arguments and must leave the module-level
+    # `_dicINI` exactly as it found it. `sfmodel_init` below writes that global, so snapshot
+    # the binding and put it back, including when the call throws (it clears `_dicINI`
+    # before its own validation runs).
+    global _dicINI
+    _saved_dicINI = @isdefined(_dicINI) ? _dicINI : Dict{Symbol, Any}()
+    d = try
+        sfmodel_init(; spec = spec, kwargs...)
+    finally
+        _dicINI = _saved_dicINI
+    end
+
+    nz, nq = if spec.panel === :TFE_CSW2014 && spec.ineff === :HalfNormal
+        0, 0
+    elseif spec.panel === :TRE && spec.ineff === :HalfNormal
+        0, 1
+    elseif spec.panel === :TRE && spec.ineff === :TruncatedNormal
+        1, 1
+    else
+        # INTERNAL INVARIANT, not a user-facing path: unified dispatch calls this helper for
+        # exactly the three layouts listed above and for no other. Kept so that adding a
+        # fourth without updating this table is a named error.
+        throw("sfmodel_init_vec() covers the MLE-only panel models: `panel=:TFE_CSW2014` " *
+              "with `ineff=:HalfNormal`, and `panel=:TRE` with `ineff=:HalfNormal` or " *
+              "`:TruncatedNormal`. Got `panel=$(spec.panel)`, `ineff=$(spec.ineff)`.")
+    end
+
+    nz == 0 && haskey(d, :eqz) && throw(ArgumentError(
+        "`mu` is not a parameter of this model (panel=$(spec.panel), ineff=$(spec.ineff))."))
+    # INTERNAL INVARIANT, not a user-facing path: every keyword that could write `:eqq` —
+    # `hscale`, its `scaling` synonym, and `gamma` — is refused above before the dictionary is
+    # written, so a public CSW call cannot arrive here with one. Kept as the backstop for
+    # that refusal.
+    nq == 0 && haskey(d, :eqq) && throw(ArgumentError(
+        "This model has no parameter at the q-position (panel=$(spec.panel))."))
+
+    nofpara = size(spec.frontier, 2) + nz + nq + 2
+
+    # Full-vector mode: the user gave the whole vector, hand it back -- but check its
+    # length here, the way the cross-sectional and `:panel_TFE` builders do, instead of
+    # leaving it to the fit.
+    if haskey(d, :all_init)
+        allv = convert(Vector{Float64}, vec(d[:all_init]))
+        length(allv) == nofpara || error("Length mismatch in sfmodel_init(): expected " *
+                                         "$nofpara parameters, got $(length(allv)).")
+        return allv
+    end
+
+    # Each component block has a width fixed by the specification. A block of the wrong
+    # width is refused by name, matching `sfmodel_MCI_init` / `sfmodel_MSLE_init`. Without
+    # this, offsetting width mistakes keep the total right, the fit's own length check
+    # passes, and the values silently land in the wrong parameter blocks: on a K=2
+    # `:panel_TFE_CSW`, `frontier=[0.41], ln_sigma_u_sq=[-0.71,-0.72], ln_sigma_v_sq=-0.91`
+    # returned `[0.41, -0.71, -0.72, -0.91]`, making a variance start the second frontier
+    # coefficient.
+    badw = String[]
+    for (key, name, want) in ((:frontier, "frontier", size(spec.frontier, 2)),
+                              (:eqz, "mu", nz),
+                              (:eqq, "sigma_a_sq", nq),
+                              (:eqw, "ln_sigma_u_sq", 1),
+                              (:eqv, "ln_sigma_v_sq", 1))
+        haskey(d, key) && length(d[key]) != want &&
+            push!(badw, "$name: expected $want, got $(length(d[key]))")
+    end
+    isempty(badw) ||
+        error("Length mismatch(es) in sfmodel_init(): " * join(badw, "; ") * ".")
+
+    beta0 = if spec.panel === :TFE_CSW2014
+        rowIDT = get_rowIDT(vec(spec.idvar))
+        yx = hcat(spec.depvar, spec.frontier)
+        D  = zeros(Float64, size(yx, 1), size(yx, 2))
+        for i in 1:size(rowIDT, 1)
+            D[rowIDT[i, 1], :] = sf_demean(yx[rowIDT[i, 1], :])
+        end
+        D[:, 2:end] \ D[:, 1]
+    else
+        spec.frontier \ spec.depvar
+    end
+
+    v = vcat(get(d, :frontier, beta0),
+             get(d, :eqz, ones(nz) * _MLE_INIT_COMPONENT_DEFAULT),
+             get(d, :eqq, ones(nq) * _MLE_INIT_COMPONENT_DEFAULT),
+             get(d, :eqw, ones(1)  * _MLE_INIT_COMPONENT_DEFAULT),
+             get(d, :eqv, ones(1)  * _MLE_INIT_COMPONENT_DEFAULT))
+    return convert(Vector{Float64}, vec(v))
+end
+
 ########################################################
 ####                sfmodel_opt()                   ####
 ########################################################
@@ -778,6 +1098,12 @@ Specify optimization options (solvers and convergence criteria).
 - `main_solver=Newton()`: Main optimizer.
 - `main_opt=(iterations=2000, g_abstol=1e-8)`: NamedTuple of main optimization
   options passed to `Optim.Options`.
+
+This is the analytic backend's own, deprecated options builder; its defaults apply only to
+a bare legacy `sfmodel_fit()` of this backend. The package's `sfmodel_fit` uses the unified
+`sfmodel_opt` and, when `optim_options` is omitted, the default shared by every method
+(NelderMead 200 / 1e-3 then Newton 200 / 1e-7). This builder keeps only the
+iteration caps and `g_abstol`.
 
 # Examples
 ```julia
@@ -804,6 +1130,12 @@ function sfmodel_opt(;
         error("warmstart_opt must be a NamedTuple, e.g. (iterations=200,). " *
               "Hint: single-element tuples need a trailing comma: (iterations=200,)")
     end
+    # Without a solver there is no warmstart stage, so a `warmstart_opt` given without one is refused.
+    if warmstart_opt !== nothing && warmstart_solver === nothing
+        error("`warmstart_opt` needs a `warmstart_solver`: without a solver there is no " *
+              "warmstart stage to configure. Add a solver (e.g. `warmstart_solver = NelderMead()`), " *
+              "or remove `warmstart_opt`.")
+    end
 
     global _dicOPT
     _dicOPT = Dict{Symbol, Any}()
@@ -820,13 +1152,18 @@ function sfmodel_opt(;
     _dicOPT[:marginal]     = true
     _dicOPT[:table_format] = :text
 
+    # Written by the user's own sfmodel_opt() call, so a later bare sfmodel_fit() must
+    # honour it. Options that sfmodel_fit writes from its own argument clear this flag,
+    # which is what stops them leaking into the next fit.
+    _dicOPT[:_user_set] = true
+
     return _dicOPT
 end    # end of sfmodel_opt()
 
-# R-27: capture the main optimizer's iteration trace as a NamedTuple for
-# plot(:convergence). The MLE backend always runs Optim with store_trace=true, so
-# `_optres` carries a trace; expose it on the result only when the user requested
-# it (via the unified `sfmodel_opt(store_trace=true)`), else return `nothing`.
+# Capture the main optimizer's iteration trace as a NamedTuple for
+# plot(:convergence), only when the user requested it (via the unified
+# `sfmodel_opt(store_trace=true)`, which sets `store_trace` in the main Optim.Options
+# that the fit runs with), else return `nothing`.
 function _sf_optim_trace(optres, want::Bool)
     want || return nothing
     fv = Optim.f_trace(optres)
@@ -857,7 +1194,8 @@ Return a NamedTuple with results.
 - `init`: Initial values vector from `sfmodel_init()`, or `nothing` for
   auto-generated OLS-based defaults.
 - `optim_options`: Optimization options dict from `sfmodel_opt()`, or `nothing`
-  for defaults.
+  for defaults. (The package's `sfmodel_fit` always passes a dict: the unified default,
+  NelderMead 200 / 1e-3 then Newton 200 / 1e-7, when the user gives none.)
 - `jlms_bc_index::Bool=true`: Whether to compute JLMS and BC efficiency indices.
 - `marginal::Bool=true`: Whether to compute marginal effects.
 - `show_table::Bool=true`: Whether to print the results table and banner.
@@ -877,7 +1215,7 @@ result = sfmodel_fit(spec=spec, init=init, optim_options=opt,
 ```
 """
 function sfmodel_fit(;
-    spec::SFModelSpec_MLE = _MLE_spec,
+    spec::Union{SFModelSpec_MLE, Nothing} = nothing,
     init = nothing,
     optim_options = nothing,
     jlms_bc_index::Bool = true,
@@ -904,8 +1242,13 @@ function sfmodel_fit(;
    global _dicOPT
    if optim_options !== nothing
        _dicOPT = optim_options
-   else
-       @isdefined(_dicOPT) || sfmodel_opt()
+       _dicOPT[:_user_set] = false   # set by this fit; must not outlive it
+   elseif !@isdefined(_dicOPT) || get(_dicOPT, :_user_set, false) == false
+       # Nothing is set, or what is set was left behind by a previous fit rather than
+       # written by the user's own sfmodel_opt() call. Reset to fresh defaults, as
+       # `_dicINI` is reset just above, so the solver, iteration cap and tolerance of
+       # one fit cannot silently become those of the next.
+       sfmodel_opt()
    end
 
    # Populate display-related keys in _dicOPT from keyword args
@@ -915,13 +1258,34 @@ function sfmodel_fit(;
    _dicOPT[:marginal]     = marginal
    _dicOPT[:table_format] = :text
 
-   #* for simulation, add a flag
-   redflag::Bool = 0
+   #* Quality flag, as in the MCI/MSLE/panel backends and the manual's "Convergence Warnings":
+   #* 0 = no issue; 1 = gradient norm > 0.1 or NaN, Optim did not report convergence (which
+   #* includes stopping at the iteration limit), the line search failed even when Optim
+   #* reports convergence (sf_convergence_flag), a Hessian that could not be computed, is not
+   #* invertible, is numerically singular or is not positive definite, or a boundary solution
+   #* (a variance or scale parameter at the simulation clamp); 2 = a non-positive var-cov
+   #* diagonal. The highest applicable value is kept, except that a boundary solution is
+   #* always 1.
+   redflag::Int = 0
+
+   #* --- Make the module-level model state describe the spec we were handed ---
+   # See `_sfmodel_rebuild_dicM_from_spec!`. When a spec object was handed in it always
+   # decides the model, whatever wrote `_dicM` last. The `_spec_built` marker distinguishes
+   # only the two SPEC-LESS flows: the deprecated Vararg `sfmodel_spec` returns no spec
+   # object and writes `_dicM` directly, so a bare fit after it must keep reading the state
+   # that path wrote, while a bare fit after a keyword/DSL spec still falls back to the last
+   # spec object constructed.
+   if spec === nothing
+       spec = _MLE_spec
+       get(_dicM, :_spec_built, false) && _sfmodel_rebuild_dicM_from_spec!(spec)
+   else
+       _sfmodel_rebuild_dicM_from_spec!(spec)
+   end
 
    sfdat = _dicM[:sdf]
 
-   # Reset display names in _dicM from the spec to guard against stale global
-   # state when multiple specs are created before fitting (bug 8d).
+   # Display names come from the spec that was handed in. The rebuild above already wrote
+   # them, so these two lines now matter only on the Vararg path.
    _dicM[:_display_frontier] = spec.display_frontier
    _dicM[:_display_zvar]     = spec.display_zvar
 
@@ -947,6 +1311,23 @@ function sfmodel_fit(;
          dnames_fr = String.(get(_dicM, :_display_frontier, Symbol[]))
          _raw_zv = get(_dicM, :_display_zvar, nothing)
          dnames_zv = _raw_zv !== nothing ? String.(_raw_zv) : String[]
+         # An equation takes the @zvar names when its columns are the zvar columns, also when
+         # there is only one: the scaling equation of the scaling models (the q slot; in
+         # panel_TRE it holds σₐ², a constant), and the μ and σᵤ² equations when that parameter
+         # is heteroscedastic, i.e. when its columns are not the constant `_cons`. With the test
+         # "more than one column", a single zvar column would keep its internal name
+         # (hscale_var1, μ_var1, σᵤ²_var1), unlike its marginal-effect column (marg_<name>) and
+         # the names of :MCI and :MSLE. Each test also asks for as many names as the equation
+         # has columns. After the deprecated Vararg sfmodel_spec (`_spec_built` false) the
+         # names here come from the last spec object built, not from the model being fitted,
+         # and the tests are those of "more than one column".
+         _from_spec = get(_dicM, :_spec_built, false) === true
+         _dsl_mu = _from_spec ? (num.nofz == length(dnames_zv) && get(_dicM, :μ, nothing) != [:_cons]) :
+                                num.nofz > 1
+         _dsl_q  = _from_spec ? (num.nofq == length(dnames_zv) && haskey(eqvec, :log_hscale)) :
+                                (!isempty(dnames_zv) && num.nofq > 1)
+         _dsl_su = _from_spec ? (num.nofw == length(dnames_zv) && get(_dicM, :σᵤ², nothing) != [:_cons]) :
+                                num.nofw > 1
          vi = 2  # varlist[1] is " "
          # frontier names
          for j in 1:num.nofx
@@ -955,17 +1336,17 @@ function sfmodel_fit(;
          end
          # z equation names (μ hetero for TruncatedNormal)
          for j in 1:num.nofz
-             varlist[vi] = num.nofz > 1 ? dnames_zv[j] : varlist[vi]
+             varlist[vi] = _dsl_mu ? dnames_zv[j] : varlist[vi]
              vi += 1
          end
          # q equation names (scaling hscale)
          for j in 1:num.nofq
-             varlist[vi] = (!isempty(dnames_zv) && num.nofq > 1) ? dnames_zv[j] : varlist[vi]
+             varlist[vi] = _dsl_q ? dnames_zv[j] : varlist[vi]
              vi += 1
          end
-         # w equation names (σᵤ²/λ hetero)
+         # w equation names (σᵤ² hetero)
          for j in 1:num.nofw
-             varlist[vi] = num.nofw > 1 ? dnames_zv[j] : varlist[vi]
+             varlist[vi] = _dsl_su ? dnames_zv[j] : varlist[vi]
              vi += 1
          end
          # v equation names (σᵥ²) — always scalar, keep as-is
@@ -1011,7 +1392,7 @@ function sfmodel_fit(;
      resid  = yvar - xvar*beta0
      sse    = sum((resid).^2)
      ssd    = sqrt(sse/size(resid,1)) # MLE standard deviation; σ² = (1/N)* Σ ϵ^2
-     ll_ols = sum(normlogpdf.(0, ssd, resid)) # ols log-likelihood
+     ll_ols = _dicM[:panel] === nothing ? sum(normlogpdf.(0, ssd, resid)) : nothing # ols log-likelihood (cross-sectional models)
      sk_ols = sum((resid).^3) / ((ssd^3)*(size(resid,1))) # skewness of ols residuals
 
      #* --- Create the dictionary -----------
@@ -1020,8 +1401,16 @@ function sfmodel_fit(;
          sf_init = _dicINI[:all_init]
      else
          #*  Create ini vectors from user's values; if none, use the default.--- #
+         # The Wang and Ho (2010) panel truncated-normal model starts the mu equation at
+         # 0.0, not at the flat 0.1 every other omitted component takes: both
+         # `sfmodel_panel_init` and `sfmodel_panel_fit` do (sf_panel_v20.jl lines 2472 and
+         # 2690), and `sfmodel_init`'s contract is that an omitted component equals what
+         # the fit would have used had no starting values been supplied at all.
+         # Cross-sectional truncated normal and panel TRE already agree at 0.1 on every
+         # route, so the override is PFEWHT only.
+         _z_default = (tagD[:modelid] === PFEWHT) ? 0.0 : 0.1
          b_ini  = get(_dicINI, :frontier, beta0)
-         d1_ini = get(_dicINI, :eqz, ones(num.nofz) * 0.1)
+         d1_ini = get(_dicINI, :eqz, ones(num.nofz) * _z_default)
          t_ini  = get(_dicINI, :eqq, ones(num.nofq) * 0.1)
          d2_ini = get(_dicINI, :eqw, ones(num.nofw) * 0.1)
          g_ini  = get(_dicINI, :eqv, ones(num.nofv) * 0.1)
@@ -1041,7 +1430,11 @@ function sfmodel_fit(;
 
   #* ############# process optimization options  #######
 
-         if (_dicOPT[:warmstart_solver] === nothing) || (_dicOPT[:warmstart_maxIT] === nothing)
+         # A warmstart of 0 iterations is skipped, as in the other backends.
+         # (NelderMead run for 0 iterations still moves the start, to the best vertex or the
+         # centroid of its initial simplex.)
+         if (_dicOPT[:warmstart_solver] === nothing) || (_dicOPT[:warmstart_maxIT] === nothing) ||
+            (_dicOPT[:warmstart_maxIT] <= 0)
              do_warmstart_search = 0
          else
              do_warmstart_search = 1
@@ -1055,6 +1448,40 @@ function sfmodel_fit(;
          sf_tol   = _dicOPT[:tolerance]
          sf_table = _dicOPT[:table_format]
 
+     # ---- the Optim.Options each stage runs with ----
+         # The unified API hands over the two Options objects whole, and they are used as
+         # they are, as MCI, MSLE and the panel backend use them: every option counts, and
+         # the warmstart has its own tolerance. Only the legacy `MLE_Backend.sfmodel_opt`
+         # dictionary, which carries no Options, still builds them from the iteration caps
+         # and the one tolerance. (`g_abstol`: Optim's `g_tol` is a silent alias today.)
+         sf_main_options = get(_dicOPT, :main_opt, nothing)
+         if sf_main_options === nothing
+             sf_main_options = Optim.Options(g_abstol    = sf_tol,
+                                             iterations  = sf_maxit,
+                                             store_trace = get(_dicOPT, :store_trace, false),
+                                             show_trace  = false)
+         end
+         if do_warmstart_search == 1
+             sf_ini_options = get(_dicOPT, :warmstart_opt, nothing)
+             if sf_ini_options === nothing
+                 sf_ini_options = Optim.Options(g_abstol    = sf_tol,
+                                                iterations  = sf_ini_maxit,
+                                                show_trace  = false)
+             end
+         end
+
+     # ---- starting values at or beyond a bound (`sf_start_check`, src/sf_redflag.jl) ----
+         # panel_TFE_CSW and panel_TRE clamp their variances in the likelihood, so a start at or beyond a bound is
+         # refused; their variances are scalar coefficients, so there is no warning. A fit held at its starting
+         # values (no warmstart stage, no main iteration) is not checked.
+         held = do_warmstart_search == 0 && sf_main_options.iterations == 0
+         if !held && tagD[:modelid] in (PFECSWH, PTREH, PTRET)
+             start_error, _ = sf_start_check(_mle_bound_list(tagD[:modelid], pos, wvar, vvar),
+                                             _mle_bound_verdict(tagD[:modelid], pos, sf_init, wvar, vvar, num.nofobs),
+                                             sf_init)
+             isempty(start_error) || throw(ArgumentError(start_error))
+         end
+
   #* ########  Start the Estimation  ##########
 
     #* ----- Define the objective function -----#
@@ -1067,8 +1494,8 @@ function sfmodel_fit(;
 
     #* ---- Make placeholders for dictionary recording purposes *#
 
-    sf_init_1st_dic  = 0
-    sf_init_2nd_dic  = 0
+    sf_init_1st_dic  = nothing   # `nothing` when no warmstart runs, as in the other backends
+    sf_init_2nd_dic  = nothing
     sf_ini_algo_dic  = nothing
     sf_ini_maxit_dic = 0
     sf_total_iter    = 0
@@ -1088,10 +1515,7 @@ function sfmodel_fit(;
                _optres = optimize(_lik,
                                sf_init,         # initial values
                                sf_ini_algo,
-                               Optim.Options(g_tol = sf_tol,
-                                             iterations  = sf_ini_maxit,
-                                             store_trace = true,
-                                             show_trace  = false))
+                               sf_ini_options)  # the warmstart's own Options
 
 
         sf_total_iter += Optim.iterations(_optres) # for later use
@@ -1117,14 +1541,18 @@ function sfmodel_fit(;
        end
 
               _optres = optimize(_lik,
-                              sf_init,       # initial values
-                              sf_algo,       # different from search run
-                              Optim.Options(g_tol = sf_tol,
-                                            iterations  = sf_maxit, # different from search run
-                                            store_trace = true,
-                                            show_trace  = false);
+                              sf_init,          # initial values
+                              sf_algo,          # different from search run
+                              sf_main_options;  # the main stage's own Options
                               autodiff = AutoForwardDiff())
        sf_total_iter += Optim.iterations(_optres)
+
+       # The objective and gradient norm at the point the result reports, for loglikelihood,
+       # gradient_norm, the gradient check below and the printed log-likelihood. After a
+       # line-search failure Optim's own minimum and g_residual describe the previous iterate
+       # (sf_final_fg, src/sf_redflag.jl). For a gradient-free main solver (NelderMead,
+       # ParticleSwarm, SimulatedAnnealing) the gradient norm is the ForwardDiff gradient there.
+       _fmin, _gnorm = sf_final_fg(_optres, _lik)
 
        if verbose
              println()
@@ -1133,16 +1561,18 @@ function sfmodel_fit(;
        end
 
 
-       if isnan(Optim.g_residual(_optres)) || (Optim.g_residual(_optres) > 0.1)
-            redflag = 1
+       if isnan(_gnorm) || (_gnorm > 0.1)
+            redflag = max(redflag, 1)
             printstyled("Note that the estimation may not have converged properly. The gradients are problematic (too large, > 0.1, or others).\n\n", color = :red)
        end
 
 
-       if Optim.iteration_limit_reached(_optres)
-             redflag = 1
-             printstyled("Caution: The number of iterations reached the limit.\n\n"; color= :red)
-       end
+       # "Optim did not report convergence" counts, whatever stopped the run and whatever
+       # show_table is. The iteration limit counts only through it: a fit that converges on
+       # exactly its last allowed iteration is not flagged. A failed line search counts too,
+       # even when Optim reports convergence. The rule and its messages are shared by the four
+       # backends (sf_convergence_flag, src/sf_redflag.jl).
+       redflag = max(redflag, sf_convergence_flag(_optres))
 
    end     # if (do_warmstart_search == 0 )....
 
@@ -1150,35 +1580,44 @@ function sfmodel_fit(;
   #* ###### Post-estimation process ###############
 
       _coevec            = Optim.minimizer(_optres)  # coef. vec.
-      numerical_hessian  = ForwardDiff.hessian(_lik, _coevec)  # Hessian
 
-     #* ------ Check if the matrix is invertible. ----
+     #* ------ The Hessian part of redflag, by the rule shared with the other backends ----
+     # (src/sf_redflag.jl): 1 when the Hessian cannot be inverted, or is
+     # numerically singular (reciprocal condition number below machine epsilon), with an
+     # all-NaN var-cov matrix; 2 for a non-positive var-cov diagonal; otherwise 1 when the
+     # Hessian is not positive definite (var-cov matrix kept). A parameter at or beyond its
+     # numerical bound (a variance or scale parameter; `_mle_bound_verdict`, at the optimizer's
+     # point, stored as `bound_check`) makes the fit a boundary solution: 1, whatever the Hessian
+     # says, and the message names each such parameter. A degenerate fit still returns its
+     # coefficients, loglik, jlms and bc. The messages print whatever `verbose` is.
 
-     hess_invertible = true
-     var_cov_matrix = try
-                         inv(numerical_hessian)
-                      catch err
-                         # Non-invertible Hessian: return NaN SEs + redflag instead of
-                         # throwing, so a degenerate fit still returns its coefficients/
-                         # loglik/jlms/bc (parity with MCI/MSLE/panel; re-audit R-06).
-                         hess_invertible = false
-                         redflag = 1
-                         printstyled("The Hessian matrix is not invertible, indicating the model does not converge properly. Standard errors are set to NaN.\n\n"; color = :red)
-                         try
-                             checkCollinear(tagD[:modelid], xvar, zvar, qvar, wvar, vvar)   # collinearity diagnostic
-                         catch   # non-fatal: keep the fit alive with NaN SEs
-                         end
-                         fill(NaN, size(numerical_hessian))
-                      end
+     # The Hessian is computed by sf_classify_hessian(f, x), so an error while computing it
+     # does not end the fit or discard the estimate. Such a fit reads as one whose Hessian
+     # cannot be inverted (redflag 1, all-NaN Hessian and var-cov matrix, NaN standard
+     # errors), a message gives the error, and jlms, bc and the marginal effects are still
+     # computed. Ctrl-C, out of memory, a stack overflow and CUDA's out-of-GPU-memory error
+     # still end the fit.
+     bc = _mle_bound_verdict(tagD[:modelid], pos, _coevec, wvar, vvar, num.nofobs)
+     # A coefficient beyond its bound is moved to the bound (`sf_bound_move`, src/sf_redflag.jl): only the variances
+     # of panel_TFE_CSW and panel_TRE, which their likelihoods clamp, can move, and there the likelihood and its
+     # derivatives equal those at the optimizer's point. The moved vector is reported from JLMS/BC on, in the
+     # backend's own order `pos`, and the entry in `bound_check` keeps the optimizer's value.
+     bc, coef_moved = sf_bound_move(_mle_bound_list(tagD[:modelid], pos, wvar, vvar), bc, _coevec)
+     _hess = sf_classify_hessian(_lik, _coevec; at_clamp = !isempty(bc), message = true,
+                                 bound_text = isempty(bc) ? "" : sf_bound_message(bc))
+     numerical_hessian = _hess.hessian
+     var_cov_matrix = _hess.var_cov_matrix
+     redflag = max(redflag, _hess.redflag)
+     if _hess.hessian_flag > 0
+         try
+             checkCollinear(tagD[:modelid], xvar, zvar, qvar, wvar, vvar)   # collinearity diagnostic
+         catch   # non-fatal: keep the fit alive with NaN SEs
+         end
+     end
 
-          #* In some cases the matrix is invertible but the resulting diagonal
-          #*    elements are negative. Check.
-
-          if hess_invertible && !all( diag(var_cov_matrix) .> 0 ) # invertible but not all diagonal are positive
-               redflag = 1
-               printstyled("Some of the diagonal elements of the var-cov matrix are non-positive, indicating problems in the convergence. The affected standard errors are set to NaN.\n\n"; color = :red)
-               checkCollinear(tagD[:modelid], xvar, zvar, qvar, wvar, vvar)
-          end
+     # The reported coefficients from here on: a variance beyond its bound at the bound. The Hessian and the
+     # variance matrix (and the standard errors computed from it below) are those at the optimizer's point.
+     _coevec = coef_moved
 
      #* ------- JLMS and BC index -------------------
 
@@ -1203,7 +1642,7 @@ function sfmodel_fit(;
      # Save originals so _dicM is not permanently mutated (allows re-running
      # sfmodel_fit without re-running sfmodel_spec).
      _saved_dicM_keys = Dict{Symbol, Any}()
-     for key in (:μ, :σᵤ², :λ, :hscale)
+     for key in (:μ, :σᵤ², :hscale)
          v = get(_dicM, key, nothing)
          if v !== nothing
              _saved_dicM_keys[key] = copy(v)
@@ -1213,7 +1652,7 @@ function sfmodel_fit(;
      if get(_dicM, :_display_zvar, nothing) !== nothing
          # DSL path: use real column names
          dnames_zv = get(_dicM, :_display_zvar, Symbol[])
-         for key in (:μ, :σᵤ², :λ, :hscale)
+         for key in (:μ, :σᵤ², :hscale)
              v = get(_dicM, key, nothing)
              if v isa Vector{Symbol} && length(v) == length(dnames_zv)
                  _dicM[key] = dnames_zv
@@ -1222,7 +1661,7 @@ function sfmodel_fit(;
      else
          # Keyword API: generate common names so addDataFrame merges correctly
          ref_len = 0
-         for key in (:μ, :σᵤ², :λ, :hscale)
+         for key in (:μ, :σᵤ², :hscale)
              v = get(_dicM, key, nothing)
              if v isa Vector{Symbol}
                  ref_len = max(ref_len, length(v))
@@ -1230,7 +1669,7 @@ function sfmodel_fit(;
          end
          if ref_len > 1
              common_names = [Symbol("z_var$i") for i in 1:ref_len]
-             for key in (:μ, :σᵤ², :λ, :hscale)
+             for key in (:μ, :σᵤ², :hscale)
                  v = get(_dicM, key, nothing)
                  if v isa Vector{Symbol} && length(v) == ref_len
                      _dicM[key] = common_names
@@ -1252,7 +1691,7 @@ function sfmodel_fit(;
 
      #* ------- Make Table ------------------
 
-     stddev  = _stderr_from_vcov(var_cov_matrix) # standard error (NaN-safe: non-PD vcov ⇒ NaN, no DomainError; re-audit R-06)
+     stddev  = _stderr_from_vcov(var_cov_matrix) # standard error (NaN-safe: non-PD vcov ⇒ NaN, no DomainError)
      t_stats = _coevec ./ stddev          # t statistics
      p_value = zeros(num.nofpara)   # p values
      ci_low  = zeros(num.nofpara) # confidence interval
@@ -1300,7 +1739,12 @@ function sfmodel_fit(;
 
          print("Method: "); printstyled("MLE"; color=:yellow); println()
          print("Model type: "); printstyled("noise=$(spec.noise), ineff=$(spec.ineff)"; color=:yellow); println()
-         if spec.hetero isa Symbol && spec.hetero == :scaling
+         # panel_TFE has the scaling function of the cross-sectional scaling model, but its spec
+         # carries no `hetero`, so a test on `hetero` alone would print "Homoscedastic model";
+         # and the scaling model pins spec.L to 1 (its μ and σᵤ² are constants), so spec.L alone
+         # would print 1 whatever the number of scaling variables. A model without zvar prints
+         # L = 1 (each equation is one constant).
+         if (spec.hetero isa Symbol && spec.hetero == :scaling) || spec.panel === :TFE_WH2010
              print("Heteroscedastic parameters: "); printstyled(":scaling"; color=:yellow); println()
          elseif spec.hetero isa Vector{Symbol} && !isempty(spec.hetero)
              print("Heteroscedastic parameters: "); printstyled(spec.hetero; color=:yellow); println()
@@ -1309,15 +1753,13 @@ function sfmodel_fit(;
          end
          print("Number of observations: "); printstyled(num.nofobs; color=:yellow); println()
          print("Number of frontier regressors (K): "); printstyled(spec.K; color=:yellow); println()
-         print("Number of Z columns (L): "); printstyled(spec.L; color=:yellow); println()
+         print("Number of Z columns (L): "); printstyled(spec.scaling ? size(spec.scaling_zvar, 2) : spec.L; color=:yellow); println()
          print("Frontier type: "); printstyled(spec.type_sign == 1 ? "production" : "cost"; color=:yellow); println()
          print("Number of iterations: "); printstyled(sf_total_iter; color=:yellow); println()
          _converged = Optim.converged(_optres)
          print("Converged: "); printstyled(_converged; color=_converged ? :yellow : :red); println()
-         if !_converged
-             redflag = 1
-         end
-         print("Log-likelihood: "); printstyled(round(-1*Optim.minimum(_optres); digits=5); color=:yellow); println()
+         # (the redflag for !_converged is set right after the optimization)
+         print("Log-likelihood: "); printstyled(round(-1*_fmin; digits=5); color=:yellow); println()
          println()
 
          pretty_table(table[2:end,:];
@@ -1355,7 +1797,10 @@ function sfmodel_fit(;
          end
 
          if rn >= 1  # table is non-empty
-             println("Log-parameters converted to original scale (σ² = exp(log_σ²)):")
+             # Every inefficiency distribution the analytic backend supports reports the
+             # same squared-scale parameter in this row, so the caption is one string.
+             _cvname = "σᵤ² = exp(log_σᵤ²)"
+             println("Log-parameters converted to original scale ($_cvname):")
              pretty_table(auxtable[1:rn,:];
                           column_labels=["", "Coef.", "Std.Err."],
                           formatters = [fmt__printf("%.4f", [2, 3])],
@@ -1368,7 +1813,9 @@ function sfmodel_fit(;
 
          printstyled("***** Additional Information *********\n"; color=:cyan)
 
-         print("* OLS (frontier-only) log-likelihood: "); printstyled(round(ll_ols; digits=5); color=:yellow); println("")
+         if _dicM[:panel] === nothing
+            print("* OLS (frontier-only) log-likelihood: "); printstyled(round(ll_ols; digits=5); color=:yellow); println("")
+         end
          print("* Skewness of OLS residuals: "); printstyled(round(sk_ols; digits=5); color=:yellow); println("")
          if jlms_bc_index
             print("* The sample mean of the JLMS inefficiency index: "); printstyled(round(_jlmsM; digits=5); color=:yellow); println("")
@@ -1376,7 +1823,7 @@ function sfmodel_fit(;
          end
          if length(margMinfo) >= 1
             print("* The sample mean of inefficiency determinants' marginal effects on E(u): " ); printstyled(margMinfo; color=:yellow); println("")
-            println("* Marginal effects of the inefficiency determinants at the observational level are saved in the return. See the follows.\n")
+            println("* Marginal effects of the inefficiency determinants at the observational level are saved in the return. See below.\n")
          end
 
          println("* Use `name.list` to see saved results (keys and values) where `name` is the return specified in `name = sfmodel_fit(..)`. Values may be retrieved using the keys. For instance:")
@@ -1397,14 +1844,14 @@ function sfmodel_fit(;
       _dicRES[:iter_limit_reached] = Optim.iteration_limit_reached(_optres)
       _dicRES[:_______________] = "___________________"  #33
       _dicRES[:n_observations]  = num.nofobs
-      _dicRES[:loglikelihood]   = -Optim.minimum(_optres)
+      _dicRES[:loglikelihood]   = -_fmin          # at the reported coefficients
       _dicRES[:table]           = [table][1]
       _dicRES[:coeff]           = _coevec
       _dicRES[:std_err]         = stddev
       _dicRES[:var_cov_mat]     = [var_cov_matrix][1]
       _dicRES[:jlms]            = _jlms
       _dicRES[:bc]              = _bc
-      _dicRES[:OLS_loglikelihood] = ll_ols
+      _dicM[:panel] === nothing && (_dicRES[:OLS_loglikelihood] = ll_ols)
       _dicRES[:OLS_resid_skew]    = sk_ols
       _dicRES[:marginal]      = margeff
       _dicRES[:marginal_mean] = margMinfo
@@ -1437,9 +1884,9 @@ function sfmodel_fit(;
 
       _dicRES[:________________]  = "___________________" #34
       _dicRES[:Hessian]           = [numerical_hessian][1]
-      _dicRES[:gradient_norm]     = Optim.g_residual(_optres)
-      _dicRES[:actual_iterations] = Optim.iterations(_optres)
-      _dicRES[:trace]             = _sf_optim_trace(_optres, get(_dicOPT, :store_trace, false))   # R-27
+      _dicRES[:gradient_norm]     = _gnorm
+      _dicRES[:actual_iterations] = sf_total_iter   # warmstart + main, as in the other backends
+      _dicRES[:trace]             = _sf_optim_trace(_optres, get(_dicOPT, :store_trace, false))
       _dicRES[:______________] = "______________________" #32
       _dicRES[:warmstart_solver] = sf_ini_algo_dic
       _dicRES[:warmstart_ini]    = sf_init_1st_dic
@@ -1447,10 +1894,13 @@ function sfmodel_fit(;
       _dicRES[:main_solver]      = sf_algo
       _dicRES[:main_ini]         = sf_init_2nd_dic
       _dicRES[:main_maxIT]       = sf_maxit
-      _dicRES[:tolerance]        = sf_tol
+      _dicRES[:main_tolerance]   = sf_main_options.g_abstol   # the name the other backends use
+      _dicRES[:tolerance]        = sf_tol                     # kept: sfmodel_boot_marginal reads it
       _dicRES[:eqpo]             = eqvec2
 
       _dicRES[:redflag]          = redflag
+      _dicRES[:hessian_flag]     = _hess.hessian_flag   # the Hessian part of redflag
+      _dicRES[:bound_check]      = bc                   # each parameter at or beyond its numerical bound
       _dicRES[:varnames]         = varlist[2:end]  # real variable names (strip header placeholder)
 
      #* ----- Delete optional keys that have value nothing,
@@ -1469,8 +1919,12 @@ function sfmodel_fit(;
 
      #* ---- Create a global dictionary for sf_predict ----
 
-        global _eqncoe
+        global _eqncoe, _fitted_dicM
         _eqncoe = Dict{Symbol, Vector}()
+        # Which `_dicM` these coefficients belong to. `sfmodel_predict` and
+        # `sfmodel_boot_marginal` read that state at call time; a spec built after this
+        # fit replaces the object, and they refuse rather than mix the two.
+        _fitted_dicM = _dicM
 
         for i in 1:length(eqvec2)
             _eqncoe[keys(eqvec)[i]]  = _coevec[eqvec2[i]] # for sf_predict
@@ -1506,11 +1960,22 @@ data.
 See also the help file on `sfmodel_CI()`.
 
 # Arguments
-- result=<returned result>: The returned result from `sfmodel_fit()`.
-- data=<dataset>: The DataFrame dataset containing the model's data.
-  Same as the one used in `sfmodel_fit()`. If the data was supplied by matrix
-  (instead of DataFrame; i.e., the Method 2 of `sfmodel_spec()`), this option
-  should be skipped.
+- result=<returned result>: The returned result from `sfmodel_fit()`. It must be the
+  result of the last `sfmodel_fit` with `method = :MLE`: the function takes the data and
+  the model's equations from the state that fit leaves in the backend (also when `data`
+  is given), so call it right after that fit, before another model is specified or
+  fitted. Any other result is refused with an error, including the result of an earlier
+  run of the same fit and a deep copy of a result (for example one saved and loaded
+  again): pass the object the fit returned (versions before 2.0.0 bootstrapped the later
+  model's data).
+- data=<dataset>: Leave it out for a model specified with the keyword or DSL form of
+  `sfmodel_spec()`: the bootstrap then takes the data from the state the fit left in the
+  backend. Do not pass the DataFrame the data came from: the model's equations refer to
+  the internal column names of that state (`depvar`, `frontier_var1`, ...), and a
+  DataFrame without them stops the bootstrap with an error. `data` is needed only after
+  the deprecated Vararg `sfmodel_spec()` given matrices (`result.transfer` is then
+  false), and it must then be the internal frame `SFrontiers.MLE_Backend.SFmle._dicM[:sdf]`.
+  (A Vararg `sfmodel_spec()` that names DataFrame columns can no longer be fitted.)
 - R::Integer=<number>: The number of bootstrapped samples. The default is 500.
 - level::Real=<number>: The significance level (default=0.05) of the bias-corrected
   confidence intervals. If `level`>0.5, it is automatically transformed to
@@ -1523,7 +1988,9 @@ See also the help file on `sfmodel_CI()`.
   result may change (slightly) between different runs.
 - iter::Integer=<number>: The maximum number of iterations for each bootstrapped
   sample. If the number is larger than 0, it overwrites the `main_maxIT` 
-  specified in `sfmodel_opt()` which is the default.
+  specified in `sfmodel_opt()` which is the default. A resample that reaches this
+  cap is drawn again, so an `iter` below what the resamples need keeps only the
+  resamples that converge quickly, which biases the standard errors (see Remarks).
 - getBootData::Bool=false: Whether to return the bootstrapped data which is
   ``R x K`` where K is the number of exogenous determinants of inefficiency.
 - every::Integer=10: Print bootstrapping progress for every `every` samples.
@@ -1532,15 +1999,53 @@ See also the help file on `sfmodel_CI()`.
 - Bootstrap samples are with replacement. For panel data, it samples
   cross-sectional units with replacement.
 - In the MLE estimation, estimated
-  coefficients from the main result is used as initial values. There is no
-  `warmstart`. The `main_solver`, `main_maxIT`, and `tolerance` specified in
-  `sfmodel_opt()` are used as default, but the value of `main_maxIT` may be
-  replaced by the `iter` option.
+  coefficients from the main result is used as initial values, in this backend's own
+  order (`result.list[:coeff]`). There is no `warmstart`. Each replicate uses the fit's
+  own main solver, iteration cap and
+  gradient tolerance (`result.main_solver`, `result.main_maxIT`, `result.tolerance`;
+  for a fit run without `optim_options`: Newton, 200 and 1e-7), and `iter` replaces the
+  cap. It stops on the gradient alone: its f- and x-tolerances are set to 0 and no
+  other `Optim.Options` keyword of the original fit is used, because a replicate is
+  kept only when its gradient norm is at most `tolerance` and it did not reach the
+  iteration cap; any other replicate is drawn again.
+- A resample is also drawn again when its optimizer throws an error, when computing the
+  Hessian at its estimate throws an error or the Hessian cannot be inverted or gives a
+  variance that is not positive, or when computing its mean marginal effects throws an
+  error or they contain NaN or lose a column (a determinant constant in the resample).
+  The standard errors and intervals therefore come only from resamples whose
+  re-estimation succeeded. A resample that fails is not a random one, so when many fail
+  the results describe only the resamples that converge. An `iter` below what the
+  resamples need adds to this: it keeps only the resamples that converge quickly. In
+  bootstraps with R = 200 (two models, three data sets, 3 or 4 seeds each), an `iter` at
+  which 62% to 73% of the resamples failed lowered the
+  standard errors by 13% to 22% against the default `iter`; where 21% to 34% failed,
+  the standard errors moved by between +2% and -13%. Even the default settings can
+  lose many: a truncated-normal
+  model with `hetero = [:mu, :sigma_u_sq]` on 350 observations, fitted with the default
+  options, lost 20 of 50 resamples (40%), 18 of them at the 200-iteration cap, and the
+  same 20 failed with `iter = 3000`.
+- The convergence test uses the fit's main solver. With NelderMead, NelderMead's own
+  convergence measure takes the place of the gradient norm. ParticleSwarm and
+  SimulatedAnnealing always run to their iteration limit and report no gradient norm,
+  so no resample can pass: for a fit with one of them as main solver the function stops
+  at once with an error. Refit with a gradient-based main solver (for example Newton or
+  BFGS, with ParticleSwarm as the warmstart if wanted) and bootstrap that fit.
+- Failed resamples are counted by kind. After `10R` of them (for example when no resample
+  converges within `iter`) the bootstrap stops with an error that gives the counts.
+  After the run it prints the number of resamples drawn and the failures by kind when the
+  fit was run with `verbose = true`, and it issues a warning, whatever `verbose`, when
+  more than 10% of the resamples drawn failed. Ctrl-C (`InterruptException`) stops the
+  bootstrap; it is not taken for a failed resample.
+- When there is nothing to bootstrap (a fit run with `marginal = false`, a model without
+  inefficiency determinants, or a `:panel_TFE_CSW` or `:panel_TRE` fit), the function
+  stops with "No statistics to bootstrap."
 
 # Examples
 ```julia
-julia> std_ci = sfmodel_boot_marginal(result=res, data=df, R=250, seed=123)
+julia> std_ci = sfmodel_boot_marginal(result=res, R=250, seed=123)
 bootstrap in progress..10..20..30..40..50..60..70..80..90..100..110..120..130..140..150..160..170..180..190..200..210..220..230..240..250..Done!
+
+Resamples drawn: 250; none failed.
 
 ┌────────┬──────────────────────┬─────────────────┬──────────────────────┐
 │        │ mean of the marginal │ std.err. of the │       bias-corrected │
@@ -1556,7 +2061,7 @@ bootstrap in progress..10..20..30..40..50..60..70..80..90..100..110..120..130..1
  0.0176472   (-0.048, 0.01224)
  0.012213    (-0.05257, -0.00447)
 
-julia> std_ci, bsdata = sfmodel_boot_marginal(result=res, data=df, R=250, seed=123, getBootData=true);
+julia> std_ci, bsdata = sfmodel_boot_marginal(result=res, R=250, seed=123, getBootData=true);
 
  (output omitted)
 
@@ -1589,19 +2094,31 @@ function sfmodel_boot_marginal(; result::Any=nothing,  data::Any=nothing,
                                  seed::Integer=-1,
                                  every::Integer=10) 
 
+  # The data and the model's equations come from the module-level state of the last :MLE fit
+  # and everything else from `result`, so `result` must be that fit's result
+  # (`_mle_require_result_of_last_fit`, SFpredict.jl). With `data` given, getvar below still
+  # reads the equations from `_dicM`, so that branch is checked as well.
   if data === nothing
       if result.transfer == true
+          _mle_require_result_of_last_fit("sfmodel_boot_marginal", result)
           data = _dicM[:sdf]
       else 
          throw("Need the `data=<DataFrame name>` option.")
       end
   elseif typeof(data) != DataFrame
       throw("`data=` needs to be a DataFrame.")
+  else
+      _mle_require_result_of_last_fit("sfmodel_boot_marginal", result)
   end      
 
    # getvar still use info from _dicM 
 
-  if result.marginal_mean==NamedTuple() || result.marginal_mean === nothing
+  # `isempty` also catches the empty tuple `()` that :MLE stores in marginal_mean for a fit
+  # with marginal = false, and for every panel_TFE_CSW and panel_TRE fit. A test against
+  # `NamedTuple()` misses it (`() == NamedTuple()` is false), and it would end in a
+  # MethodError at `ncol(result.marginal)` below. The `nothing` test comes first:
+  # isempty(nothing) throws.
+  if result.marginal_mean === nothing || isempty(result.marginal_mean)
       printstyled("The model does not have exogenous determinants of inefficiency, ", #=
                =# "or you didn't compute the marginal effect in the main estimation. Abort the bootstrap.\n"; color = :red)
       throw("No statistics to bootstrap.")               
@@ -1622,7 +2139,18 @@ function sfmodel_boot_marginal(; result::Any=nothing,  data::Any=nothing,
 #* ##### Get parameters #######
 
           _porc = result.PorC
-        sf_init = result.coeff
+        # Each replicate starts from the full-sample estimate, and LL_T reads it in this
+        # backend's own parameter order. The unified sfmodel_fit publishes `coeff` in the
+        # canonical order, which for the truncated normal with hetero = :scaling and for
+        # panel_TFE with a truncated normal puts the scaling block before μ, while
+        # `result.list` is this backend's own dictionary and keeps its order (SFrontiers.jl
+        # reorders the NamedTuple fields, not the dictionary). Starting from `result.coeff`
+        # swapped μ and the scaling coefficients: replicates that would have converged were
+        # redrawn or kept at an inferior optimum (standard errors off by about 5%), and a
+        # start whose objective is NaN made every resample fail. A result of
+        # MLE_Backend.sfmodel_fit holds the same vector in both places.
+        sf_init = (hasproperty(result, :list) && haskey(result.list, :coeff)) ?
+                  copy(result.list[:coeff]) : copy(result.coeff)
         sf_algo = eval(result.main_solver) 
        sf_maxit = result.main_maxIT  
          sf_tol = result.tolerance   
@@ -1631,6 +2159,21 @@ function sfmodel_boot_marginal(; result::Any=nothing,  data::Any=nothing,
        if iter > 0
            sf_maxit = iter
        end 
+
+       # A replicate is kept only when the solver reports convergence with a gradient norm at
+       # most sf_tol (below). ParticleSwarm and SimulatedAnnealing never report convergence and
+       # have no gradient norm (Optim gives NaN), so no resample could be kept. Stop here,
+       # before any draw, and say what to do instead.
+       if sf_algo isa Union{Optim.ParticleSwarm, Optim.SimulatedAnnealing}
+           error("sfmodel_boot_marginal cannot bootstrap this fit: its main solver is " *
+                 "$(nameof(typeof(sf_algo))). Each resample is re-estimated with the fit's main " *
+                 "solver and kept only when the solver reports convergence, with a gradient norm " *
+                 "at most `tolerance`, within the iteration cap. ParticleSwarm and " *
+                 "SimulatedAnnealing always run to their iteration limit and report no gradient " *
+                 "norm, so no resample could be kept. Refit with a gradient-based main solver, " *
+                 "for example `sfmodel_opt(main_solver = Newton())` or `BFGS()` (ParticleSwarm " *
+                 "can stay as the `warmstart_solver`), and bootstrap that fit.")
+       end
 
 #* ########  parepare data  ##########
 
@@ -1652,11 +2195,20 @@ function sfmodel_boot_marginal(; result::Any=nothing,  data::Any=nothing,
     rng = Xoshiro(seed)
  end
 
- # R-07: override _dicM equation names with common names so the replicate
+ # Override _dicM equation names with common names so the replicate
  # `get_marg` below merges same-variable channels exactly like `result.marginal`.
  # getvar() already extracted the data above using the original names, so this
  # affects only the marginal-effect column naming/merge. Restored after the loop.
  _saved_marg_names = _boot_common_marg_names!()
+
+ # A failed resample is drawn again and counted by kind; after 10R failures the bootstrap
+ # stops with an error (for example when `iter` is below what every resample needs); the
+ # counts are reported after the run; Ctrl-C and other fatal errors are rethrown instead of
+ # being taken for a failed resample; and the `finally` below restores the names however the
+ # loop exits.
+ _fails = _BootFailures(sf_maxit, sf_tol)
+
+ try
 
  for i in 1:R
 
@@ -1721,14 +2273,21 @@ function sfmodel_boot_marginal(; result::Any=nothing,  data::Any=nothing,
                        optimize(_lik2,
                                 sf_init,       # initial values
                                 sf_algo,       # different from search run
-                                Optim.Options(g_tol = sf_tol,
-                                              f_tol=0.0, # force `Optim` to ignore this, but sometimes it does meet the 0.0 criterion
-                                              x_tol=0.0, # same above
+                                # Each replicate stops on the gradient alone, because it is
+                                # accepted only with g_residual <= sf_tol below; a user's f- or
+                                # x-tolerance could stop it earlier and make it resample again
+                                # and again. The explicit zero tolerances are spelled with
+                                # Optim's current names (f_tol / x_tol warn in every replicate).
+                                Optim.Options(g_abstol = sf_tol,
+                                              f_reltol = 0.0, f_abstol = 0.0,
+                                              x_abstol = 0.0, x_reltol = 0.0,
                                               iterations  = sf_maxit, # different from search run
                                               store_trace = false,
                                               show_trace  = false);
                                 autodiff = AutoForwardDiff())
                     catch err
+                       _boot_fatal(err) && rethrow()   # Ctrl-C stops the bootstrap
+                       _boot_fail!(_fails, :optimizer, R, i - 1, err)
                        @goto start1
                     end 
 
@@ -1737,41 +2296,66 @@ function sfmodel_boot_marginal(; result::Any=nothing,  data::Any=nothing,
 
 if (Optim.iteration_limit_reached(_optres) ) || 
      (isnan(Optim.g_residual(_optres)) ) ||  
-     (Optim.g_residual(_optres) > sf_tol)  # hjw!! was: 1e-1
+     (Optim.g_residual(_optres) > sf_tol)
+         _boot_fail!(_fails, Optim.iteration_limit_reached(_optres) ? :itercap : :gradient, R, i - 1)
          @goto start1
   end  
 
     _coevec            = Optim.minimizer(_optres)  # coef. vec.
-    numerical_hessian  = ForwardDiff.hessian(_lik2, _coevec)  # Hessian
+    # An error while computing the replicate's Hessian, or its marginal effects below, is a
+    # failed resample of its own kind, drawn again and counted like the others, so the
+    # replicates already done are kept; the fatal errors (_boot_fatal) end the bootstrap.
+    numerical_hessian  = try
+                            ForwardDiff.hessian(_lik2, _coevec)  # Hessian
+                         catch err
+                            _boot_fatal(err) && rethrow()
+                            _boot_fail!(_fails, :hesserror, R, i - 1, err)
+                            @goto start1
+                         end
 
    #* ------ Check if the matrix is invertible. ----
 
    var_cov_matrix = try
                        inv(numerical_hessian)
                     catch err 
+                       _boot_fatal(err) && rethrow()
+                       _boot_fail!(_fails, :inverse, R, i - 1)
                        @goto start1
                     end 
 
         if !all( diag(var_cov_matrix) .> 0 ) # not all are positive
+              _boot_fail!(_fails, :variance, R, i - 1)
               @goto start1
         end              
 
    #* ---- marginal effect on E(u) -------------- 
 
-   margeff, margMinfo = get_marg(result.modelid, pos, num, _coevec, zvar, qvar, wvar)
+   margeff, margMinfo = try
+                           get_marg(result.modelid, pos, num, _coevec, zvar, qvar, wvar)
+                        catch err
+                           _boot_fatal(err) && rethrow()
+                           _boot_fail!(_fails, :margerror, R, i - 1, err)
+                           @goto start1
+                        end
 
    theM = mean.(eachcol(margeff))  # mean marginal effect
 
-   if sum(isnan.(theM)) != 0  # in this run some of the element is NaN
+   # `any(isnan, theM)` gives the same answer as `sum(isnan.(theM)) != 0` on every non-empty
+   # theM, and `false` on an empty one (every determinant constant in the resample), where the
+   # sum test would throw MethodError(zero, Any) and end the bootstrap; such a resample reaches the
+   # column test below and is drawn again.
+   if any(isnan, theM)  # in this run some of the element is NaN
+      _boot_fail!(_fails, :margnan, R, i - 1)
       @goto start1
    end
 
-   # R-07: a bootstrap resample can make a determinant column constant, so
+   # A bootstrap resample can make a determinant column constant, so
    # `nonConsDataFrame` inside get_marg purges it and `theM` ends up shorter than
    # `result.marginal` (whose columns were fixed on the full, non-degenerate
    # sample). Resample such a degenerate draw — like the inv/NaN guards above —
    # instead of hitting an uncaught DimensionMismatch at the assignment below.
    if length(theM) != size(sim_res, 1)
+      _boot_fail!(_fails, :margdim, R, i - 1)
       @goto start1
    end
 
@@ -1791,7 +2375,11 @@ if (Optim.iteration_limit_reached(_optres) ) ||
 
 end   # for i=1:R
 
- _boot_restore_marg_names!(_saved_marg_names)   # R-07: undo the common-name override
+ finally
+ _boot_restore_marg_names!(_saved_marg_names)   # undo the common-name override
+ end
+
+ _boot_report(_fails, R, result.verbose)   # counts by kind; a warning above 10%
 
  sim_res = sim_res'  # nofobs x K; ith row = ith replication, column = statistics
 
@@ -1819,13 +2407,12 @@ end   # for i=1:R
 
        mylevel = 100*(1-level)
 
-      table = [" " "mean of the marginal" "std.err. of the"  "bias-corrected"; 
-               " " "effect on E(u)"       "mean effect"      "$(mylevel)%  conf. int.";
-               table]  
-
+      # The two header rows are PrettyTables-3 column labels. The `show_header` /
+      # `body_hlines` keywords are PrettyTables 2 and would throw a MethodError here, after all
+      # R replicates have run, whenever the fit is verbose.
             pretty_table(table;
-                         show_header = false,
-                         body_hlines = [2],
+                         column_labels = [[" ", "mean of the marginal", "std.err. of the", "bias-corrected"],
+                                          [" ", "effect on E(u)", "mean effect", "$(mylevel)%  conf. int."]],
                          formatters = [fmt__printf("%.5f", collect(2:4))],
                          compact_printing = true,
                          backend = sf_table)
@@ -1845,22 +2432,23 @@ end # sfmodel_boot_marginal
 # --- utilities for sfmodel_boot_marginal -------#
 # -----------------------------------------------#
 
-# R-07: the fit-time marginal (sfmodel_fit) overrides the `_dicM` equation entries
-# (:μ/:σᵤ²/:λ/:hscale) with common names before calling `get_marg`, so that
+# The fit-time marginal (sfmodel_fit) overrides the `_dicM` equation entries
+# (:μ/:σᵤ²/:hscale) with common names before calling `get_marg`, so that
 # `addDataFrame` merges same-variable channels across equations — `result.marginal`
 # therefore has the MERGED column set. `sfmodel_boot_marginal`'s replicate `get_marg`
 # must use the identical override or it produces the UNMERGED (wider) column set,
 # and `sim_res[:, i] = theM` then throws a DimensionMismatch for multi-channel fits.
-# These two helpers apply and undo that override (mirroring SFmainfun.jl:1200-1246).
+# These two helpers apply and undo that override (mirroring the one around `get_marg` in
+# `sfmodel_fit`).
 function _boot_common_marg_names!()
     saved = Dict{Symbol, Any}()
-    for key in (:μ, :σᵤ², :λ, :hscale)
+    for key in (:μ, :σᵤ², :hscale)
         v = get(_dicM, key, nothing)
         v !== nothing && (saved[key] = copy(v))
     end
     if get(_dicM, :_display_zvar, nothing) !== nothing
         dnames_zv = get(_dicM, :_display_zvar, Symbol[])
-        for key in (:μ, :σᵤ², :λ, :hscale)
+        for key in (:μ, :σᵤ², :hscale)
             v = get(_dicM, key, nothing)
             if v isa Vector{Symbol} && length(v) == length(dnames_zv)
                 _dicM[key] = dnames_zv
@@ -1868,13 +2456,13 @@ function _boot_common_marg_names!()
         end
     else
         ref_len = 0
-        for key in (:μ, :σᵤ², :λ, :hscale)
+        for key in (:μ, :σᵤ², :hscale)
             v = get(_dicM, key, nothing)
             v isa Vector{Symbol} && (ref_len = max(ref_len, length(v)))
         end
         if ref_len > 1
             common_names = [Symbol("z_var$i") for i in 1:ref_len]
-            for key in (:μ, :σᵤ², :λ, :hscale)
+            for key in (:μ, :σᵤ², :hscale)
                 v = get(_dicM, key, nothing)
                 if v isa Vector{Symbol} && length(v) == ref_len
                     _dicM[key] = common_names
@@ -1886,6 +2474,110 @@ function _boot_common_marg_names!()
 end
 
 _boot_restore_marg_names!(saved) = (for (k, v) in saved; _dicM[k] = v; end; nothing)
+
+# Bookkeeping of the bootstrap's failed resamples.
+# The kinds, in the order they are reported; each is one test of the redraw loop.
+const _BOOT_FAIL_KINDS = (
+    optimizer = "the optimizer threw an error",
+    itercap   = "reached the iteration cap",
+    gradient  = "stopped with the gradient norm above the tolerance, or NaN",
+    hesserror = "computing the Hessian threw an error",
+    inverse   = "Hessian not invertible",
+    variance  = "inverse Hessian with a non-positive variance",
+    margerror = "computing the marginal effects threw an error",
+    margnan   = "NaN in the mean marginal effects",
+    margdim   = "an inefficiency determinant constant in the resample",
+)
+
+mutable struct _BootFailures
+    n::Vector{Int}     # failed resamples by kind, in the order of _BOOT_FAIL_KINDS
+    lasterr::Any       # the last error the optimizer threw (its message is formatted only
+                       # when a report, warning or error is printed; `nothing` if none)
+    maxit::Any         # the resamples' iteration cap (`iter`, else the fit's main_maxIT)
+    tol::Any           # the resamples' gradient tolerance
+    lastposterr::Any   # the last error of a replicate's Hessian or marginal effects
+end
+_BootFailures(maxit, tol) = _BootFailures(zeros(Int, length(_BOOT_FAIL_KINDS)), nothing, maxit, tol, nothing)
+
+# Errors that end the bootstrap instead of counting as a failed resample: Ctrl-C, and
+# errors that another draw cannot cure. Ctrl-C can also arrive wrapped, when it lands in a
+# task spawned by a likelihood's threaded loop (TaskFailedException, CompositeException).
+# The rule is SFRedflag.sf_fatal_error, which the four fit functions apply to an error in
+# their final Hessian and re-evaluation as well; it is the rule above (InterruptException,
+# OutOfMemoryError, StackOverflowError, also wrapped) plus CUDA's out-of-GPU-memory error,
+# recognised by its type name or its message.
+using ...SFRedflag: sf_fatal_error
+_boot_fatal(err) = sf_fatal_error(err)
+
+# The message of an optimizer error on one line, at most 200 characters; the error's type
+# when its message cannot be printed (a broken `showerror` must not end the bootstrap).
+function _boot_errtext(err)
+    try
+        return first(replace(sprint(showerror, err), r"\s+" => " "), 200)
+    catch e
+        _boot_fatal(e) && rethrow()
+        return string(typeof(err))
+    end
+end
+
+function _boot_fail_summary(f::_BootFailures)
+    parts = String[]
+    for (j, k) in enumerate(keys(_BOOT_FAIL_KINDS))
+        f.n[j] == 0 && continue
+        lab = k === :itercap  ? "reached the iteration cap ($(f.maxit))" :
+              k === :gradient ? "stopped with the gradient norm above the tolerance ($(f.tol)), or NaN" :
+              _BOOT_FAIL_KINDS[k]
+        push!(parts, "$(lab): $(f.n[j])")
+    end
+    s = join(parts, "; ")
+    f.lasterr === nothing || (s *= "; the last optimizer error: " * _boot_errtext(f.lasterr))
+    f.lastposterr === nothing ||
+        (s *= "; the last error in a Hessian or the marginal effects: " * _boot_errtext(f.lastposterr))
+    return s
+end
+
+# Count one failed resample (`ndone` replicates are complete); stop after 10R failures.
+function _boot_fail!(f::_BootFailures, kind::Symbol, R::Integer, ndone::Integer, err = nothing)
+    f.n[findfirst(==(kind), keys(_BOOT_FAIL_KINDS))] += 1
+    err === nothing || (kind in (:hesserror, :margerror) ? (f.lastposterr = err) : (f.lasterr = err))
+    nf = sum(f.n)
+    if nf >= 10 * R
+        error("sfmodel_boot_marginal stopped: $(nf) resamples failed (the limit is 10R = $(10 * R)) " *
+              "while $(ndone) of the R = $(R) replicates were complete. Failed resamples by kind: " *
+              _boot_fail_summary(f) * ". Standard errors from the few resamples that do converge " *
+              "would not be reliable. If most failures reached the iteration cap, raise `iter` (it " *
+              "replaces the fit's `main_maxIT` in each resample). Check that the fit itself " *
+              "converged (`converged`, `redflag`, `gradient_norm`) and that the model is identified " *
+              "on this sample; an estimate near a boundary (for example σᵤ² near 0) may call for a " *
+              "simpler model.")
+    end
+    return nothing
+end
+
+# After the run: print the counts when the fit was verbose; warn when more than 10% of the
+# resamples drawn failed, whatever `verbose`.
+function _boot_report(f::_BootFailures, R::Integer, verbose)
+    nf = sum(f.n); nd = R + nf
+    pct = round(100 * nf / nd; digits = 1)
+    if verbose == true
+        if nf == 0
+            println("Resamples drawn: $(nd); none failed.\n")
+        else
+            println("Resamples drawn: $(nd); $(nf) failed and were drawn again ($(pct)%): ",
+                    _boot_fail_summary(f), ".\n")
+        end
+    end
+    if 10 * nf > nd
+        @warn("sfmodel_boot_marginal: $(nf) of the $(nd) resamples drawn ($(pct)%) failed and were " *
+              "replaced by new draws (" * _boot_fail_summary(f) * "). The standard errors and " *
+              "confidence intervals come only from the $(R) resamples whose re-estimation " *
+              "succeeded. A resample that fails is not a random one, so the results are " *
+              "conditional on convergence and may understate the sampling variability. If most " *
+              "failures reached the iteration cap, try a larger `iter`; also check the fit " *
+              "(`converged`, `redflag`, `gradient_norm`).")
+    end
+    return nothing
+end
 
 
 """
@@ -1910,7 +2602,6 @@ It returns the sampled data and a vector of generated individual id.
  - select: a vector indicating the selected rows. Typically an output
    from `sample()`.
 """
-
 function mySample(rowIDT, data, select)
   newobs = 0.0  # number of obs in the new dataset
   for i in 1:length(select)  
@@ -1960,11 +2651,11 @@ See also the help file on `sfmodel_boot_marginal()`.
 
 # Examples
 ```julia
-julia> myans = sfmodel_fit(useData(df));
+julia> myans = sfmodel_fit(spec = myspec, method = mymeth);   # a fit with method = :MLE
 
  (output omitted)
 
-julia> std_ci, bsdata = sfmodel_boot_marginal(result=myans, data=df, R=250, seed=123, getBootData=true);
+julia> std_ci, bsdata = SFrontiers.MLE_Backend.sfmodel_boot_marginal(result=myans, R=250, seed=123, getBootData=true);
 
  (output omitted)
 
@@ -2012,7 +2703,7 @@ function sfmodel_CI(; bootdata::Any=nothing, observed::Union{Vector, Real, Tuple
     ci = Array{Any}(undef, nofK, 1)
 
     z1 = quantile(Normal(), level/2)
-    z2 = quantile(Normal(), 1 - level/2)  #! why z1 != z2?
+    z2 = quantile(Normal(), 1 - level/2)
 
 
     for i in 1:nofK

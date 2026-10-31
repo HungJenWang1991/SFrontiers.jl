@@ -23,7 +23,9 @@ efficiency (BC) index. Return various results in a distionary.
 - `omega (or ω)::Union{Real, Vector, Tuple}=<a vector of numbers>`:
   The `ω` parameter used in the test. It could take the form of a single value
   (e.g., `ω=1`) or a vector or tuple (e.g., `ω=(0.5, 1, 2)`). Default is
-  `ω=1.0`.
+  `ω=1.0`. The two spellings are one argument: supply either, not both with
+  different values — that is refused rather than resolved by precedence, since
+  `ω` used to win and `omega` was discarded without a word.
 - `level::Real=<number>`: The significance level (default=0.05) of the bias-corrected
   confidence intervals. If `level`>0.5, it is automatically transformed to
   `1-level`, such that `level=0.05` and `level=0.95` both return 95%
@@ -84,9 +86,24 @@ function sfmodel_MoMTest(arg::Vararg; data::DataFrame, ω::Union{Vector, Real, T
 
     #-- retrieve parameters -------
 
-    if !(1 in ω) || (length(ω) > 1)
+    # `ω` and `omega` are two spellings of one argument. The rule below takes whichever is
+    # nondefault, with `ω` winning — which meant that when a caller supplied BOTH and they
+    # disagreed (`ω=2, omega=3`), `omega` was discarded without a word and the reported test
+    # statistics were the `ω=2` ones. A conflict between two spellings of the same argument is
+    # a mistake in the call, not something to resolve by precedence, so name it. Either
+    # spelling on its own is untouched, and supplying the same value twice is accepted.
+    _ω_given     = !(1 in ω)     || (length(ω) > 1)
+    _omega_given = !(1 in omega) || (length(omega) > 1)
+    _as_vec(x) = x isa Union{AbstractVector, Tuple} ? collect(float.(x)) : [float(x)]
+    if _ω_given && _omega_given && _as_vec(ω) != _as_vec(omega)
+        throw("`ω` and `omega` are two spellings of the same argument, and you supplied both " *
+              "with conflicting values: ω = $ω, omega = $omega. Only `ω` would have been used " *
+              "and `omega` silently discarded. Supply one of them.")
+    end
+
+    if _ω_given
         ω = ω
-    elseif !(1 in omega) || (length(omega) > 1)
+    elseif _omega_given
         ω = omega
     end
 
@@ -186,9 +203,9 @@ function sfmodel_MoMTest(arg::Vararg; data::DataFrame, ω::Union{Vector, Real, T
         end
 
         if s == "H"
-            Resid2 = Resid .- sqrt(σᵤ²)*sqrt(2/π)   # R-01: subtract E[u] unconditionally (see JLMS note below)
+            Resid2 = Resid .- sqrt(σᵤ²)*sqrt(2/π)   # subtract E[u] unconditionally (see JLMS note below)
         elseif s == "E"
-            Resid2 = Resid .- sqrt(σᵤ²)              # R-01: subtract E[u] unconditionally
+            Resid2 = Resid .- sqrt(σᵤ²)              # subtract E[u] unconditionally
         end
         
         Grad2 = CResid.^2 .- (σᵥ²+λ₂*σᵤ²)
@@ -310,18 +327,27 @@ function sfmodel_MoMTest(arg::Vararg; data::DataFrame, ω::Union{Vector, Real, T
     #***** JLMS & BC ********************************
     
     if s == "H" 
-        myeps = Resid .- sqrt(σᵤ²)*sqrt(2/π)  # R-01: subtract E[u] unconditionally. Resid is already _porc-flipped (L153) into production v−u form (prod) / −(v+u) form (cost), each offset by +E[u] that the OLS intercept absorbed; the extra _porc here added E[u] for :cost (shift +2E[u]).
+        # Subtract E[u] unconditionally: Resid is already flipped by _porc (`Resid = _porc*resid`
+        # above) into the production form v−u (prod) or −(v+u) (cost), each offset by the +E[u]
+        # that the OLS intercept absorbed.
+        myeps = Resid .- sqrt(σᵤ²)*sqrt(2/π)
         mustar  = -σᵤ²*myeps/(σᵤ² + σᵥ²) 
         sig2star = σᵤ²*σᵥ²/(σᵤ² + σᵥ²) 
         rat1 = mustar/sqrt(sig2star)
-        _jlms = sqrt(sig2star) .* exp.(normlogpdf.(rat1) .- normlogcdf.(rat1)) .+ (mustar)
-        _bc  = exp.(clamp.(-mustar .+ 0.5*sig2star .+ normlogcdf.(rat1 .- sqrt(sig2star)) .- normlogcdf.(rat1), -500.0, 500.0))
+        # rat1 < -40 takes the stable forms of SFindex.jl
+        _jlms = ifelse.(rat1 .< -40, sqrt(sig2star) .* sf_tn_mean.(rat1),
+                        sqrt(sig2star) .* exp.(normlogpdf.(rat1) .- normlogcdf.(rat1)) .+ (mustar))
+        _bc  = ifelse.(rat1 .< -40, exp.(sf_tn_logmgf.(rat1, sqrt(sig2star))),
+                       exp.(clamp.(-mustar .+ 0.5*sig2star .+ normlogcdf.(rat1 .- sqrt(sig2star)) .- normlogcdf.(rat1), -500.0, 500.0)))
     elseif s == "E" 
-        myeps = Resid .- sqrt(σᵤ²) # R-01: subtract E[u] unconditionally (see the half-normal branch above)
+        myeps = Resid .- sqrt(σᵤ²) # subtract E[u] unconditionally (see the half-normal branch above)
         mustar = -myeps .- σᵥ²/sqrt(σᵤ²) 
         rat1 = mustar/sqrt(σᵥ²)
-        _jlms = sqrt(σᵥ²) .* exp.(normlogpdf.(rat1) .- normlogcdf.(rat1)) .+ mustar
-        _bc = exp.(clamp.(-mustar .+ 0.5*σᵥ² .+ normlogcdf.(rat1 .- sqrt(σᵥ²)) .- normlogcdf.(rat1), -500.0, 500.0))
+        # rat1 < -40 takes the stable forms of SFindex.jl
+        _jlms = ifelse.(rat1 .< -40, sqrt(σᵥ²) .* sf_tn_mean.(rat1),
+                        sqrt(σᵥ²) .* exp.(normlogpdf.(rat1) .- normlogcdf.(rat1)) .+ mustar)
+        _bc = ifelse.(rat1 .< -40, exp.(sf_tn_logmgf.(rat1, sqrt(σᵥ²))),
+                      exp.(clamp.(-mustar .+ 0.5*σᵥ² .+ normlogcdf.(rat1 .- sqrt(σᵥ²)) .- normlogcdf.(rat1), -500.0, 500.0)))
     end
 
     _jlmsM = mean(_jlms) 
@@ -453,7 +479,7 @@ function sfmodel_MoMTest(arg::Vararg; data::DataFrame, ω::Union{Vector, Real, T
       _dicRES[:std_err]         = std_list 
       _dicRES[:jlms]            = _jlms     
       _dicRES[:bc]              = _bc       
-      _dicRES[:MoM_loglikelihood] = llike #! hjw: see SFloglikefun
+      _dicRES[:MoM_loglikelihood] = llike # see SFloglikefun.jl
       _dicRES[:OLS_loglikelihood] = ll_ols  
       _dicRES[:OLS_resid_skew]    = sk_ols  
       _dicRES[:depvar]        = _dicMoM[:depvar]    

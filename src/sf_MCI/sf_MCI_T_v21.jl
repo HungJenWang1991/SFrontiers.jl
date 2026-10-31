@@ -2,12 +2,13 @@
 # SPDX-License-Identifier: GPL-3.0-or-later
 
 #=
-    sf_MCI_T_v18.jl
+    sf_MCI_T_v21.jl
 
     Monte Carlo Integration (MCI/T-approach) for all inefficiency distributions.
 
     This file provides a UNIFIED implementation for all inefficiency distributions:
-    Exponential, HalfNormal, TruncatedNormal, Weibull, Lognormal, Lomax, Rayleigh, Gamma.
+    Exponential, HalfNormal, TruncatedNormal, Weibull, Lognormal, Lomax, Rayleigh, Gamma,
+    Erlang{2,3,4}.
 
     The MCI approach computes the likelihood as:
         L(t) = f_noise(ε + sign·u) · f_u(u; params) · J(t)
@@ -33,7 +34,6 @@
         - GPU compatible (element-wise operations, no scalar indexing)
         - ForwardDiff compatible for automatic differentiation
         - Supports both chunked and non-chunked paths
-        - Modular design following temp_MCI_example.jl pattern
 =#
 
 using SpecialFunctions: erf, erfinv
@@ -41,6 +41,26 @@ using SpecialFunctions: erf, erfinv
 # Helper function for standard normal CDF (used by TruncatedNormal)
 """Standard normal CDF: Φ(x) = 0.5 × (1 + erf(x/√2))"""
 _normcdf(x) = 0.5 * (1 + erf(x / sqrt(oftype(x, 2))))
+
+"""
+    _mci_tn_logPhi(a)
+
+log Φ(a), the truncated-normal normaliser at a = μ/σᵤ. The direct form
+`log(max(_normcdf(a), 1e-15))` fails as a falls: `1 + erf` cancels, which puts errors of either
+sign, up to 0.037 per observation, into the log-likelihood just above a = -7.94, and below that
+the floor takes over, so the density is mis-normalised by about a²/2 per observation (at
+μ = -0.096 and ln σᵤ² = -10, a = -14.25, the direct form gives an MCI log-likelihood of -28888
+on 400 observations against -672.4 for MLE and MSLE). Below a = -1 the stable form
+`sf_normlogcdf_lowtail` (src/sf_numerics.jl) is used; at a ≥ -1 the direct form is used
+(Φ(a) ≥ 0.158 there, so the floor never binds).
+
+The density's own terms, -z²/2 and -log Φ(a), are each about a²/2 when u is near 0 and still
+cancel, by about eps·a²/2 per draw (5e-10 at a = -2115, 0.01 nats near a = -1e7). That is far
+inside the region where MCI's draws cover the density poorly (manual, Section 9).
+"""
+@inline _mci_tn_logPhi(a) = a < -1 ? sf_normlogcdf_lowtail(1.0 * a) : log(_normcdf(a))
+# (1.0 * a: log(_normcdf(a)) returns Float64, because _normcdf's 0.5 promotes; the tail
+# branch promotes the same way, so the result type does not depend on the branch)
 
 # ============================================================================
 # Section 0a: Generic Transformation Rules (Configurable)
@@ -120,7 +140,7 @@ const TRANSFORMATION_RULES = Dict{Symbol, Tuple{Function, Function}}(
 Get the default transformation rule for a given inefficiency distribution.
 """
 function default_transformation_rule(ineff::Symbol)
-    if ineff in (:Exponential, :Weibull, :Gamma, :Rayleigh)
+    if ineff in (:Exponential, :Weibull, :Gamma, :Rayleigh, :Erlang2, :Erlang3, :Erlang4)
         return :expo_rule
     elseif ineff in (:HalfNormal, :TruncatedNormal, :Lognormal)
         return :logistic_1_rule
@@ -135,6 +155,7 @@ end
 default_transformation_rule(::Exponential_MCI) = :expo_rule
 default_transformation_rule(::Weibull_MCI) = :expo_rule
 default_transformation_rule(::Gamma_MCI) = :expo_rule
+default_transformation_rule(::Erlang_MCI) = :expo_rule
 default_transformation_rule(::Rayleigh_MCI) = :expo_rule
 default_transformation_rule(::HalfNormal_MCI) = :logistic_1_rule
 default_transformation_rule(::TruncatedNormal_MCI) = :logistic_1_rule
@@ -163,13 +184,14 @@ end
 """
     log_pdf_ineff_exp(u, lambda, clamp_lo)
 
-Log-PDF of Exponential distribution at u, where λ = Var(u).
-    rate = 1/√λ,  f(u; λ) = (1/√λ) · exp(-u/√λ)
-    log f = -0.5·log(λ) - u/√λ
+Log-PDF of Exponential distribution at u, parameterised by the squared scale σᵤ², which
+for this distribution is also Var(u); the scale is √σᵤ².
+    rate = 1/√σᵤ²,  f(u; σᵤ²) = (1/√σᵤ²) · exp(-u/√σᵤ²)
+    log f = -0.5·log(σᵤ²) - u/√σᵤ²
 """
-@inline function log_pdf_ineff_exp(u, lambda, clamp_lo)
-    lambda_safe = max(lambda, clamp_lo)
-    return -0.5 * log(lambda_safe) - u / sqrt(lambda_safe)
+@inline function log_pdf_ineff_exp(u, sigma_sq, clamp_lo)
+    sigma_sq_safe = max(sigma_sq, clamp_lo)
+    return -0.5 * log(sigma_sq_safe) - u / sqrt(sigma_sq_safe)
 end
 
 """
@@ -283,14 +305,31 @@ end
 Extract the scale parameter used for transformation from ineff_vals.
 Each distribution uses a different parameter as its scale.
 """
-get_scale_param(::Exponential_MCI, vals) = sqrt.(vals.lambda)
+get_scale_param(::Exponential_MCI, vals) = sqrt.(vals.sigma_sq)
 get_scale_param(::HalfNormal_MCI, vals) = vals.sigma
 get_scale_param(::TruncatedNormal_MCI, vals) = vals.sigma_u
 get_scale_param(::Weibull_MCI, vals) = vals.lambda
 get_scale_param(::Lognormal_MCI, vals) = vals.sigma
-get_scale_param(::Lomax_MCI, vals) = vals.lambda
+# Lomax: scale by the MEDIAN λ(2^(1/α) − 1), not λ. λ alone is far too wide once α is large,
+# so almost every draw lands where the integrand is negligible. The MEAN λ/(α−1) is not usable
+# as a scale: α is only floored at c.α_floor = 0.1, so the mean is negative or infinite over
+# part of the optimizer's admissible region, while the median is positive and finite for every
+# admissible α.
+get_scale_param(::Lomax_MCI, vals) = vals.lambda .* (exp2.(1 ./ vals.alpha) .- 1)
 get_scale_param(::Rayleigh_MCI, vals) = vals.sigma
-get_scale_param(::Gamma_MCI, vals) = vals.theta
+# Gamma: θ·√(1+k²), observation by observation, as in the panel (mypan_get_mci_scale(::Gamma_Panel)
+# in src/sf_panel/sf_panel_v20.jl). The mass of Gamma(k, θ) sits near k·θ: scaling the expo_rule
+# proposal by θ alone makes the importance weight proportional to u^(k−1), unbounded and increasing
+# for k > 1, so a single draw decides each observation's integral. A scale of k·θ is too narrow for
+# k < 1 (and often for k from 1 to 2 when the noise is small): the draws thin out faster than the
+# Gamma's own tail exp(−u/θ), so an observation far in the tail gets almost no draws (at k = 0.5 on
+# 500 observations, tens to hundreds of nats off in some samples). θ·√(1+k²) is close to k·θ for
+# large k and to θ for small k, and smooth in k. The broadcast serves a heteroscedastic k on the CPU
+# or a CuArray, and Float32 stays Float32. Gamma with k = M does not reproduce Erlang M (scaled by
+# M·θ, below) bit for bit.
+get_scale_param(::Gamma_MCI, vals) = vals.theta .* sqrt.(1 .+ vals.k .^ 2)
+# Mass of Erlang(M, θ) sits near M·θ — scale the expo_rule draws accordingly
+get_scale_param(::Erlang_MCI{M}, vals) where {M} = vals.theta .* M
 
 # ============================================================================
 # Section 1b: Log-PDF Computation (dispatch by distribution type)
@@ -313,8 +352,8 @@ Dispatches to distribution-specific implementation.
 - `c`: Constants struct with clamp_lo
 """
 function log_pdf_ineff!(::Exponential_MCI, out, u, ineff_vals, c)
-    lambda = reshape(ineff_vals.lambda, :, 1)
-    @. out = log_pdf_ineff_exp(u, lambda, c.clamp_lo)
+    sigma_sq = reshape(ineff_vals.sigma_sq, :, 1)
+    @. out = log_pdf_ineff_exp(u, sigma_sq, c.clamp_lo)
 end
 
 function log_pdf_ineff!(::HalfNormal_MCI, out, u, ineff_vals, c)
@@ -325,7 +364,7 @@ end
 function log_pdf_ineff!(::TruncatedNormal_MCI, out, u, ineff_vals, c)
     mu = reshape(ineff_vals.mu, :, 1)
     sigma_u = reshape(ineff_vals.sigma_u, :, 1)
-    log_Phi = log.(max.(_normcdf.(mu ./ sigma_u), c.clamp_lo))
+    log_Phi = _mci_tn_logPhi.(mu ./ sigma_u)       # log Φ with no floor and no cancellation
     @. out = log_pdf_ineff_truncnorm(u, mu, sigma_u, log_Phi, c.clamp_lo)
 end
 
@@ -359,6 +398,11 @@ function log_pdf_ineff!(::Gamma_MCI, out, u, ineff_vals, c)
     @. out = log_pdf_ineff_gamma(u, k, theta, lgk, c.clamp_lo)
 end
 
+# Erlang ineff_vals carries (k, theta, lgk) with the shape pinned at the Erlang
+# order, so every Gamma kernel below applies unchanged
+log_pdf_ineff!(::Erlang_MCI, out, u, ineff_vals, c) =
+    log_pdf_ineff!(Gamma_MCI(), out, u, ineff_vals, c)
+
 # ============================================================================
 # Section 1c: Chunked Log-PDF Computation (dispatch by distribution type)
 # ============================================================================
@@ -372,8 +416,8 @@ Chunked version of log_pdf_ineff! for memory-efficient processing.
 Extracts the relevant slice of parameter vectors for the current chunk.
 """
 function log_pdf_ineff_chunk!(::Exponential_MCI, out, u, ineff_vals, c, rs, re)
-    lambda = reshape((@view ineff_vals.lambda[rs:re]), :, 1)
-    @. out = log_pdf_ineff_exp(u, lambda, c.clamp_lo)
+    sigma_sq = reshape((@view ineff_vals.sigma_sq[rs:re]), :, 1)
+    @. out = log_pdf_ineff_exp(u, sigma_sq, c.clamp_lo)
 end
 
 function log_pdf_ineff_chunk!(::HalfNormal_MCI, out, u, ineff_vals, c, rs, re)
@@ -384,7 +428,7 @@ end
 function log_pdf_ineff_chunk!(::TruncatedNormal_MCI, out, u, ineff_vals, c, rs, re)
     mu = reshape((@view ineff_vals.mu[rs:re]), :, 1)
     sigma_u = reshape((@view ineff_vals.sigma_u[rs:re]), :, 1)
-    log_Phi = log.(max.(_normcdf.(mu ./ sigma_u), c.clamp_lo))
+    log_Phi = _mci_tn_logPhi.(mu ./ sigma_u)       # log Φ with no floor and no cancellation
     @. out = log_pdf_ineff_truncnorm(u, mu, sigma_u, log_Phi, c.clamp_lo)
 end
 
@@ -418,8 +462,11 @@ function log_pdf_ineff_chunk!(::Gamma_MCI, out, u, ineff_vals, c, rs, re)
     @. out = log_pdf_ineff_gamma(u, k, theta, lgk, c.clamp_lo)
 end
 
+log_pdf_ineff_chunk!(::Erlang_MCI, out, u, ineff_vals, c, rs, re) =
+    log_pdf_ineff_chunk!(Gamma_MCI(), out, u, ineff_vals, c, rs, re)
+
 # ============================================================================
-# Section 1d: Inefficiency CDF F_u(u) — copula models only (FIX-22)
+# Section 1d: Inefficiency CDF F_u(u) — copula models only
 # ============================================================================
 #
 # The T-approach draws u = trans(t) via a generic importance transform, so the
@@ -430,16 +477,31 @@ end
 # Each F_u is the exact inverse of the matching quantile function (Section 3).
 #
 # `_copula_true_Fu` is a trait: true → use the computed CDF F_u(u) as the copula's
-# u-side argument. All 8 inefficiency distributions pass the true CDF (FIX-22),
+# u-side argument. All 8 inefficiency distributions pass the true CDF,
 # so MCI + copula estimates the same c(F_v,F_u) model the manual documents (§8)
-# and matches MSLE. Gamma uses the AD-safe regularized incomplete gamma below.
+# as MSLE, and the two agree up to simulation error. For the truncated normal this
+# needs the log-space tail of `_mci_tn_cdf_tail` (below): a direct evaluation of F_u
+# collapses below μ/σᵤ ≈ -7.5. Gamma uses the AD-safe regularized incomplete gamma below.
 _copula_true_Fu(::MCIIneffModel) = true
 
+using ForwardDiff: ForwardDiff, Dual
+
+# The continued fraction stops when its factor is 1 to within tol. Under ForwardDiff the
+# factor's partials must have converged too: at an integer shape a the factor is exactly 1
+# while its derivative in a is not. Partials are tested at 10 times the tolerance of the
+# order below, which stays above the rounding noise of the partials.
+# Fits differentiate in Float64 (the coefficients are Float64, also with Float32 data);
+# the 10× steps assume Float64 partials.
+_cf_converged(d::Real, tol) = abs(d) < tol
+_cf_converged(d::Dual, tol) = _cf_converged(ForwardDiff.value(d), tol) &&
+    all(i -> _cf_converged(ForwardDiff.partials(d, i), 10 * tol), 1:ForwardDiff.npartials(d))
+
 # AD-safe regularized lower incomplete gamma P(a,x) = γ(a,x)/Γ(a), the Gamma(a,θ)
-# CDF at u=θx. Series (gser) for x < a+1, continued fraction for Q (gcf) otherwise
-# — both use only ForwardDiff-differentiable primitives, so P is stable in the
-# shape a as well as x (verified vs Distributions.jl and the analytic dP/dx =
-# x^(a-1)e^{-x}/Γ(a)). `lga = loggamma(a)` is passed precomputed (ineff_vals.lgk).
+# CDF at u=θx. Series (gser) for x < a+1, continued fraction for Q (gcf) otherwise;
+# both use only ForwardDiff-differentiable primitives, and the continued fraction stops
+# only when `_cf_converged` (above) holds for its factor and, under ForwardDiff, for the
+# factor's partials, so P and its derivatives in a and in x converge together.
+# `lga = loggamma(a)` is passed precomputed (ineff_vals.lgk).
 @inline function _reg_inc_gamma_P(a, x, lga)
     x <= zero(x) && return zero(x)
     if x < a + one(a)
@@ -469,15 +531,15 @@ _copula_true_Fu(::MCIIneffModel) = true
             d  = one(x) / d
             del = d * c
             h  *= del
-            abs(del - one(x)) < 1e-15 && break
+            _cf_converged(del - one(x), 1e-15) && break
         end
         return one(x) - exp(-x + a * log(x) - lga) * h
     end
 end
 
 function ineff_cdf!(::Exponential_MCI, out, u, ineff_vals, c)
-    lambda = reshape(ineff_vals.lambda, :, 1)
-    @. out = -expm1(-max(u, zero(u)) / sqrt(lambda))            # F = 1 - exp(-u/√λ)
+    sigma_sq = reshape(ineff_vals.sigma_sq, :, 1)
+    @. out = -expm1(-max(u, zero(u)) / sqrt(sigma_sq))          # F = 1 - exp(-u/√σᵤ²)
     return nothing
 end
 function ineff_cdf!(::HalfNormal_MCI, out, u, ineff_vals, c)
@@ -485,11 +547,83 @@ function ineff_cdf!(::HalfNormal_MCI, out, u, ineff_vals, c)
     @. out = 2 * _normcdf(max(u, zero(u)) / sigma) - 1          # F = erf(u/(σ√2))
     return nothing
 end
+# The log-erfcx pieces of `_mci_tn_cdf_tail`; `Dual` (for `_mci_tn_switch`) is imported above `_cf_converged`.
+using SpecialFunctions: erfcx
+using ..SFNumerics: _sf_logS_erfcx
+
+"""
+    _mci_tn_cdf_tail(F, u, mu, sigma_u)
+
+The truncated-normal CDF F_u(u) that the copula reads, in the truncated normal's lower tail:
+where μ/σᵤ < -3 (< -1 when -μ/σᵤ is a Float32; see below) it returns F_u formed in log space,
+elsewhere `F`, the old expression's value, unchanged. With x0 = -μ/σᵤ and x1 = (u - μ)/σᵤ,
+F_u = (Φ(x1) - Φ(x0))/(1 - Φ(x0)), which `ineff_cdf!` and `ineff_cdf_chunk!` form from
+Φ = (1 + erf)/2 with the denominator floored at `clamp_lo` (1e-15). As x0 grows, the numerator
+and 1 - Φ(x0) both cancel: that F_u is off by about 3e-10 at μ/σᵤ = -5 and 1e-4 at -7, takes a
+few coarse values near -8 (0.111, 0.333 and 0.666 for a true 0.1, 0.5 and 0.9), and is 0 for
+every draw from about -8.3. The copula log-likelihood of the Gaussian, Clayton, Clayton90 and
+Gumbel models is then off by hundreds of nats: too high near -8, too low below.
+
+In the tail this returns 1 - Q(x1)/Q(x0), Q the normal upper tail, formed in log space. With
+y0 = x0/√2, t = u/(σᵤ√2) and erfc(y) = erfcx(y)·exp(-y²),
+
+    1 - F_u = exp(-E),   E = t(2y0 + t) + log erfcx(y0) - log erfcx(y0 + t),
+
+and F_u = -expm1(-E), with no floor. Beyond y0 = 28 (μ/σᵤ < -39.6) the log-erfcx difference is
+log1p(t/y0) + log S(y0) - log S(y0 + t), from the asymptotic series of erfcx (`_sf_logS_erfcx`,
+src/sf_numerics.jl, as in `sf_tn_quantile_tail`): through erfcx, ForwardDiff's rule
+erfcx'(x) = 2x·erfcx(x) - 2/√π cancels as x grows.
+
+Where the switch is (`_mci_tn_switch`). With -μ/σᵤ a Float64, or a ForwardDiff Dual of one (what
+every fit uses, also with Float32 data, since the coefficients are Float64), the old expression's
+error in F_u is at most about 7e-16 at μ/σᵤ ≥ -1, 4e-15 at -2 and 1e-13 near -3, then 3e-12
+at -4 and 3e-10 at -5. On 300 observations the old and new MCI log-likelihoods differ by at
+most 5e-9 just below -3, and their gradients by at most 8e-8, against 4e-7 at -4 (Newton's
+default g_abstol is 1e-7). So the switch is at -3, and a fit whose optimizer only dips below -1
+gives the same numbers as before, bit for bit. With -μ/σᵤ a Float32 (Float32 coefficients), the
+old expression evaluates erf in Float32 and is off by up to 6e-7 already at -1 (2.4e-6 at -2,
+5.4e-5 at -3), so there the switch stays at -1.
+
+The kernels keep the old broadcast as it was and call this in a second pass, so that above the
+switch the values and their ForwardDiff derivatives stay the same bit for bit on the GPU as
+well: the GPU compiler fuses a*b + c into one fma, so the old formula compiled into a different
+kernel could round differently in the last bit. The tail is formed in Float64 (the `1.0 *` and
+the Float64 constant √2) and rounded to the type of `F`, so it is correctly rounded (at most
+0.5 ulp) for Float32 as well. The old expression also returns a Float64 for Float32 arguments
+(its 0.5 promotes), but its erf runs in Float32, so with Float32 arguments F_u can jump by up to
+about 6e-7 at the switch.
+"""
+@inline function _mci_tn_cdf_tail(F, u, mu, sigma_u)
+    r = -mu / sigma_u
+    r > _mci_tn_switch(typeof(r)) || return F
+    return oftype(F, _mci_tn_cdf_lowtail(1.0 * max(u, zero(u)), 1.0 * mu, 1.0 * sigma_u))
+end
+
+# -μ/σᵤ above which _mci_tn_cdf_tail replaces the old expression: 3 when -μ/σᵤ is a Float64 (or
+# a Dual, nested or not, of one), 1 when it is a Float32; see the docstring of _mci_tn_cdf_tail
+_mci_tn_switch(::Type{<:Dual{T, V}}) where {T, V} = _mci_tn_switch(V)
+_mci_tn_switch(::Type{Float32}) = 1
+_mci_tn_switch(::Type) = 3
+
+# F_u in the lower tail (see _mci_tn_cdf_tail); u ≥ 0
+@inline function _mci_tn_cdf_lowtail(u, mu, sigma_u)
+    s = sigma_u * 1.4142135623730951          # σᵤ√2
+    y0 = -mu / s
+    t = u / s
+    if y0 > 28
+        E = t * (2y0 + t) + (log1p(t / y0) + (_sf_logS_erfcx(y0) - _sf_logS_erfcx(y0 + t)))
+    else
+        E = t * (2y0 + t) + (log(erfcx(y0)) - log(erfcx(y0 + t)))
+    end
+    return -expm1(-E)
+end
+
 function ineff_cdf!(::TruncatedNormal_MCI, out, u, ineff_vals, c)
     mu = reshape(ineff_vals.mu, :, 1)
     sigma_u = reshape(ineff_vals.sigma_u, :, 1)
     @. out = (_normcdf((max(u, zero(u)) - mu) / sigma_u) - _normcdf(-mu / sigma_u)) /
              max(1 - _normcdf(-mu / sigma_u), c.clamp_lo)
+    @. out = _mci_tn_cdf_tail(out, u, mu, sigma_u)      # log-space tail: μ/σᵤ < -3 (Float32: < -1)
     return nothing
 end
 function ineff_cdf!(::Weibull_MCI, out, u, ineff_vals, c)
@@ -522,11 +656,14 @@ function ineff_cdf!(::Gamma_MCI, out, u, ineff_vals, c)
     @. out = _reg_inc_gamma_P(k, max(u, zero(u)) / max(theta, c.clamp_lo), lgk)  # F = P(k, u/θ)
     return nothing
 end
+# Erlang CDF is the regularized incomplete gamma at the pinned integer shape
+ineff_cdf!(::Erlang_MCI, out, u, ineff_vals, c) =
+    ineff_cdf!(Gamma_MCI(), out, u, ineff_vals, c)
 
 # Chunked variants (slice parameter vectors for the current chunk).
 function ineff_cdf_chunk!(::Exponential_MCI, out, u, ineff_vals, c, rs, re)
-    lambda = reshape((@view ineff_vals.lambda[rs:re]), :, 1)
-    @. out = -expm1(-max(u, zero(u)) / sqrt(lambda))
+    sigma_sq = reshape((@view ineff_vals.sigma_sq[rs:re]), :, 1)
+    @. out = -expm1(-max(u, zero(u)) / sqrt(sigma_sq))
     return nothing
 end
 function ineff_cdf_chunk!(::HalfNormal_MCI, out, u, ineff_vals, c, rs, re)
@@ -539,6 +676,7 @@ function ineff_cdf_chunk!(::TruncatedNormal_MCI, out, u, ineff_vals, c, rs, re)
     sigma_u = reshape((@view ineff_vals.sigma_u[rs:re]), :, 1)
     @. out = (_normcdf((max(u, zero(u)) - mu) / sigma_u) - _normcdf(-mu / sigma_u)) /
              max(1 - _normcdf(-mu / sigma_u), c.clamp_lo)
+    @. out = _mci_tn_cdf_tail(out, u, mu, sigma_u)      # log-space tail: μ/σᵤ < -3 (Float32: < -1)
     return nothing
 end
 function ineff_cdf_chunk!(::Weibull_MCI, out, u, ineff_vals, c, rs, re)
@@ -571,6 +709,8 @@ function ineff_cdf_chunk!(::Gamma_MCI, out, u, ineff_vals, c, rs, re)
     @. out = _reg_inc_gamma_P(k, max(u, zero(u)) / max(theta, c.clamp_lo), lgk)
     return nothing
 end
+ineff_cdf_chunk!(::Erlang_MCI, out, u, ineff_vals, c, rs, re) =
+    ineff_cdf_chunk!(Gamma_MCI(), out, u, ineff_vals, c, rs, re)
 
 # ============================================================================
 # Section 2: Unified Workspace Allocation
@@ -580,7 +720,7 @@ end
     make_mci_workspace(ε, P, n_obs, D, chunks)
 
 Preallocate workspace buffers for MCI T-approach (all distributions).
-This single function replaces the 7 distribution-specific workspace functions.
+One function serves every inefficiency distribution.
 
 # Returns
 Named tuple with:
@@ -610,14 +750,17 @@ end
     return size(draws, 1) > 1 ? (@view draws[row_start:row_end, :]) : draws
 end
 
+# A host copy of the per-observation values of one chunk (the array itself when it is on the host already).
+_host_vec(x::Array) = x
+_host_vec(x) = Array(x)
+
 """
     MCI_nll_mci_T(ε, draws_1D, model, c, n_obs, D, frontier_sign, chunks,
                   noise_vals, ineff_vals; workspace=nothing, trans, jacob)
 
 Compute negative log-likelihood using MCI T-approach for ANY inefficiency distribution.
 
-This single unified function replaces all 7 distribution-specific NLL functions
-(MCI_nll_exp_T, MCI_nll_halfnorm_T, etc.) by using type dispatch.
+One function serves every inefficiency distribution, by type dispatch.
 
 # The MCI Likelihood
 The likelihood at each draw is:
@@ -649,16 +792,21 @@ In log-space:
 - `workspace=nothing`: Pre-allocated buffers (from make_mci_workspace)
 - `trans`: Transformation function (t, scale) → u
 - `jacob`: Jacobian function (t, scale) → |du/dt|
+- `per_obs=false`: return the per-observation log-likelihoods LL_i (not negated), a host vector of
+  length N, instead of the negative log-likelihood. They are computed in the chunk loop for every
+  value of `chunks` (with `chunks = 1` the loop has one chunk of N rows); their sum equals minus the
+  negative log-likelihood up to the order of summation.
 
 # Returns
-Negative log-likelihood (scalar).
+Negative log-likelihood (scalar); with `per_obs = true`, the vector of LL_i.
 """
 function MCI_nll_mci_T(ε::AbstractVector{P}, draws_1D, model, c, n_obs, D,
                         frontier_sign, chunks, noise_vals, ineff_vals;
                         workspace=nothing,
                         trans, jacob,
                         copula_vals=NamedTuple(),
-                        scaling_h=nothing) where {P<:Real}
+                        scaling_h=nothing,
+                        per_obs::Bool=false) where {P<:Real}
 
     # Get scale parameter for transformation (dispatch on distribution type)
     scale = get_scale_param(model.ineff, ineff_vals)
@@ -669,7 +817,7 @@ function MCI_nll_mci_T(ε::AbstractVector{P}, draws_1D, model, c, n_obs, D,
 
     has_copula = copula_plen(model.copula) > 0
 
-    if chunks == 1
+    if chunks == 1 && !per_obs
         # ----------------------------------------------------------------
         # Non-chunked path: process all observations at once
         # ----------------------------------------------------------------
@@ -688,10 +836,11 @@ function MCI_nll_mci_T(ε::AbstractVector{P}, draws_1D, model, c, n_obs, D,
         # Component 3: Log Jacobian
         @. log_lik_buffer = log_lik_buffer + log(max(jacob(draws_1D, scale_bcast), c.clamp_lo))
 
-        # Copula (FIX-22): the copula density's 2nd argument must be the true
-        # inefficiency CDF F_u(u*), computed on the base draw BEFORE scaling and
-        # the composite error (F_u(u)=F_{u*}(u*) since scaling is monotone). Gamma
-        # falls back to the draw t (no ForwardDiff-stable incomplete-gamma CDF).
+        # Copula: the copula density's second argument is the inefficiency CDF F_u(u*),
+        # computed on the base draw before scaling and the composite error
+        # (F_u(u) = F_{u*}(u*), since scaling is monotone); every inefficiency family
+        # supplies it, the Gamma and Erlang through the regularized incomplete gamma
+        # `_reg_inc_gamma_P`.
         Fu_src = draws_1D
         if has_copula && _copula_true_Fu(model.ineff)
             Fu_buf = workspace === nothing ? similar(ε, P, n_obs, D) : workspace.Fu_buf
@@ -737,7 +886,12 @@ function MCI_nll_mci_T(ε::AbstractVector{P}, draws_1D, model, c, n_obs, D,
         copula_adj_buf = has_copula ? (workspace === nothing ? similar(ε, P, chunk_size, D) : workspace.copula_adj) : log_lik_buffer
         Fv_adj_buf = has_copula ? (workspace === nothing ? similar(ε, P, chunk_size, D) : workspace.Fv_buf) : log_lik_buffer
         Fu_adj_buf = has_copula ? (workspace === nothing ? similar(ε, P, chunk_size, D) : workspace.Fu_buf) : log_lik_buffer
+        # The log-sum-exp temporary, allocated once per evaluation (not anew for every chunk
+        # inside logsumexp_rows); see _logsumexp_rows_tmp!.
+        lse_tmp = similar(ε, P, chunk_size, D)
         chunk_nlls = zeros(P, chunks)  # zero-init: empty trailing chunks skip their slot (`continue`); sum must not read undef
+        # With `per_obs`: the log-likelihood of each observation, copied to the host chunk by chunk.
+        ll_obs = per_obs ? Vector{P}(undef, n_obs) : nothing
 
         for chunk_idx in 1:chunks
             row_start = (chunk_idx - 1) * chunk_size + 1
@@ -761,7 +915,7 @@ function MCI_nll_mci_T(ε::AbstractVector{P}, draws_1D, model, c, n_obs, D,
             log_pdf_ineff_chunk!(model.ineff, log_lik_buf, u_buf, ineff_vals, c, row_start, row_end)
             @. log_lik_buf = log_lik_buf + log(max(jacob(draws_chunk, scale_chunk), c.clamp_lo))
 
-            # Copula (FIX-22): true F_u(u*) on the base draw before scaling.
+            # Copula: true F_u(u*) on the base draw before scaling.
             Fu_src = draws_chunk
             if has_copula && _copula_true_Fu(model.ineff)
                 Fu_buf_c = @view Fu_adj_buf[1:chunk_N, :]
@@ -793,11 +947,14 @@ function MCI_nll_mci_T(ε::AbstractVector{P}, draws_1D, model, c, n_obs, D,
                 @. log_lik_buf = log_lik_buf + copula_adj
             end
 
-            log_likes_chunk = logsumexp_rows(log_lik_buf) .- log(P(D))
+            # A shorter last chunk gets a temporary of its own exact size
+            lse_buf = chunk_N == chunk_size ? lse_tmp : similar(ε, P, chunk_N, D)
+            log_likes_chunk = _logsumexp_rows_tmp!(lse_buf, log_lik_buf) .- log(P(D))
             chunk_nlls[chunk_idx] = _sum_scalar(log_likes_chunk)
+            per_obs && copyto!(ll_obs, row_start, _host_vec(log_likes_chunk), 1, chunk_N)
         end
 
-        return -sum(chunk_nlls)
+        return per_obs ? ll_obs : -sum(chunk_nlls)
     end
 end
 
@@ -805,13 +962,36 @@ end
 # Section 4: Unified JLMS/BC Function
 # ============================================================================
 
+# The per-observation effective sample size of the jlms/bc importance weights,
+# ESS_i = (Σ_d w_id)² / Σ_d w_id². With Halton draws small values also occur when
+# the integrals are accurate, so the warning it triggers (below 10) flags a
+# potential numerical issue and does not establish that the fit is affected; the
+# integration check (the `integration_check` option of `sfmodel_fit`) tells
+# whether it is. Values are never altered.
+const _JLMS_ESS_WARN_MIN = 10.0
+
+"Print the MCI warning when any observation's jlms/bc effective sample size is below 10; return the count."
+function _warn_low_ess(ess::AbstractVector, D::Integer)
+    n_low = Int(sum(ess .< _JLMS_ESS_WARN_MIN))
+    n_low == 0 && return n_low
+    n = length(ess)
+    printstyled("Warning (MCI): For $n_low of the $n observations, the simulated likelihood and the JLMS " *
+                "and BC indices are effectively computed from fewer than 10 of the $D draws (effective " *
+                "sample size below 10; smallest $(round(Float64(minimum(ess)), sigdigits = 3))). This " *
+                "warning flags a potential numerical issue; it does not establish that this fit is " *
+                "affected. To check this fit, use sfmodel_fit(..., integration_check = true); if the " *
+                "check reports CAUTION or FAIL, increase n_draws, try transformation = " *
+                ":logistic_2_rule, or refit with method = :MSLE or :MLE where the model allows it.\n"; color = :yellow)
+    return n_low
+end
+
 """
     _jlms_bc_mci_T(ε, draws_1D, model, c, n_obs, D, sign, chunks, noise_vals, ineff_vals;
                    trans, jacob)
 
 Compute JLMS and BC efficiency indices using MCI T-approach for ANY inefficiency distribution.
 
-This single unified function replaces all 7 distribution-specific JLMS/BC functions.
+One function serves every inefficiency distribution, by type dispatch.
 
 # Mathematical Definitions
 Given the composed error ε = v - u, where v is noise and u ≥ 0 is inefficiency:
@@ -830,28 +1010,6 @@ Named tuple with:
 - `bc::Vector`: E(e^{-u}|ε) for each observation (efficiency index)
 - `likelihood::Vector`: f_ε(ε) for each observation (density value)
 """
-# OBS-1 (09_gap_closure_findings.md): MCI's fixed draw transformation can miss
-# the inefficiency distribution's mass entirely at extreme parameter corners
-# (e.g. TruncatedNormal with μ/σᵤ ≫ D — the logistic proposal only reaches
-# u ≈ σᵤ·(D−1)); jlms/bc are then dominated by a single draw and silently
-# biased (bc pins at exactly 1). The per-observation effective sample size
-# ESS_i = (Σ_d w_id)² / Σ_d w_id² detects this; values are never altered.
-const _JLMS_ESS_WARN_MIN = 10.0
-
-"Warn when any observation's jlms/bc importance sample is degenerate; returns the count."
-function _warn_low_ess(ess::AbstractVector, D::Integer)
-    n_low = Int(sum(ess .< _JLMS_ESS_WARN_MIN))
-    n_low == 0 && return n_low
-    printstyled("Warning: the jlms/bc importance sample is degenerate for $n_low " *
-                "observation(s) (min effective sample size " *
-                "$(round(Float64(minimum(ess)), sigdigits=3)) of $D draws). The " *
-                "inefficiency distribution concentrates outside the MCI draws' range, " *
-                "so jlms/bc (and the likelihood near these parameter values) may be " *
-                "far from converged. Increase n_draws substantially or prefer " *
-                "method=:MSLE for this model.\n"; color=:yellow)
-    return n_low
-end
-
 function _jlms_bc_mci_T(ε::AbstractVector{P}, draws_1D, model, c, n_obs, D,
                          sign, chunks, noise_vals, ineff_vals;
                          trans, jacob,
@@ -879,7 +1037,7 @@ function _jlms_bc_mci_T(ε::AbstractVector{P}, draws_1D, model, c, n_obs, D,
         log_pdf_ineff!(model.ineff, log_w_buffer, u_buffer, ineff_vals, c)
         @. log_w_buffer = log_w_buffer + log(max(jacob(draws_1D, scale_bcast), c.clamp_lo))
 
-        # Copula (FIX-22): true F_u(u*) on the base draw before scaling.
+        # Copula: true F_u(u*) on the base draw before scaling.
         has_copula = copula_plen(model.copula) > 0
         Fu_src = draws_1D
         if has_copula && _copula_true_Fu(model.ineff)
@@ -916,7 +1074,7 @@ function _jlms_bc_mci_T(ε::AbstractVector{P}, draws_1D, model, c, n_obs, D,
         @. log_w_buffer = -u_buffer + z_buffer
         log_bc_num = logsumexp_rows(log_w_buffer) .- log(P(D))
 
-        # OBS-1 degeneracy diagnostic (skipped under AD dual numbers; no effect
+        # Effective-sample-size warning (skipped under AD dual numbers; no effect
         # on returned values). ESS = exp(2·logΣw − logΣw²), logΣw = log_denom + log D.
         if P <: AbstractFloat
             @. log_w_buffer = 2 * z_buffer
@@ -938,7 +1096,7 @@ function _jlms_bc_mci_T(ε::AbstractVector{P}, draws_1D, model, c, n_obs, D,
         u_buffer = similar(ε, P, chunk_size, D)
         log_w_buffer = similar(ε, P, chunk_size, D)
         z_buffer = similar(ε, P, chunk_size, D)
-        # OBS-1 degeneracy diagnostic accumulator (diagnostics only; skipped
+        # Effective-sample-size warning accumulator (diagnostics only; skipped
         # under AD dual numbers)
         ess_out = P <: AbstractFloat ? similar(ε, P, n_obs) : nothing
 
@@ -971,7 +1129,7 @@ function _jlms_bc_mci_T(ε::AbstractVector{P}, draws_1D, model, c, n_obs, D,
             log_pdf_ineff_chunk!(model.ineff, lw_buf, u_buf, ineff_vals, c, row_start, row_end)
             @. lw_buf = lw_buf + log(max(jacob(draws_chunk, scale_chunk), c.clamp_lo))
 
-            # Copula (FIX-22): true F_u(u*) on the base draw before scaling.
+            # Copula: true F_u(u*) on the base draw before scaling.
             Fu_src = draws_chunk
             if has_copula_chunked && _copula_true_Fu(model.ineff)
                 Fu_buf_c = @view Fu_adj_buf[1:chunk_N, :]
@@ -1013,7 +1171,7 @@ function _jlms_bc_mci_T(ε::AbstractVector{P}, draws_1D, model, c, n_obs, D,
             bc_out[row_start:row_end] .= exp.(log_bc_chunk .- log_denom_chunk)
             likelihood_out[row_start:row_end] .= exp.(log_denom_chunk)
 
-            # OBS-1 degeneracy diagnostic for this chunk (values unchanged)
+            # Effective-sample-size warning for this chunk (values unchanged)
             if ess_out !== nothing
                 @. lw_buf = 2 * z_buf
                 ess_out[row_start:row_end] .= exp.(2 .* (log_denom_chunk .+ log(P(D))) .-

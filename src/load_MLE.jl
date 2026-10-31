@@ -5,7 +5,6 @@
 # Module isolation wrapper for the sf_MLE project (analytic MLE estimation).
 # Wraps all MLE definitions inside MLE_Backend to avoid name conflicts with
 # sf_MCI, sf_MSLE, and sf_panel.
-# The original sf_MLE files are NOT modified.
 
 module MLE_Backend
 

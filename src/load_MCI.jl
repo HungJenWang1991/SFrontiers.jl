@@ -4,11 +4,25 @@
 # load_MCI.jl
 # Module isolation wrapper for the sf_MCI project.
 # Wraps all MCI definitions inside MCI_Backend to avoid name conflicts with sf_MSLE.
-# The original sf_MCI files are NOT modified.
 
 module MCI_Backend
 
 using DataFrames
+# The shared redflag rule (src/sf_redflag.jl): one Hessian classifier and one
+# clamp test for all four backends.
+using ..SFRedflag: sf_classify_hessian, sf_scale_at_clamp, sf_final_fg, sf_convergence_flag,
+                   SF_BOUND_RTOL, sf_bound_side, SFBoundEntry, sf_bound_entries!, sf_bound_message, sf_bound_move,
+                   sf_start_check, sf_classify_opg
+# Shared numerical kernels (src/sf_numerics.jl).
+using ..SFNumerics: sf_normlogcdf_lowtail, sf_tn_quantile_tail, sf_logaddexp, sf_log_neglogcdf_normal,
+                    sf_log_neglogcdf_laplace
+using ..SFNumerics: sf_tn_mean
+# Shared Halton generator (src/sf_draws.jl).
+using ..SFDraws: sf_halton_draws, sf_halton_period, sf_draw_scheme, sf_recycling_request, sf_warn_repeated_rows,
+                 sf_check_gpu_memory, SF_WORK_ARRAYS
+# The optional integration check after a fit (src/sf_accuracy.jl).
+using ..SFAccuracy: sf_integration_settings, sf_integration_unavailable, sf_run_integration_check,
+                    sf_integration_line, sf_shape_entry, sf_shape_check, sf_warn_lomax_mean, sf_print_warning
 
 # If CUDA was loaded in Main, bring it into this module so that
 # @isdefined(CuArray) inside the backend code returns true.

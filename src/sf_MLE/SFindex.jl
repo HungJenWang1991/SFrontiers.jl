@@ -5,6 +5,17 @@
 ####        JLMS and BC index        ####
 #########################################
 
+# With r = μₛ/σₛ the closed forms below are JLMS = σₛ·m(r), m(r) = r + φ(r)/Φ(r), and
+# log BC = -μₛ + σₛ²/2 + log Φ(r - σₛ) - log Φ(r) (h·σₛ in place of σₛ where the model scales u
+# by h; σᵥ in place of σₛ for Expo).
+# Computed directly, as σₛ·exp(normlogpdf(r) - normlogcdf(r)) + μₛ and as that sum of four
+# terms, both cancel as r → -∞ (μ < 0 with σᵤ → 0, or ϵ ≫ 0 with σᵥ → 0): the relative
+# error of JLMS grows like eps·r⁴/4 (1.5e-10 near r = -40, 5e-5 at -1e3, 13% at -1e4, then
+# any sign), and log BC carries an absolute error of about eps·r², so BC can exceed 1. For
+# r < -40 they are therefore σₛ·sf_tn_mean(r) and exp(sf_tn_logmgf(r, σₛ)) (src/sf_numerics.jl),
+# exact because r·σₛ = μₛ; there JLMS > 0 and 0 < BC ≤ 1. For r ≥ -40 the direct
+# expressions are evaluated.
+
 #? --------------- Truncated Normal --------------
 
 function jlmsbc(::Type{Trun}, PorC::Int64, pos::NamedTuple, coef::Array{Float64, 1},
@@ -27,8 +38,10 @@ function jlmsbc(::Type{Trun}, PorC::Int64, pos::NamedTuple, coef::Array{Float64,
     σₛ  = @. sqrt((σᵥ² * σᵤ²) / σ²)
 
    r    = @. μₛ / σₛ
-   jlms = @. σₛ * exp(normlogpdf(r) - normlogcdf(r)) + μₛ
-     bc = @. exp(clamp(-μₛ + 0.5 * σₛ^2 + normlogcdf(r - σₛ) - normlogcdf(r), -500.0, 500.0))
+   # r < -40 takes the stable forms (see the note at the top of this file)
+   jlms = @. ifelse(r < -40, σₛ * sf_tn_mean(r), σₛ * exp(normlogpdf(r) - normlogcdf(r)) + μₛ)
+     bc = @. ifelse(r < -40, exp(sf_tn_logmgf(r, σₛ)),
+                    exp(clamp(-μₛ + 0.5 * σₛ^2 + normlogcdf(r - σₛ) - normlogcdf(r), -500.0, 500.0)))
 
    return jlms, bc
 end
@@ -56,8 +69,10 @@ function jlmsbc(::Type{Half}, PorC::Int64, pos::NamedTuple, coef::Array{Float64,
     σₛ  = @. sqrt((σᵥ² * σᵤ²) / σ²)
 
    r    = @. μₛ / σₛ
-   jlms = @. σₛ * exp(normlogpdf(r) - normlogcdf(r)) + μₛ
-     bc = @. exp(clamp(-μₛ + 0.5 * σₛ^2 + normlogcdf(r - σₛ) - normlogcdf(r), -500.0, 500.0))
+   # r < -40 takes the stable forms (see the note at the top of this file)
+   jlms = @. ifelse(r < -40, σₛ * sf_tn_mean(r), σₛ * exp(normlogpdf(r) - normlogcdf(r)) + μₛ)
+     bc = @. ifelse(r < -40, exp(sf_tn_logmgf(r, σₛ)),
+                    exp(clamp(-μₛ + 0.5 * σₛ^2 + normlogcdf(r - σₛ) - normlogcdf(r), -500.0, 500.0)))
 
    return jlms, bc
 end
@@ -74,19 +89,22 @@ function jlmsbc(::Type{Expo}, PorC::Int64, pos::NamedTuple, coef::Array{Float64,
     x_pre = X*coef[pos.begx : pos.endx]
   # z_pre = Z*coef[pos.begz : pos.endz]  # mu
   # q_pre = Q*coef[pos.begq : pos.endq]
-    w_pre = W*coef[pos.begw : pos.endw] # log_λ
+    w_pre = W*coef[pos.begw : pos.endw] # log_σᵤ²
     v_pre = V*coef[pos.begv : pos.endv] # log_σᵥ²
 
-    λ   = @. sqrt(clamp(exp(w_pre), _MLE_CLAMP.exp_lo, _MLE_CLAMP.exp_hi))
+    # σᵤ is the exponential's scale, sqrt of the squared scale the w-block carries
+    σᵤ  = @. sqrt(clamp(exp(w_pre), _MLE_CLAMP.exp_lo, _MLE_CLAMP.exp_hi))
     σᵥ² = @. clamp(exp(v_pre), _MLE_CLAMP.exp_lo, _MLE_CLAMP.exp_hi)
     σᵥ  = @. sqrt(σᵥ²)
 
     ϵ   = PorC*(Y - x_pre)
-    μₛ  = (- ϵ) -(σᵥ² ./ λ) # don't know why this line cannot use @.
+    μₛ  = (- ϵ) -(σᵥ² ./ σᵤ) # don't know why this line cannot use @.
 
     r    = @. μₛ / σᵥ
-    jlms = @. σᵥ * exp(normlogpdf(r) - normlogcdf(r)) + μₛ
-      bc = @. exp(clamp(-μₛ + 0.5 * σᵥ² + normlogcdf(r - σᵥ) - normlogcdf(r), -500.0, 500.0))
+    # r < -40 takes the stable forms (see the note at the top of this file)
+    jlms = @. ifelse(r < -40, σᵥ * sf_tn_mean(r), σᵥ * exp(normlogpdf(r) - normlogcdf(r)) + μₛ)
+      bc = @. ifelse(r < -40, exp(sf_tn_logmgf(r, σᵥ)),
+                     exp(clamp(-μₛ + 0.5 * σᵥ² + normlogcdf(r - σᵥ) - normlogcdf(r), -500.0, 500.0)))
 
     return jlms, bc
 end
@@ -114,8 +132,10 @@ function jlmsbc(::Type{Trun_Scale}, PorC::Int64, pos::NamedTuple, coef::Array{Fl
     σₛ  = @. sqrt((σᵥ² * σᵤ²) / σ²)
 
    r    = @. μₛ / σₛ
-   jlms = @. σₛ * exp(normlogpdf(r) - normlogcdf(r)) + μₛ
-     bc = @. exp(clamp(-μₛ + 0.5 * σₛ^2 + normlogcdf(r - σₛ) - normlogcdf(r), -500.0, 500.0))
+   # r < -40 takes the stable forms (see the note at the top of this file)
+   jlms = @. ifelse(r < -40, σₛ * sf_tn_mean(r), σₛ * exp(normlogpdf(r) - normlogcdf(r)) + μₛ)
+     bc = @. ifelse(r < -40, exp(sf_tn_logmgf(r, σₛ)),
+                    exp(clamp(-μₛ + 0.5 * σₛ^2 + normlogcdf(r - σₛ) - normlogcdf(r), -500.0, 500.0)))
 
    return jlms, bc
 end
@@ -152,9 +172,15 @@ function jlmsbc(::Type{PFEWHH}, PorC::Int64, pos::NamedTuple, coef::Array{Float6
         @views μₛₛ = (μ/σᵤ² - ϵ̃[ind]'*h̃*(1/σᵥ²)) * σₛₛ²
 
         r = μₛₛ/σₛₛ
-        mills = exp(normlogpdf(r) - normlogcdf(r))
-        jlms[ind] = @. h[ind] * (μₛₛ + mills*σₛₛ)
-        bc[ind]   = @. exp(clamp(-h[ind]*μₛₛ + 0.5*(h[ind]^2)*σₛₛ² + normlogcdf(r - h[ind]*σₛₛ) - normlogcdf(r), -500.0, 500.0))
+        if r < -40   # the stable forms (see the note at the top of this file)
+            m_r = sf_tn_mean(r)
+            jlms[ind] = @. h[ind] * (σₛₛ * m_r)
+            bc[ind]   = @. exp(sf_tn_logmgf(r, h[ind]*σₛₛ))
+        else
+            mills = exp(normlogpdf(r) - normlogcdf(r))
+            jlms[ind] = @. h[ind] * (μₛₛ + mills*σₛₛ)
+            bc[ind]   = @. exp(clamp(-h[ind]*μₛₛ + 0.5*(h[ind]^2)*σₛₛ² + normlogcdf(r - h[ind]*σₛₛ) - normlogcdf(r), -500.0, 500.0))
+        end
     end # for_i
 
     return jlms, bc
@@ -191,9 +217,15 @@ function jlmsbc(::Type{PFEWHT}, PorC::Int64, pos::NamedTuple, coef::Array{Float6
         @views μₛₛ = (μ/σᵤ² - ϵ̃[ind]'*h̃*(1/σᵥ²)) * σₛₛ²
 
         r = μₛₛ/σₛₛ
-        mills = exp(normlogpdf(r) - normlogcdf(r))
-        jlms[ind] = @. h[ind] * (μₛₛ + mills*σₛₛ)
-        bc[ind]   = @. exp(clamp(-h[ind]*μₛₛ + 0.5*(h[ind]^2)*σₛₛ² + normlogcdf(r - h[ind]*σₛₛ) - normlogcdf(r), -500.0, 500.0))
+        if r < -40   # the stable forms (see the note at the top of this file)
+            m_r = sf_tn_mean(r)
+            jlms[ind] = @. h[ind] * (σₛₛ * m_r)
+            bc[ind]   = @. exp(sf_tn_logmgf(r, h[ind]*σₛₛ))
+        else
+            mills = exp(normlogpdf(r) - normlogcdf(r))
+            jlms[ind] = @. h[ind] * (μₛₛ + mills*σₛₛ)
+            bc[ind]   = @. exp(clamp(-h[ind]*μₛₛ + 0.5*(h[ind]^2)*σₛₛ² + normlogcdf(r - h[ind]*σₛₛ) - normlogcdf(r), -500.0, 500.0))
+        end
     end # for_i
 
     return jlms, bc
@@ -239,11 +271,17 @@ function jlmsbc(::Type{PanDecay}, PorC::Int64, pos::NamedTuple, coef::Array{Floa
       σₛ   = sqrt(σₛ²)
 
       r = μₛ/σₛ
+      if r < -40   # the stable forms (see the note at the top of this file)
+             jlms_ui[ind] .= σₛ*sf_tn_mean(r)
+      @views jlms_uit[ind] = Gₜ .* jlms_ui[ind]
+             bc_uit[ind] = exp.(sf_tn_logmgf.(r, Gₜ*σₛ))
+      else
       mills = exp(normlogpdf(r) - normlogcdf(r))
              jlms_ui[ind] .= μₛ + σₛ*mills
       @views jlms_uit[ind] = Gₜ .* jlms_ui[ind]
 
       bc_uit[ind] = exp.(clamp.(-Gₜ.*μₛ .+ 0.5*((Gₜ).^2)*σₛ² .+ normlogcdf.(r .- Gₜ*σₛ) .- normlogcdf(r), -500.0, 500.0))
+      end
 
   end
 
@@ -290,11 +328,17 @@ function jlmsbc(::Type{PanKumb90}, PorC::Int64, pos::NamedTuple, coef::Array{Flo
       σₛ   = sqrt(σₛ²)
 
       r = μₛ/σₛ
+      if r < -40   # the stable forms (see the note at the top of this file)
+             jlms_ui[ind] .= σₛ*sf_tn_mean(r)
+      @views jlms_uit[ind] = Gₜ .* jlms_ui[ind]
+             bc_uit[ind] = exp.(sf_tn_logmgf.(r, Gₜ*σₛ))
+      else
       mills = exp(normlogpdf(r) - normlogcdf(r))
              jlms_ui[ind] .= μₛ + σₛ*mills
       @views jlms_uit[ind] = Gₜ .* jlms_ui[ind]
 
       bc_uit[ind] = exp.(clamp.(-Gₜ.*μₛ .+ 0.5*((Gₜ).^2)*σₛ² .+ normlogcdf.(r .- Gₜ*σₛ) .- normlogcdf(r), -500.0, 500.0))
+      end
 
   end
 
@@ -336,8 +380,11 @@ function jlmsbc(::Type{PFECSWH}, PorC::Int64, pos::NamedTuple, coef::Array{Float
                μₛ  = -(σᵤ²*ϵ) ./ (σᵤ² + σᵥ²)
                σₛ² = (σᵤ² * σᵥ²)/(σᵤ² + σᵥ²)
                r   =  μₛ ./ sqrt(σₛ²)
-         jlms[ind] =  sqrt.(σₛ²) .* exp.(normlogpdf.(r) .- normlogcdf.(r)) .+ μₛ
-         bc[ind]   =  exp.(clamp.(-μₛ .+ 0.5 .* σₛ² .+ normlogcdf.( r .- sqrt.(σₛ²) ) .- normlogcdf.(r), -500.0, 500.0))
+         # r < -40 takes the stable forms (see the note at the top of this file)
+         jlms[ind] =  ifelse.(r .< -40, sqrt.(σₛ²) .* sf_tn_mean.(r),
+                              sqrt.(σₛ²) .* exp.(normlogpdf.(r) .- normlogcdf.(r)) .+ μₛ)
+         bc[ind]   =  ifelse.(r .< -40, exp.(sf_tn_logmgf.(r, sqrt.(σₛ²))),
+                              exp.(clamp.(-μₛ .+ 0.5 .* σₛ² .+ normlogcdf.( r .- sqrt.(σₛ²) ) .- normlogcdf.(r), -500.0, 500.0)))
 
     end # for_i
 
@@ -383,9 +430,12 @@ function jlmsbc(::Type{PTREH}, PorC::Int64, pos::NamedTuple, coef::Array{Float64
         @views K    = ε[ind]'*invΣ - μ[ind]'*invΣᵤ
 
       # analytic form of G = inv(inv(Σ)+inv(Σᵤ))
-        γ²   = max(1/(1/σᵤ²+1/σᵥ²), _MLE_CLAMP.exp_lo)
-        g    = -T*1/(1+σₐ²/σᵥ²*T)*σₐ²/σᵥ²^2*1/(1/σᵤ²+1/σᵥ²)
-        ρ²   = max(1/(1+g) * 1/(1/σᵤ²+1/σᵥ²)^2 * 1/(1 + σₐ²/σᵥ²*T) *(σₐ²/σᵥ²^2), zero(eltype(Y)))
+        # Cancellation-free Sherman-Morrison form, identical to LL_T(PTREH) in
+        # SFloglikefun.jl so the index is built from the same G the likelihood used.
+        c    = 1/σᵤ² + 1/σᵥ²
+        cTd  = 1/σᵤ² + 1/(σᵥ² + T*σₐ²)
+        γ²   = 1/c
+        ρ²   = σₐ²/(σᵥ²*(σᵥ² + T*σₐ²)) / (c*cTd)
         G    = γ² * Matrix(I,T,T) + ρ² * ones(T,T)
 
         B    = (-K*G)'
@@ -393,32 +443,54 @@ function jlmsbc(::Type{PTREH}, PorC::Int64, pos::NamedTuple, coef::Array{Float64
         ρ    = sqrt(ρ²)
 
 
-        MCDF1 = quadgk(u -> normpdf(u)*prod(normcdf.(clamp.((B.-ρ*u)/γ, -500.0, 500.0))), -Inf, Inf, rtol=1e-8)
+        # Every number this function reports is a RATIO of orthant probabilities, so all
+        # three are formed in log space; see _tre_logorthant in SFloglikefun.jl.  Neither h1
+        # nor h2 survives on its own -- MCDF underflows to 0, so it would need a floor such
+        # as 1e-15, and the exponent of the quadratic form a clamp at ±500 -- but both faults
+        # cancel out of the ratio once it is taken in logs.  With that floor, on a T = 5 firm
+        # sitting four units on the inefficient side of the frontier, the floor reaches
+        # MCDF2 before MCDF1 and bc comes out 2.86 for a true 0.906: an efficiency above 1,
+        # which E[exp(-u)] with u ≥ 0 cannot be.  Two units further out it is 7.42 for a
+        # true 0.930.  Once both sit on the floor and the exponent clamp saturates as well,
+        # bc is exactly 1 and jlms exactly 0 -- a firm the model thinks impossible, reported
+        # as fully efficient.
+        #
+        # The exponents of h1 and h2 need not be formed at all.  B2 = B - G e_j and
+        # (Σ⁻¹+Σᵤ⁻¹)G = I, so ½B2'(Σ⁻¹+Σᵤ⁻¹)B2 - ½B'(Σ⁻¹+Σᵤ⁻¹)B is exactly -B_j + ½G_jj.
+        # As two quadratic forms they are each of order 1/σᵥ² or 1/σᵤ² and their difference
+        # is O(1): at σᵥ² = 2.5e-12 it comes out 1291 wrong, and bc with it.  As -B_j + ½G_jj
+        # it is right to 4e-7 there and to rounding everywhere else.
+        # A firm with r·√T > 100, r = ρ/γ
+        # (_tre_past_switch in SFloglikefun.jl, the switch of LL_T(PTRET), which every firm
+        # whose integral LL_T(PTREH) takes piecewise also passes), gets jlms and bc from the
+        # piecewise branches of the helpers, with B formed again without the cancellation of
+        # its 1/σᵥ²-sized terms (_tre_Bx) and the firm's integral computed once (Px), and bc's
+        # log-probability difference is taken in one piece, as in jlmsbc(PTRET) below: formed
+        # as two logarithms from two separately rounded B's it was off by up to 4e-5 relative
+        # at the σᵥ² bound. Every other firm uses B with _tre_logorthant and _tre_orthant_jlms.
+        past     = _tre_past_switch(ρ, γ, T)
+        Bx       = past ? _tre_Bx(ε[ind], μ[ind], σₐ², σᵤ², σᵥ², γ², ρ², T) : B
+        Px       = past ? _tre_orthant_x(Bx, ρ, γ) : nothing
+        logMCDF1 = past ? NaN : _tre_logorthant(B, ρ, γ)        # not needed past the switch
 
-        h1 = max(MCDF1[1], _MLE_CLAMP.log_lo)*exp(clamp(0.5*(B'*(invΣ + invΣᵤ)*B), -500.0, 500.0))
-
-        # JLMS: E[u_j | ε, u ≥ 0] via 1-d quadrature over the common factor
-        jlms_i = zeros(T)
-        for j in 1:T
-           JLMS_int = quadgk(u -> begin
-               a = clamp.((B .- ρ*u) ./ γ, -500.0, 500.0)
-               normpdf(u) * γ * (a[j]*normcdf(a[j]) + normpdf(a[j])) *
-                   prod(normcdf.(a[1:end .!= j]))
-           end, -Inf, Inf, rtol=1e-8)
-           jlms_i[j] = JLMS_int[1] / max(MCDF1[1], _MLE_CLAMP.log_lo)
-        end
+        # JLMS: E[u_j | ε, u ≥ 0] via 1-d quadrature over the common factor.  The numerator
+        # integrand φ(u)γ(a_jΦ(a_j) + φ(a_j))∏_{k≠j}Φ(a_k) is φ(u)γ·m(a_j)·∏ₖΦ(aₖ), so it
+        # shares the denominator's integrand and the ratio needs no floor at all.
+        jlms_i = past ? _tre_orthant_jlms_x(Bx, ρ, γ, Px) : _tre_orthant_jlms(B, ρ, γ)
         jlms[ind] = jlms_i
 
         # BC: E[exp(-u_j) | ε, u ≥ 0]
         bc_i = zeros(T)
         for j in 1:T
+           if past
+               bc_i[j] = exp(_tre_logorthant_diff_x(Bx, ρ, γ, -G[:, j], Px) - Bx[j] + 0.5*G[j,j])
+               continue
+           end
            l_T    = zeros(T)
            l_T[j] = 1.0
            K2 = K + l_T'
            B2 = (-K2*G)'
-           MCDF2 = quadgk(u -> normpdf(u)*prod(normcdf.(clamp.((B2.-ρ*u)/γ, -500.0, 500.0))), -Inf, Inf, rtol=1e-8)
-           h2 = max(MCDF2[1], _MLE_CLAMP.log_lo)*exp(clamp(0.5*(B2'*(invΣ + invΣᵤ)*B2), -500.0, 500.0))
-           bc_i[j] = h2/h1
+           bc_i[j] = exp(_tre_logorthant(B2, ρ, γ) - logMCDF1 - B[j] + 0.5*G[j,j])
         end
         bc[ind] = bc_i
 
@@ -460,41 +532,60 @@ function jlmsbc(::Type{PTRET}, PorC::Int64, pos::NamedTuple, coef::Array{Float64
         @views K     = ε[ind]'*invΣ - μ[ind]'*invΣᵤ
 
       # the analytic form of G = inv(inv(Σ)+inv(Σᵤ))
-        γ²   = max(1/(1/σᵤ²+1/σᵥ²), _MLE_CLAMP.exp_lo)
-        g    = -T*1/(1+σₐ²/σᵥ²*T)*σₐ²/σᵥ²^2*1/(1/σᵤ²+1/σᵥ²)
-        ρ²   = max(1/(1+g) * 1/(1/σᵤ²+1/σᵥ²)^2 * 1/(1 + σₐ²/σᵥ²*T) *(σₐ²/σᵥ²^2), zero(eltype(Y)))
+        # Cancellation-free Sherman-Morrison form, identical to LL_T(PTREH) in
+        # SFloglikefun.jl so the index is built from the same G the likelihood used.
+        c    = 1/σᵤ² + 1/σᵥ²
+        cTd  = 1/σᵤ² + 1/(σᵥ² + T*σₐ²)
+        γ²   = 1/c
+        ρ²   = σₐ²/(σᵥ²*(σᵥ² + T*σₐ²)) / (c*cTd)
         G    = γ² * Matrix(I,T,T) + ρ² * ones(T,T)
 
         B    = (-K*G)'
         γ    = sqrt(γ²)
         ρ    = sqrt(ρ²)
 
-        MCDF1 = quadgk(u -> normpdf(u)*prod(normcdf.(clamp.((B.-ρ*u)/γ, -500.0, 500.0))), -Inf, Inf, rtol=1e-8)
-
-        h1 = max(MCDF1[1], _MLE_CLAMP.log_lo)*exp(clamp(0.5*(B'*(invΣ + invΣᵤ)*B), -500.0, 500.0))
-
-        # JLMS: E[u_j | ε, u ≥ 0] via 1-d quadrature over the common factor
-        jlms_i = zeros(T)
-        for j in 1:T
-           JLMS_int = quadgk(u -> begin
-               a = clamp.((B .- ρ*u) ./ γ, -500.0, 500.0)
-               normpdf(u) * γ * (a[j]*normcdf(a[j]) + normpdf(a[j])) *
-                   prod(normcdf.(a[1:end .!= j]))
-           end, -Inf, Inf, rtol=1e-8)
-           jlms_i[j] = JLMS_int[1] / max(MCDF1[1], _MLE_CLAMP.log_lo)
-        end
+        # Every number this function reports is a RATIO of orthant probabilities: jlms
+        # shares one integrand between numerator and denominator, and bc's ratio is taken
+        # by _tre_logorthant_diff in SFloglikefun.jl without forming either logarithm.
+        # Neither h1 nor h2 survives on its own -- MCDF underflows to 0, so it would need a
+        # floor such as 1e-15, and the exponent of the quadratic form a clamp at ±500 -- but
+        # both faults cancel out of the ratio.  With that floor, on a T = 5 firm
+        # sitting four units on the inefficient side of the frontier, the floor reaches
+        # MCDF2 before MCDF1 and bc comes out 2.86 for a true 0.906: an efficiency above 1,
+        # which E[exp(-u)] with u ≥ 0 cannot be.  Two units further out it is 7.42 for a
+        # true 0.930.  Once both sit on the floor and the exponent clamp saturates as well,
+        # bc is exactly 1 and jlms exactly 0 -- a firm the model thinks impossible, reported
+        # as fully efficient.
+        #
+        # The exponents of h1 and h2 need not be formed at all.  B2 = B - G e_j and
+        # (Σ⁻¹+Σᵤ⁻¹)G = I, so ½B2'(Σ⁻¹+Σᵤ⁻¹)B2 - ½B'(Σ⁻¹+Σᵤ⁻¹)B is exactly -B_j + ½G_jj.
+        # As two quadratic forms they are each of order 1/σᵥ² or 1/σᵤ² and their difference
+        # is O(1): at σᵥ² = 2.5e-12 it comes out 1291 wrong, and bc with it.  As -B_j + ½G_jj
+        # it is right to 4e-7 there and to rounding everywhere else.
+        # A firm with r·√T > 100 (_tre_past_switch in SFloglikefun.jl, the switch of LL_T(PTRET))
+        # gets jlms and bc from the piecewise branches of the helpers, with B formed again without
+        # the cancellation of its 1/σᵥ²-sized terms (_tre_Bx) and the firm's integral computed once
+        # (Px); every other firm uses B with _tre_orthant_jlms and _tre_logorthant_diff.
+        past = _tre_past_switch(ρ, γ, T)
+        Bx   = past ? _tre_Bx(ε[ind], μ[ind], σₐ², σᵤ², σᵥ², γ², ρ², T) : B
+        Px   = past ? _tre_orthant_x(Bx, ρ, γ) : nothing
+        # JLMS: E[u_j | ε, u ≥ 0] via 1-d quadrature over the common factor.  The numerator
+        # integrand φ(u)γ(a_jΦ(a_j) + φ(a_j))∏_{k≠j}Φ(a_k) is φ(u)γ·m(a_j)·∏ₖΦ(aₖ), so it
+        # shares the denominator's integrand and the ratio needs no floor at all.
+        jlms_i = past ? _tre_orthant_jlms_x(Bx, ρ, γ, Px) : _tre_orthant_jlms(B, ρ, γ)
         jlms[ind] = jlms_i
 
-        # BC: E[exp(-u_j) | ε, u ≥ 0]
+        # BC: E[exp(-u_j) | ε, u ≥ 0] = exp(logP₂ - logP₁ - B_j + ½G_jj), B₂ = B - Ge_j.
+        # logP₂ and logP₁ each carry the same ∑ₜlog Φ(μₜ/σᵤ)-sized bulk, about -5.9e14 at
+        # the σᵤ² clamp, that cancels in the difference: formed apart the difference is
+        # quantised at 0.06 and bc came out 1.101 for three of forty observations, where
+        # E[exp(-u)] with u ≥ 0 cannot exceed 1.  _tre_logorthant_diff takes the
+        # difference with the exact shift S = -Ge_j (a₂ₜ - a₁ₜ = Sₜ/γ exactly) and never
+        # forms either log; see SFloglikefun.jl.
         bc_i = zeros(T)
         for j in 1:T
-           l_T    = zeros(T)
-           l_T[j] = 1.0
-           K2 = K + l_T'
-           B2 = (-K2*G)'
-           MCDF2 = quadgk(u -> normpdf(u)*prod(normcdf.(clamp.((B2.-ρ*u)/γ, -500.0, 500.0))), -Inf, Inf, rtol=1e-8)
-           h2 = max(MCDF2[1], _MLE_CLAMP.log_lo)*exp(clamp(0.5*(B2'*(invΣ + invΣᵤ)*B2), -500.0, 500.0))
-           bc_i[j] = h2/h1
+           bc_i[j] = past ? exp(_tre_logorthant_diff_x(Bx, ρ, γ, -G[:, j], Px) - Bx[j] + 0.5*G[j,j]) :
+                            exp(_tre_logorthant_diff(B, ρ, γ, -G[:, j]) - B[j] + 0.5*G[j,j])
         end
         bc[ind] = bc_i
 

@@ -3,10 +3,10 @@
 
 module SFmle
 
-export sfmodel_spec, sfmodel_init, sfmodel_opt,
+export sfmodel_spec, sfmodel_init, sfmodel_init_vec, sfmodel_opt,
   sfmodel_fit, sfmodel_predict, drawTrun,
   genTrun, sf_demean, sfmodel_boot_marginal,
-  get_rowIDT, #! experiment
+  get_rowIDT,
   # likelihood functions
   LL_T,
   # new SFrontiers-style DSL types and macros
@@ -69,12 +69,15 @@ using OrderedCollections: OrderedDict
 using Distributions              # for TDist, Normal
 using FLoops                     # multithreading
 using ForwardDiff                # for marginal effect
-# using HaltonSequences, Sobol, RCall #! experiment, for genSequence; ENV["R_HOME"] = "d:/MathStat/R/R-4.0.4";  Pkg.build("RCall");  using RCall
 # HypothesisTests removed — pvalue() replaced by ccdf() from Distributions
 # KahanSummation removed — sum_kbn() replaced by sum()
 using LinearAlgebra              # extract diagnol and Matrix(I,...)
 # NLSolversBase removed — using direct Optim.optimize + ForwardDiff.hessian instead
 using Optim
+# The shared redflag rule (src/sf_redflag.jl), from the parent package module.
+using ...SFRedflag: sf_classify_hessian, sf_scale_at_clamp, sf_final_fg, sf_convergence_flag,
+                    SF_BOUND_RTOL, sf_bound_side, SFBoundEntry, sf_bound_entries!, sf_bound_message,
+                    SF_SCALE_FLOOR, SF_SCALE_CEIL, sf_bound_move, sf_start_check
 using PrettyTables: pretty_table, fmt__printf  # making tables
 using QuadGK                     # for TFE_CSW2014 model
 using Random                     # for sfmodel_boot_marginal
@@ -82,6 +85,8 @@ using Random                     # for sfmodel_boot_marginal
 using SpecialFunctions           # for erfi used in sfmodel_MoMTest 
 using ADTypes                    # for AutoForwardDiff() in TwiceDifferentiable
 using StatsFuns                  # for normlogpdf(), normlogcdf()
+# The stable truncated-normal kernels of the closed-form JLMS/BC (src/sf_numerics.jl).
+using ...SFNumerics: sf_tn_mean, sf_tn_logmgf
 using Statistics                 #
 
 #############################
@@ -114,7 +119,7 @@ struct PFEWHH <: Sfmodeltype end # panel fixed-effet of Wang and Ho 2010, half n
 struct PTREH <: Sfmodeltype end # panel true random effect model, half normal
 struct PTRET <: Sfmodeltype end # panel true random effect model, truncated normal
 struct PFECSWH <: Sfmodeltype end  # panel true fixed-effect of Chen, Schmidt, and Wang 2014 JE
-struct PFECSWHMM <: Sfmodeltype end  # CSW model using MM, #! experiment
+struct PFECSWHMM <: Sfmodeltype end  # CSW model using MM
 struct PanDecay <: Sfmodeltype end # Panel Time Decay Model of Battese and Coelli (1992)
 struct PanKumb90 <: Sfmodeltype end # Kumbhakar (1990)
 
@@ -177,7 +182,6 @@ end
 ################################################
 
 include("SFmacfun.jl")
-# include("0000SFtemp.jl")    #! experiment; quasi random number generator used for MSLE
 include("SFloglikefun.jl")
 include("SFutil.jl")
 include("SFmtest.jl")

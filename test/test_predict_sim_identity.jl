@@ -1,11 +1,11 @@
-# Regression tests for the 2026-07 predict re-review.
+# Regression tests: predict reuses the fit-time simulation kernel.
 #
 # Change: cross-sectional MCI / MSLE predict(:jlms/:bc/:response/:all) now reuses the
 # fit-time SIMULATION kernel for EVERY inefficiency distribution — including HalfNormal
 # and TruncatedNormal, which previously short-circuited to an analytic closed form. The
 # fit populates r.jlms / r.bc by simulating E(u|ε) over Halton draws, so predict on the
-# estimation data must reproduce those values BIT-FOR-BIT by reconstructing the identical
-# draws (or accepting them via `draws=`). The analytic MLE backend keeps its closed form.
+# estimation data must reproduce those values BIT-FOR-BIT with the draws stored on the
+# result (or the draws passed with `draws=`). The analytic MLE backend keeps its closed form.
 #
 # These would FAIL before the change: HN/TN MCI/MSLE predict used the closed form, which
 # disagreed with the simulated r.jlms by the Monte-Carlo simulation error (~1e-2 here).
@@ -21,7 +21,7 @@ using StatsAPI: predict
 _psi_opt() = sfmodel_opt(warmstart_solver = NelderMead(), warmstart_opt = (iterations = 60,),
                          main_solver = NelderMead(), main_opt = (iterations = 400,))
 
-@testset "predict sim-kernel identity (2026-07 predict re-review)" begin
+@testset "predict sim-kernel identity" begin
 
     Random.seed!(70714)
     n  = 140
@@ -39,12 +39,12 @@ _psi_opt() = sfmodel_opt(warmstart_solver = NelderMead(), warmstart_opt = (itera
         sp_hn = sfmodel_spec(depvar = y, frontier = X, noise = :Normal,
                              ineff = :HalfNormal, type = :prod)
         ini_hn = sfmodel_init(spec = sp_hn, frontier = βo,
-                              ln_sigma_sq = log(0.25), ln_sigma_v_sq = log(0.09))
+                              ln_sigma_u_sq = log(0.25), ln_sigma_v_sq = log(0.09))
         # TruncatedNormal, μ heteroscedastic over [_cons, z1].
         sp_tn = sfmodel_spec(depvar = y, frontier = X, zvar = Z, noise = :Normal,
                              ineff = :TruncatedNormal, hetero = [:mu], type = :prod)
         ini_tn = sfmodel_init(spec = sp_tn, frontier = βo, mu = [0.0, 0.0],
-                              ln_sigma_sq = log(0.25), ln_sigma_v_sq = log(0.09))
+                              ln_sigma_u_sq = log(0.25), ln_sigma_v_sq = log(0.09))
 
         for backend in (:MCI, :MSLE), mr in (true, false)
             for (tag, sp, ini, zk) in (("HalfNormal", sp_hn, ini_hn, nothing),
@@ -66,9 +66,6 @@ _psi_opt() = sfmodel_opt(warmstart_solver = NelderMead(), warmstart_opt = (itera
                 # BIT-IDENTICAL — the whole point of the change. (`==`, not `≈`.)
                 @test vec(jl) == vec(r.jlms)
                 @test vec(bc) == vec(r.bc)
-                # Belt-and-suspenders: exact zero max deviation, tagged for a readable failure.
-                @test maximum(abs.(vec(jl) .- vec(r.jlms))) == 0.0  # $backend $tag multiRand=$mr jlms
-                @test maximum(abs.(vec(bc) .- vec(r.bc)))   == 0.0  # $backend $tag multiRand=$mr bc
             end
         end
     end
@@ -81,7 +78,7 @@ _psi_opt() = sfmodel_opt(warmstart_solver = NelderMead(), warmstart_opt = (itera
         sp = sfmodel_spec(depvar = y, frontier = X, noise = :Normal,
                           ineff = :HalfNormal, type = :prod)
         ini = sfmodel_init(spec = sp, frontier = βo,
-                           ln_sigma_sq = log(0.25), ln_sigma_v_sq = log(0.09))
+                           ln_sigma_u_sq = log(0.25), ln_sigma_v_sq = log(0.09))
         r = sfmodel_fit(spec = sp, method = sfmodel_method(method = :MCI, n_draws = 150),
                         init = ini, optim_options = _psi_opt(),
                         marginal = false, show_table = false, verbose = false)
@@ -96,11 +93,11 @@ _psi_opt() = sfmodel_opt(warmstart_solver = NelderMead(), warmstart_opt = (itera
     end
 
     # ----------------------------------------------------------------------
-    # (3) `draws=` round-trips for an HN fit (caveat #3). Because HN now uses the
+    # (3) `draws=` round-trips for an HN fit. Because HN now uses the
     #     simulation path, a HN fit run with user-supplied `draws=` (a) reports
-    #     user_draws_supplied=true, (b) reproduces r.jlms bit-for-bit ONLY when the
-    #     same draws are passed back, and (c) errors when they are omitted (they are
-    #     not stored on the result). Pre-change, HN ignored draws entirely.
+    #     user_draws_supplied=true, (b) reproduces r.jlms bit for bit when the same
+    #     draws are passed back, and (c) also when they are omitted, because predict
+    #     uses the draws stored on the result. Pre-change, HN ignored draws entirely.
     # ----------------------------------------------------------------------
     @testset "draws= round-trips for a HalfNormal fit" begin
         D = 200
@@ -109,7 +106,7 @@ _psi_opt() = sfmodel_opt(warmstart_solver = NelderMead(), warmstart_opt = (itera
         sp = sfmodel_spec(depvar = y, frontier = X, noise = :Normal,
                           ineff = :HalfNormal, type = :prod)
         ini = sfmodel_init(spec = sp, frontier = βo,
-                           ln_sigma_sq = log(0.25), ln_sigma_v_sq = log(0.09))
+                           ln_sigma_u_sq = log(0.25), ln_sigma_v_sq = log(0.09))
         for backend in (:MCI, :MSLE)
             r = sfmodel_fit(spec = sp,
                             method = sfmodel_method(method = backend, draws = draws_col,
@@ -125,8 +122,8 @@ _psi_opt() = sfmodel_opt(warmstart_solver = NelderMead(), warmstart_opt = (itera
             @test predict(r; frontier = X, depvar = y, draws = vec(draws_col), what = :jlms) == vec(jl)
             # A different draw set ⇒ a different prediction (draws are genuinely consumed).
             @test predict(r; frontier = X, depvar = y, draws = other_col, what = :jlms) != vec(jl)
-            # Omitting draws= for a user-draws fit must error (draws not stored).
-            @test_throws Exception predict(r; frontier = X, depvar = y, what = :jlms)
+            # Omitting draws= uses the draws stored on the result.
+            @test predict(r; frontier = X, depvar = y, what = :jlms) == vec(jl)
         end
     end
 
@@ -136,8 +133,8 @@ _psi_opt() = sfmodel_opt(warmstart_solver = NelderMead(), warmstart_opt = (itera
     # ----------------------------------------------------------------------
     @testset "MLE HN/TN still closed-form (unchanged)" begin
         for (ineff, hetero, zk, ini_extra) in (
-                (:HalfNormal, Symbol[], nothing, (ln_sigma_sq = log(0.25),)),
-                (:TruncatedNormal, [:mu], Z, (mu = [0.0, 0.0], ln_sigma_sq = log(0.25))))
+                (:HalfNormal, Symbol[], nothing, (ln_sigma_u_sq = log(0.25),)),
+                (:TruncatedNormal, [:mu], Z, (mu = [0.0, 0.0], ln_sigma_u_sq = log(0.25))))
             sp = zk === nothing ?
                  sfmodel_spec(depvar = y, frontier = X, noise = :Normal, ineff = ineff, type = :prod) :
                  sfmodel_spec(depvar = y, frontier = X, zvar = zk, noise = :Normal,

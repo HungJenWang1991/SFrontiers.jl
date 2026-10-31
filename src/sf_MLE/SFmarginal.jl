@@ -34,6 +34,14 @@ function marg_trun( # PorC::Int64,
 
        Λ = μ/σᵤ
 
+       # E(u) = σᵤ·m(Λ), with
+       # m(Λ) = Λ + φ(Λ)/Φ(Λ). Formed as below, the two logarithms are about -Λ²/2 each and the
+       # sum cancels as Λ falls: the value and its ForwardDiff derivative carry a relative error
+       # of about eps·Λ⁴/4 (1.7e-9 at Λ = -100, 5e-5 at -1e3, 13% at -1e4, the wrong sign by
+       # -1e5). Below Λ = -40 the stable m of SFNumerics.sf_tn_mean is used instead; for
+       # Λ ≥ -40, the expression below. marg_scal, marg_fewht, marg_pdecay and marg_pkumb90
+       # below use the same switch.
+       Λ < -40 && return σᵤ * sf_tn_mean(Λ)
        uncondU = σᵤ* (Λ + exp(normlogpdf(Λ) - normlogcdf(Λ))) # kx1
 end
 
@@ -137,9 +145,9 @@ end
 function marg_expo( pos::NamedTuple, coef::Array{Float64, 1},
      Wmarg)
 
-     w_pre = Wmarg'*coef[pos.begw : pos.endw] # log_λ
-     λ   = sqrt(clamp(exp(w_pre), _MLE_CLAMP.exp_lo, _MLE_CLAMP.exp_hi))
-     uncondU = λ # kx1
+     w_pre = Wmarg'*coef[pos.begw : pos.endw] # log_σᵤ²
+     σᵤ  = sqrt(clamp(exp(w_pre), _MLE_CLAMP.exp_lo, _MLE_CLAMP.exp_hi))
+     uncondU = σᵤ # kx1; E(u) for the exponential is its scale
 
 end   
 
@@ -161,7 +169,7 @@ function get_marg(::Type{Expo}, # PorC::Int64,
 
      end  # for i in 1:num.nofobs
 
-     margeff = DataFrame(mm_w', _dicM[:λ]) # the base set
+     margeff = DataFrame(mm_w', _dicM[:σᵤ²]) # the base set
 
      #* purge off the constant var's marginal effect from the DataFrame
          margeff = nonConsDataFrame(margeff, W)
@@ -197,6 +205,8 @@ function marg_scal( # PorC::Int64,
      σᵤ  = sqrt(clamp(exp(w_pre), _MLE_CLAMP.exp_lo, _MLE_CLAMP.exp_hi)) * hscale
      Λ   = μ/σᵤ
 
+     # below Λ = -40 the stable σᵤ·m(Λ) (see marg_trun); above, the direct form
+     Λ < -40 && return σᵤ * sf_tn_mean(Λ)
      uncondU = σᵤ* (Λ + exp(normlogpdf(Λ) - normlogcdf(Λ)))
 
 end
@@ -332,6 +342,8 @@ function marg_fewht( # PorC::Int64,
       σᵤ = sqrt(clamp(exp(w_pre), _MLE_CLAMP.exp_lo, _MLE_CLAMP.exp_hi)) * hscale
       Λ  = μ/σᵤ
 
+    # below Λ = -40 the stable σᵤ·m(Λ) (see marg_trun); above, the direct form
+    Λ < -40 && return σᵤ * sf_tn_mean(Λ)
     uncondU = σᵤ* (Λ + exp(normlogpdf(Λ) - normlogcdf(Λ))) # kx1
 
 end
@@ -408,6 +420,8 @@ function marg_pdecay( # PorC::Int64,
      σᵤ = sqrt(clamp(exp(w_pre), _MLE_CLAMP.exp_lo, _MLE_CLAMP.exp_hi)) * hscale
      Λ  = μ/σᵤ
 
+     # below Λ = -40 the stable σᵤ·m(Λ) (see marg_trun); above, the direct form
+     Λ < -40 && return σᵤ * sf_tn_mean(Λ)
      uncondU = σᵤ* (Λ + exp(normlogpdf(Λ) - normlogcdf(Λ))) # kx1
 
 end
@@ -484,6 +498,8 @@ function marg_pkumb90( # PorC::Int64,
      σᵤ = Gₜ * sqrt(clamp(exp(w_pre), _MLE_CLAMP.exp_lo, _MLE_CLAMP.exp_hi))
      Λ  = μ/σᵤ
 
+     # below Λ = -40 the stable σᵤ·m(Λ) (see marg_trun); above, the direct form
+     Λ < -40 && return σᵤ * sf_tn_mean(Λ)
      uncondU = σᵤ* (Λ + exp(normlogpdf(Λ) - normlogcdf(Λ))) # kx1
 
 end

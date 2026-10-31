@@ -6,7 +6,7 @@ A Julia package for stochastic frontier analysis with multiple estimation method
 
 SFrontiers.jl provides a unified interface for estimating stochastic frontier models using four backends:
 
-- **MLE**: Analytic maximum likelihood estimation (closed-form, fastest)
+- **MLE**: Analytic maximum likelihood estimation (closed form; one-dimensional quadrature per firm for `panel_TFE_CSW` and `panel_TRE`)
 - **MCI**: Monte Carlo integration with change-of-variable transforms
 - **MSLE**: Maximum simulated likelihood estimation via inverse CDF
 - **Panel**: Wang and Ho (2010) true fixed-effect panel models
@@ -15,7 +15,7 @@ SFrontiers.jl provides a unified interface for estimating stochastic frontier mo
 
 **Noise (v)**: Normal, Student-t, Laplace
 
-**Inefficiency (u)**: Half-Normal, Truncated-Normal, Exponential, Weibull, Lognormal, Lomax, Rayleigh, Gamma
+**Inefficiency (u)**: Half-Normal, Truncated-Normal, Exponential, Weibull, Lognormal, Lomax, Rayleigh, Gamma, Erlang (orders 2, 3 and 4)
 
 ## API Reference
 

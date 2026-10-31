@@ -42,7 +42,7 @@ end
 # ------- Exponential ----------------
 
 function checksyn(::Type{Expo})
-    for k in (:depvar, :frontier, :λ, :σᵥ²)
+    for k in (:depvar, :frontier, :σᵤ², :σᵥ²)
         if  (_dicM[k] === nothing)
             throw("For the exponential-normal model, the `$k` equation is missing in sfmodel_spec().")
         end
@@ -296,8 +296,8 @@ end
 """
     sfmodel_MixTable(<keyword arguments>)
 
-Display and return critical values of the mixed `χ²` (ch-square) distribution.
-The values are taken from Table 1, Kodde and Palm (1986, Econometrica).
+Display and return critical values of the mixed χ² distribution, the 50:50 mixture of
+χ²(dof − 1) and χ²(dof). The values are those of Table 1 of Kodde and Palm (1986, Econometrica).
 
 ## Argument
 - `dof::Integer`: the degree of freedom. Currently support `dof` between 1 and 40.
@@ -321,8 +321,7 @@ function sfmodel_MixTable(dof::Real=9999) # not using ::Int64 in order to thow i
 
     (dof isa(Integer)) || throw("The degree of freedom (dof) has to be an integer.")
 
-    @isdefined(_dicOPT) || sfmodel_opt()  
-    sf_table = _dicOPT[:table_format]
+    sf_table = _sf_table_backend()
 
     table = Array{Float32}(undef, 40, 5)
 
@@ -331,13 +330,13 @@ function sfmodel_MixTable(dof::Real=9999) # not using ::Int64 in order to thow i
     table[3 ,1] = 3;   table[3 ,2] =   5.528; table[3 ,3] =   7.045;  table[3 ,4] =   8.542;   table[3 ,5]=   10.501 ; 
     table[4 ,1] = 4;   table[4 ,2] =   7.094; table[4 ,3] =   8.761;  table[4 ,4] =  10.383;   table[4 ,5]=   12.483 ; 
     table[5 ,1] = 5;   table[5 ,2] =   8.574; table[5 ,3] =  10.371;  table[5 ,4] =   12.103;  table[5 ,5] =  14.325 ; 
-    table[6 ,1] = 6;   table[6 ,2] =   9.998; table[6 ,3] =  11.911;  table[6 ,4] =   13.742;  table[6 ,5] =  16.704 ; 
+    table[6 ,1] = 6;   table[6 ,2] =   9.998; table[6 ,3] =  11.911;  table[6 ,4] =   13.742;  table[6 ,5] =  16.074 ; 
     table[7 ,1] = 7;   table[7 ,2] =  11.383; table[7 ,3] =  13.401;  table[7 ,4] =   15.321;  table[7 ,5] =  17.755 ; 
     table[8 ,1] = 8;   table[8 ,2] =  12.737; table[8 ,3] =  14.853;  table[8 ,4] =   16.856;  table[8 ,5] =  19.384 ; 
     table[9 ,1] = 9;   table[9 ,2] =  14.067; table[9 ,3] =  16.274;  table[9 ,4] =   18.354;  table[9 ,5] =  20.972 ; 
     table[10,1] = 10;  table[10,2] =  15.377; table[10,3] =  17.670;  table[10,4] =   19.824;  table[10,5] =  22.525 ; 
     table[11,1] = 11;  table[11,2] =  16.670; table[11,3] =  19.045;  table[11,4] =   21.268;  table[11,5] =  24.049 ; 
-    table[12,1] = 12;  table[12,2] =  17.949; table[12,3] =  20.410;  table[12,4] =   22.691;  table[12,5] =  25.549 ; 
+    table[12,1] = 12;  table[12,2] =  17.949; table[12,3] =  20.401;  table[12,4] =   22.691;  table[12,5] =  25.549 ; 
     table[13,1] = 13;  table[13,2] =  19.216; table[13,3] =  21.742;  table[13,4] =   24.096;  table[13,5] =  27.026 ; 
     table[14,1] = 14;  table[14,2] =  20.472; table[14,3] =  23.069;  table[14,4] =   25.484;  table[14,5] =  28.485 ; 
     table[15,1] = 15;  table[15,2] =  21.718; table[15,3] =  24.384;  table[15,4] =   26.856;  table[15,5] =  29.927 ; 
@@ -397,10 +396,25 @@ end
 
 # ---------  Chi-square table ---------
 
+# The table backend, read without writing anything: both table functions read the format from
+# `_dicOPT` when it is defined and leave the dictionary alone. Calling `sfmodel_opt()` here
+# would set `_dicOPT[:_user_set] = true` and so make a later bare `sfmodel_fit` skip the reset
+# that keeps one fit's optimizer options out of the next.
+_sf_table_backend() = (@isdefined(_dicOPT) && haskey(_dicOPT, :table_format)) ?
+                      _dicOPT[:table_format] : :text
 
+"""
+    sfmodel_ChiSquareTable(dof)
+
+Print, and return, the row of critical values of the χ² distribution at the significance
+levels 0.10, 0.05, 0.025 and 0.01 for `dof` degrees of freedom. The returned row is
+`1 × 5`; its first entry is `dof` itself, matching `sfmodel_MixTable`.
+"""
 function sfmodel_ChiSquareTable(dof::Real=1) # not using ::Int64 in order to throw informative error
 
     (dof isa(Integer)) || throw("The degree of freedom (dof) has to be an integer.")
+
+    sf_table = _sf_table_backend()
 
     table = Array{Float64}(undef, 1, 5)
 
@@ -419,6 +433,7 @@ function sfmodel_ChiSquareTable(dof::Real=1) # not using ::Int64 in order to thr
                  compact_printing = true,
                  backend = sf_table)
 
+    return table[1, :]'
 end
 
 

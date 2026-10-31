@@ -2,17 +2,17 @@
 # SPDX-License-Identifier: GPL-3.0-or-later
 
 #=
-    sf_MCI_marginal_v15.jl
+    sf_MCI_marginal_v21.jl
 
     Marginal effects of exogenous determinants on E(u)
     for MCI-based stochastic frontier models.
 
     Uses ForwardDiff automatic differentiation on analytical E(u) formulas,
-    following the same pattern as SFmarginal.jl from the SFmle package.
+    following the same pattern as SFmarginal.jl of the :MLE backend (src/sf_MLE).
 
     Supported Models:
     - HalfNormal, TruncatedNormal, Exponential, Lognormal
-    - Rayleigh, Gamma, Lomax, Weibull
+    - Rayleigh, Gamma, Lomax, Weibull, Erlang{2,3,4}
 =#
 
 using ForwardDiff
@@ -55,8 +55,8 @@ _to_cpu(x::AbstractVector) = Array(x)
 function uncondU_half(coef, idx, Zmarg)
     # σ = exp(0.5 × Z'δ)
     k_sigma = length(idx.ineff.sigma_sq)
-    ln_sigma_sq = sum(coef[idx.ineff.sigma_sq[j]] * Zmarg[j] for j in 1:k_sigma)
-    sigma = clamp(exp(0.5 * ln_sigma_sq), oftype(ln_sigma_sq, 1e-12), oftype(ln_sigma_sq, 1e12))
+    ln_sigma_u_sq = sum(coef[idx.ineff.sigma_sq[j]] * Zmarg[j] for j in 1:k_sigma)
+    sigma = clamp(exp(0.5 * ln_sigma_u_sq), oftype(ln_sigma_u_sq, 1e-12), oftype(ln_sigma_u_sq, 1e12))
     return sigma * sqrt(2/π)
 end
 
@@ -69,21 +69,34 @@ function uncondU_trun(coef, idx, Zmarg_mu, Zmarg_sigma)
 
     # σ = exp(0.5 × Z'γ)
     k_sigma = length(idx.ineff.sigma_u)
-    ln_sigma_sq = sum(coef[idx.ineff.sigma_u[j]] * Zmarg_sigma[j] for j in 1:k_sigma)
-    sigma = clamp(exp(0.5 * ln_sigma_sq), oftype(ln_sigma_sq, 1e-12), oftype(ln_sigma_sq, 1e12))
+    ln_sigma_u_sq = sum(coef[idx.ineff.sigma_u[j]] * Zmarg_sigma[j] for j in 1:k_sigma)
+    sigma = clamp(exp(0.5 * ln_sigma_u_sq), oftype(ln_sigma_u_sq, 1e-12), oftype(ln_sigma_u_sq, 1e12))
 
     Λ = mu / sigma
+    # E(u) = σ·m(Λ), with m(Λ) = Λ + φ(Λ)/Φ(Λ). Formed as below, the two logarithms are
+    # about -Λ²/2 each and the sum cancels as Λ falls: the value and its ForwardDiff derivative
+    # carry a relative error of about eps·Λ⁴/4 (1.7e-9 at Λ = -100, 5e-5 at -1e3, 61% at -1e4,
+    # the wrong sign by -1e5). Below Λ = -40 the stable m of SFNumerics.sf_tn_mean is used
+    # instead; for Λ ≥ -40, the expression below, bit for bit. _base_Eu_star(::TruncatedNormal)
+    # below uses the same switch.
+    Λ < -40 && return sigma * sf_tn_mean(Λ)
     return sigma * (Λ + exp(_normlogpdf(Λ) - _normlogcdf(Λ)))
 end
 
-#? ----------- Exponential: E(u) = √λ  (Var(u) = λ) -----------
+#? ----------- Exponential: E(u) = √σᵤ²  (Var(u) = σᵤ²) -----------
 
 function uncondU_expo(coef, idx, Zmarg)
-    # λ = exp(Z'δ), where λ = Var(u)
-    k_lambda = length(idx.ineff.lambda)
-    ln_lambda = sum(coef[idx.ineff.lambda[j]] * Zmarg[j] for j in 1:k_lambda)
-    lambda = exp(ln_lambda)
-    return sqrt(lambda)
+    # σᵤ² = exp(Z'δ); for the exponential the squared scale is also Var(u), and E(u) is
+    # the scale itself, √σᵤ²
+    k_sigma = length(idx.ineff.sigma_sq)
+    ln_sigma_sq = sum(coef[idx.ineff.sigma_sq[j]] * Zmarg[j] for j in 1:k_sigma)
+    # σᵤ² clamped to the likelihood's [σ_floor, σ_ceil] = [1e-12, 1e12] (make_constants — the
+    # Exponential σᵤ² is clamped against that base tuple, not against make_ineff_constants) so
+    # the marginal mean and its gradient describe the same effective model the NLL evaluated;
+    # unclamped, a large Z'δ returns Inf and a small one returns 0, with a NaN gradient in both
+    # cases, while the likelihood is saturated at the bound
+    sigma_sq = clamp(exp(ln_sigma_sq), oftype(ln_sigma_sq, 1e-12), oftype(ln_sigma_sq, 1e12))
+    return sqrt(sigma_sq)
 end
 
 #? ----------- Lognormal: E(u) = exp(μ + σ²/2) -----------
@@ -95,8 +108,8 @@ function uncondU_lognorm(coef, idx, Zmarg_mu, Zmarg_sigma)
 
     # σ = exp(0.5 × Z'γ), so σ² = exp(Z'γ)
     k_sigma = length(idx.ineff.sigma_sq)
-    ln_sigma_sq = sum(coef[idx.ineff.sigma_sq[j]] * Zmarg_sigma[j] for j in 1:k_sigma)
-    sigma_sq = clamp(exp(ln_sigma_sq), oftype(ln_sigma_sq, 1e-24), oftype(ln_sigma_sq, 1e24))
+    ln_sigma_u_sq = sum(coef[idx.ineff.sigma_sq[j]] * Zmarg_sigma[j] for j in 1:k_sigma)
+    sigma_sq = clamp(exp(ln_sigma_u_sq), oftype(ln_sigma_u_sq, 1e-24), oftype(ln_sigma_u_sq, 1e24))
 
     return exp(mu + sigma_sq / 2)
 end
@@ -106,8 +119,8 @@ end
 function uncondU_rayleigh(coef, idx, Zmarg)
     # σ = exp(0.5 × Z'δ)
     k_sigma = length(idx.ineff.sigma_sq)
-    ln_sigma_sq = sum(coef[idx.ineff.sigma_sq[j]] * Zmarg[j] for j in 1:k_sigma)
-    sigma = clamp(exp(0.5 * ln_sigma_sq), oftype(ln_sigma_sq, 1e-12), oftype(ln_sigma_sq, 1e12))
+    ln_sigma_u_sq = sum(coef[idx.ineff.sigma_sq[j]] * Zmarg[j] for j in 1:k_sigma)
+    sigma = clamp(exp(0.5 * ln_sigma_u_sq), oftype(ln_sigma_u_sq, 1e-12), oftype(ln_sigma_u_sq, 1e12))
     return sigma * sqrt(π/2)
 end
 
@@ -117,14 +130,33 @@ function uncondU_gamma(coef, idx, Zmarg_k, Zmarg_theta)
     # k = exp(Z'δ_k)
     k_len = length(idx.ineff.k)
     ln_k = sum(coef[idx.ineff.k[j]] * Zmarg_k[j] for j in 1:k_len)
-    k_val = exp(ln_k)
+    # k and θ clamped to the likelihood's bounds (make_ineff_constants(::Gamma_MCI):
+    # k ∈ [0.1, 100], θ ∈ [1e-12, 1e12]) so the marginal mean and its gradient describe
+    # the same effective model the NLL evaluated; unclamped, a large Z'δ returns a
+    # different or infinite E(u) while the likelihood is saturated at the bound
+    k_val = clamp(exp(ln_k), oftype(ln_k, 0.1), oftype(ln_k, 100.0))
 
     # θ = exp(Z'δ_θ)
     theta_len = length(idx.ineff.theta)
     ln_theta = sum(coef[idx.ineff.theta[j]] * Zmarg_theta[j] for j in 1:theta_len)
-    theta_val = exp(ln_theta)
+    theta_val = clamp(exp(ln_theta), oftype(ln_theta, 1e-12), oftype(ln_theta, 1e12))
 
     return k_val * theta_val
+end
+
+#? ----------- Erlang: E(u) = M × θ (shape pinned at the Erlang order) -----------
+
+function uncondU_erlang(coef, idx, Zmarg_theta, M)
+    # θ = exp(Z'δ_θ)
+    theta_len = length(idx.ineff.theta)
+    ln_theta = sum(coef[idx.ineff.theta[j]] * Zmarg_theta[j] for j in 1:theta_len)
+    # θ clamped to the likelihood's [theta_floor, theta_ceil] = [1e-12, 1e12]
+    # (make_ineff_constants) so the marginal mean and its gradient describe the same
+    # effective model the NLL evaluated; unclamped, a large Z'δ_θ returns a different
+    # or infinite E(u) while the likelihood is saturated at the bound
+    theta_val = clamp(exp(ln_theta), oftype(ln_theta, 1e-12), oftype(ln_theta, 1e12))
+
+    return M * theta_val
 end
 
 #? ----------- Lomax: E(u) = λ/(α-1), requires α > 1 -----------
@@ -133,16 +165,30 @@ function uncondU_lomax(coef, idx, Zmarg_lambda, Zmarg_alpha)
     # λ = exp(Z'γ_λ)
     k_lambda = length(idx.ineff.ln_lambda)
     ln_lambda_val = sum(coef[idx.ineff.ln_lambda[j]] * Zmarg_lambda[j] for j in 1:k_lambda)
-    lambda = exp(ln_lambda_val)
+    # λ and α clamped to the likelihood's bounds (make_ineff_constants: λ ∈ [1e-10, 1e10],
+    # α ∈ [0.1, 100]) so the marginal mean and its gradient describe the same effective model
+    # the NLL evaluated. Without the α clamp, exp(Z'γ_α) = Inf passes the α ≤ 1 test below and
+    # E(u) = λ/(Inf-1) underflows to 0 instead of the λ/99 the NLL used. Where the clamp sits
+    # relative to that test does not matter — [0.1, 100] straddles 1 and clamp is monotone, so
+    # clamp(α, 0.1, 100) ≤ 1 exactly when α ≤ 1 — but it must precede the division
+    lambda = clamp(exp(ln_lambda_val), oftype(ln_lambda_val, 1e-10), oftype(ln_lambda_val, 1e10))
 
     # α = exp(Z'γ_α)
     k_alpha = length(idx.ineff.alpha)
     ln_alpha = sum(coef[idx.ineff.alpha[j]] * Zmarg_alpha[j] for j in 1:k_alpha)
-    alpha = exp(ln_alpha)
+    alpha = clamp(exp(ln_alpha), oftype(ln_alpha, 0.1), oftype(ln_alpha, 100.0))
 
-    # E(u) = λ/(α-1), undefined for α ≤ 1
+    # E(u) = λ/(α-1), undefined for α ≤ 1. The likelihood's α floor is 0.1, which is below 1, so
+    # a clamped α can still be ≤ 1 and this branch stays reachable — as in the panel backend.
+    #
+    # Returning a bare `oftype(alpha, Inf)` here made E(u) a CONSTANT in z, so ForwardDiff
+    # reported ∂E(u)/∂z = 0 and the marginal-effect table printed exactly 0.0 for such
+    # observations — a finite, actionable and false number, from a converged fit, with no
+    # warning. `(alpha - alpha + one(alpha))` is the identity on the value (it is 1) and carries
+    # the Inf into the partials, so the value stays +∞ and the marginal effect reads NaN, which
+    # is what an undefined derivative should look like.
     if alpha <= 1
-        return oftype(alpha, Inf)
+        return oftype(alpha, Inf) * (alpha - alpha + one(alpha))
     end
     return lambda / (alpha - 1)
 end
@@ -153,12 +199,16 @@ function uncondU_weibull(coef, idx, Zmarg_lambda, Zmarg_k)
     # λ = exp(Z'δ_λ)
     k_lambda = length(idx.ineff.lambda)
     ln_lambda = sum(coef[idx.ineff.lambda[j]] * Zmarg_lambda[j] for j in 1:k_lambda)
-    lambda = exp(ln_lambda)
+    # λ and k clamped to the likelihood's bounds (λ ∈ [1e-12, 1e12] from make_constants' base
+    # tuple, k ∈ [0.1, 10] from make_ineff_constants) so the marginal mean and its gradient
+    # describe the same effective model the NLL evaluated; unclamped, a k below the floor makes
+    # loggamma(1 + 1/k) overflow to Inf and the whole marginal column NaN
+    lambda = clamp(exp(ln_lambda), oftype(ln_lambda, 1e-12), oftype(ln_lambda, 1e12))
 
     # k = exp(Z'γ_k)
     k_len = length(idx.ineff.k)
     ln_k = sum(coef[idx.ineff.k[j]] * Zmarg_k[j] for j in 1:k_len)
-    k_val = exp(ln_k)
+    k_val = clamp(exp(ln_k), oftype(ln_k, 0.1), oftype(ln_k, 10.0))
 
     # E(u) = λ × Γ(1 + 1/k) = λ × exp(loggamma(1 + 1/k))
     return lambda * exp(loggamma(1 + 1/k_val))
@@ -257,7 +307,7 @@ function get_marg(::TruncatedNormal_MCI, spec::sfmodel_MCI_spec, coef::AbstractV
 
     # Determine which parameters are heteroscedastic
     mu_hetero = :mu in hetero
-    sigma_hetero = :sigma_sq in hetero
+    sigma_hetero = :sigma_u_sq in hetero
 
     n_mu = mu_hetero ? L : 1
     n_sigma = sigma_hetero ? L : 1
@@ -270,9 +320,9 @@ function get_marg(::TruncatedNormal_MCI, spec::sfmodel_MCI_spec, coef::AbstractV
 
         # Build combined Z vector for gradient. A homoscedastic parameter is pinned at the
         # constant `[one(T)]`: this is correct because the spec constructor's
-        # `_validate_homoscedastic_zvar` guard (re-audit R-05 / FIX-06) requires the first
-        # zvar column to be the ones intercept whenever a parameter is homoscedastic, so the
-        # likelihood's `coef·Z[:,1]` equals `coef·1` — matching this pin and the MLE `_cons`.
+        # `_validate_homoscedastic_zvar` guard requires the first zvar column to be the ones
+        # intercept whenever a parameter is homoscedastic, so the likelihood's `coef·Z[:,1]`
+        # equals `coef·1` — matching this pin and the MLE `_cons`.
         Zmarg_mu = mu_hetero ? Zi : [one(T)]
         Zmarg_sigma = sigma_hetero ? Zi : [one(T)]
         Zmarg_combined = vcat(Zmarg_mu, Zmarg_sigma)
@@ -328,16 +378,16 @@ function get_marg(::Exponential_MCI, spec::sfmodel_MCI_spec, coef::AbstractVecto
     n_obs = spec.N
     L = spec.L
 
-    mm_lambda = Matrix{T}(undef, L, n_obs)
+    mm_sigma_sq = Matrix{T}(undef, L, n_obs)
 
     @inbounds for i in 1:n_obs
         Zi = collect(@view Z[i, :])
         marg = ForwardDiff.gradient(z -> uncondU_expo(coef, idx, z), Zi)
-        mm_lambda[:, i] = marg
+        mm_sigma_sq[:, i] = marg
     end
 
-    lambda_names = _get_eq_varnames(spec, :lambda)
-    margeff = DataFrame(mm_lambda', lambda_names)
+    sigma_sq_names = _get_eq_varnames(spec, :sigma_u_sq)
+    margeff = DataFrame(mm_sigma_sq', sigma_sq_names)
 
     margeff = nonConsDataFrame(margeff, Z)
     margMean = _compute_marg_mean(margeff)
@@ -358,7 +408,7 @@ function get_marg(::Lognormal_MCI, spec::sfmodel_MCI_spec, coef::AbstractVector{
     hetero = spec.hetero
 
     mu_hetero = :mu in hetero
-    sigma_hetero = :sigma_sq in hetero
+    sigma_hetero = :sigma_u_sq in hetero
 
     n_mu = mu_hetero ? L : 1
     n_sigma = sigma_hetero ? L : 1
@@ -490,6 +540,44 @@ function get_marg(::Gamma_MCI, spec::sfmodel_MCI_spec, coef::AbstractVector{T}) 
     end
 
     margeff = addDataFrame(margeff_k, margeff_theta)
+    margMean = _compute_marg_mean(margeff)
+    margeff = _add_marg_prefix(margeff)
+
+    return margeff, margMean
+end
+
+#? ----------- Erlang -----------
+
+function get_marg(::Erlang_MCI{M}, spec::sfmodel_MCI_spec, coef::AbstractVector{T}) where {M, T}
+    # Convert to CPU for serial ForwardDiff operations
+    Z = _to_cpu(spec.zvar)
+    coef = _to_cpu(coef)
+    idx = spec.idx
+    n_obs = spec.N
+    L = spec.L
+    hetero = spec.hetero
+
+    theta_hetero = :theta in hetero
+    n_theta = theta_hetero ? L : 1
+
+    mm_theta = Matrix{T}(undef, n_theta, n_obs)
+
+    @inbounds for i in 1:n_obs
+        Zi = collect(@view Z[i, :])
+        Zmarg_theta = theta_hetero ? Zi : [one(T)]
+        marg = ForwardDiff.gradient(z -> uncondU_erlang(coef, idx, z, M), Zmarg_theta)
+        mm_theta[:, i] = marg
+    end
+
+    theta_names = theta_hetero ? _get_eq_varnames(spec, :theta) : ["_cons_theta"]
+    margeff = DataFrame(mm_theta', theta_names)
+
+    if theta_hetero
+        margeff = nonConsDataFrame(margeff, Z)
+    else
+        margeff = DataFrame()
+    end
+
     margMean = _compute_marg_mean(margeff)
     margeff = _add_marg_prefix(margeff)
 
@@ -637,7 +725,7 @@ function _get_z_varnames(spec::sfmodel_MCI_spec)
     # Find the first heteroscedastic equation and extract its variable names
     eq_name_patterns = [
         ("μ", :mu), ("mu", :mu),
-        ("ln_σᵤ²", :sigma_sq), ("ln_σ2", :sigma_sq), ("ln_σ²", :sigma_sq), ("ln_sigma", :sigma_sq), ("sigma", :sigma_sq),
+        ("ln_σᵤ²", :sigma_u_sq), ("ln_σ2", :sigma_u_sq), ("ln_σ²", :sigma_u_sq), ("ln_sigma", :sigma_u_sq), ("sigma", :sigma_u_sq),
         ("λ", :lambda), ("lambda", :lambda),
         ("ln_k", :k), ("k", :k),
         ("θ", :theta), ("theta", :theta),
@@ -700,7 +788,7 @@ Compute marginal effects of exogenous variables on E(u) for a MCI stochastic fro
 
 # Example
 ```julia
-spec = sfmodel_MCI_spec(depvar=y, frontier=X, zvar=Z, noise=:Normal, ineff=:HalfNormal, hetero=[:sigma_sq])
+spec = sfmodel_MCI_spec(depvar=y, frontier=X, zvar=Z, noise=:Normal, ineff=:HalfNormal, hetero=[:sigma_u_sq])
 coef = [...]  # estimated coefficients
 
 margeff, margMean = marginal_effects(spec, coef)
@@ -728,16 +816,22 @@ function _base_Eu_star(coef, idx, ::TruncatedNormal_MCI)
     sigma = clamp(exp(0.5 * coef[idx.ineff.sigma_u[1]]), oftype(coef[idx.ineff.sigma_u[1]], 1e-12),
                   oftype(coef[idx.ineff.sigma_u[1]], 1e12))
     Λ = mu / sigma
+    # Below Λ = -40 the stable σ·m(Λ) (see uncondU_trun); above, the direct form
+    Λ < -40 && return sigma * sf_tn_mean(Λ)
     return sigma * (Λ + exp(_normlogpdf(Λ) - _normlogcdf(Λ)))
 end
 
 function _base_Eu_star(coef, idx, ::Exponential_MCI)
-    return sqrt(exp(coef[idx.ineff.lambda[1]]))
+    # kernel-aligned clamp, as in uncondU_expo
+    ls = coef[idx.ineff.sigma_sq[1]]
+    return sqrt(clamp(exp(ls), oftype(ls, 1e-12), oftype(ls, 1e12)))
 end
 
 function _base_Eu_star(coef, idx, ::Weibull_MCI)
-    lambda = exp(coef[idx.ineff.lambda[1]])
-    k_val = exp(coef[idx.ineff.k[1]])
+    # kernel-aligned clamps, as in uncondU_weibull
+    ll = coef[idx.ineff.lambda[1]]; lk = coef[idx.ineff.k[1]]
+    lambda = clamp(exp(ll), oftype(ll, 1e-12), oftype(ll, 1e12))
+    k_val = clamp(exp(lk), oftype(lk, 0.1), oftype(lk, 10.0))
     return lambda * exp(loggamma(1 + 1/k_val))
 end
 
@@ -749,10 +843,15 @@ function _base_Eu_star(coef, idx, ::Lognormal_MCI)
 end
 
 function _base_Eu_star(coef, idx, ::Lomax_MCI)
-    lambda = exp(coef[idx.ineff.ln_lambda[1]])
-    alpha = exp(coef[idx.ineff.alpha[1]])
+    # Kernel-aligned clamps, as in uncondU_lomax. E(u*) = λ/(α − 1) does not exist for α ≤ 1;
+    # NaN makes the marginal effects of the scaling model undefined (NaN) for every z, as in the
+    # parameter-level kernel. α depends on the coefficients only and is a plain number here, so
+    # the comparison is decided by its value, also at α = 1.
+    ll = coef[idx.ineff.ln_lambda[1]]; la = coef[idx.ineff.alpha[1]]
+    lambda = clamp(exp(ll), oftype(ll, 1e-10), oftype(ll, 1e10))
+    alpha = clamp(exp(la), oftype(la, 0.1), oftype(la, 100.0))
     if alpha <= 1
-        return oftype(alpha, Inf)
+        return oftype(alpha, NaN)
     end
     return lambda / (alpha - 1)
 end
@@ -764,9 +863,18 @@ function _base_Eu_star(coef, idx, ::Rayleigh_MCI)
 end
 
 function _base_Eu_star(coef, idx, ::Gamma_MCI)
-    k_val = exp(coef[idx.ineff.k[1]])
-    theta_val = exp(coef[idx.ineff.theta[1]])
+    # kernel-aligned clamps, as in uncondU_gamma
+    lk = coef[idx.ineff.k[1]]; lt = coef[idx.ineff.theta[1]]
+    k_val = clamp(exp(lk), oftype(lk, 0.1), oftype(lk, 100.0))
+    theta_val = clamp(exp(lt), oftype(lt, 1e-12), oftype(lt, 1e12))
     return k_val * theta_val
+end
+
+function _base_Eu_star(coef, idx, ::Erlang_MCI{M}) where {M}
+    # kernel-aligned clamp, as in uncondU_erlang
+    lt = coef[idx.ineff.theta[1]]
+    theta_val = clamp(exp(lt), oftype(lt, 1e-12), oftype(lt, 1e12))
+    return M * theta_val
 end
 
 # --- Scaling unconditional E(u) ---

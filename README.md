@@ -1,20 +1,20 @@
 # SFrontiers.jl
 
-[![CI](https://github.com/HungJenWang/SFrontiers.jl/actions/workflows/CI.yml/badge.svg)](https://github.com/HungJenWang/SFrontiers.jl/actions/workflows/CI.yml)
+[![CI](https://github.com/HungJenWang1991/SFrontiers.jl/actions/workflows/CI.yml/badge.svg)](https://github.com/HungJenWang1991/SFrontiers.jl/actions/workflows/CI.yml)
 
 A Julia package for **stochastic frontier analysis**, supporting multiple estimation methods and a wide range of distributional assumptions.
 
 ## Features
 
 - **Multiple estimation backends**:
-  - **MLE** -- Analytic maximum likelihood (closed-form, fastest)
+  - **MLE** -- Analytic maximum likelihood (closed form; one-dimensional quadrature per firm for `panel_TFE_CSW` and `panel_TRE`)
   - **MCI** -- Monte Carlo integration with change-of-variable transforms
   - **MSLE** -- Maximum simulated likelihood via inverse CDF
   - **Panel** -- Wang and Ho (2010) true fixed-effect panel models
 
 - **Distributional flexibility**:
   - Noise: Normal, Student-t, Laplace
-  - Inefficiency: Half-Normal, Truncated-Normal, Exponential, Weibull, Lognormal, Lomax, Rayleigh, Gamma
+  - Inefficiency: Half-Normal, Truncated-Normal, Exponential, Weibull, Lognormal, Lomax, Rayleigh, Gamma (MCI only), Erlang (orders 2/3/4)
 
 - **Heteroscedasticity**: Scaling function and component-specific heterogeneity
 - **Efficiency indices**: JLMS and BC firm-level technical efficiency
@@ -48,7 +48,7 @@ meth = sfmodel_method(method = :MLE)
 # Set initial values
 init = sfmodel_init(spec = spec,
     frontier = beta_ols,
-    ln_sigma_sq = log(0.25),
+    ln_sigma_u_sq = log(0.25),
     ln_sigma_v_sq = log(0.09))
 
 # Configure optimizer

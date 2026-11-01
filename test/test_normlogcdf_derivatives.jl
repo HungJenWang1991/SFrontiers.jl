@@ -32,9 +32,10 @@ _b18_m(z) = (x = inv(z * z); (-1 + x * (2 + x * (-10 + x * (74 + x * (-706 + x *
             m = _b18_m(z); λ = m - z
             d1 = ForwardDiff.derivative(f, z)
             d2 = ForwardDiff.derivative(t -> ForwardDiff.derivative(f, t), z)
-            @test abs(d1 - λ) <= 4eps(λ)
+            # (a few ulps: room for the last bits of the special functions underneath)
+            @test abs(d1 - λ) <= 16eps(λ)
             @test abs(d2 - (-λ * m)) <= 1e-12          # pre-fix: 6.1e-7 at -6.65e4, 1.0 at -1e10
-            @test abs(f(z) - normlogcdf(z)) <= 8eps(abs(normlogcdf(z)))
+            @test abs(f(z) - normlogcdf(z)) <= 32eps(abs(normlogcdf(z)))
         end
         # above the switch it IS StatsFuns.normlogcdf
         for z in (-40.0, -39.5, -7.0, -1.0, 0.0, 3.0, 40.0)

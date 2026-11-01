@@ -89,9 +89,11 @@ end
             @test q > 0
             # Float32 in the far lower tail keeps only a few digits: at mu/sigma = 4 and
             # r = 1e-6 the quantile is 0.00731 against a true 0.00736.  That is the element
-            # type's own resolution, not the formula's.
+            # type's own resolution, not the formula's: near r = 0 the formula forms 1 - r,
+            # which holds r only to eps(T)/r (relative), about 1e-10 in Float64 and a few per
+            # cent in Float32 at r = 1e-6. So the tolerance is at least 2 eps(T)/r.
             @test isapprox(Float64(q), _tn_ref(Float64(ms), 1.0, Float64(r));
-                           rtol = T === Float64 ? 1e-10 : 2e-2)
+                           rtol = max(T === Float64 ? 1e-10 : 2e-2, 2 * eps(T) / Float64(r)))
         end
     end
 

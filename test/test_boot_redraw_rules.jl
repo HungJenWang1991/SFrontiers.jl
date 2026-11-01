@@ -254,8 +254,10 @@ end
             @test occursin(reportline(nf, nd, it), txt)
         end
 
-        # two optimizer errors (injected in the line search): 2 of 12, warned; same draws as before
-        mk() = _BF30InjectLS(rh.main_solver.linesearch!; at = [3, 40])
+        # two optimizer errors (injected in the line search): 2 of 12, warned; same draws as before.
+        # Each resample calls the line search at least once, so call 12 comes whatever the
+        # number of Newton iterations the dependency versions give.
+        mk() = _BF30InjectLS(rh.main_solver.linesearch!; at = [3, 12])
         (o, bs), _, logs = logged(() -> boot(result = with_ls(rh, mk()), R = 10, seed = 5, getBootData = true, every = 1000))
         ro, rbs, kinds, nd = _bf30_ref_boot(with_ls(rh, mk()); R = 10, seed = 5)
         @test nd == 12 && kinds == [:optimizer, :optimizer]
@@ -281,10 +283,11 @@ end
 
     @testset "iter below what every resample needs: stops after 10R failures" begin
         if fixed
-            e, _, _ = logged(() -> boot(result = rh, R = 2, seed = 1, iter = 2, every = 1000))
+            # iter = 1: no resample converges in one Newton step from the fit's estimate
+            e, _, _ = logged(() -> boot(result = rh, R = 2, seed = 1, iter = 1, every = 1000))
             @test e isa ErrorException
             msg = errmsg(e)
-            @test occursin("20 resamples failed", msg) && occursin("reached the iteration cap (2): 20", msg) &&
+            @test occursin("20 resamples failed", msg) && occursin("reached the iteration cap (1): 20", msg) &&
                   occursin("raise `iter`", msg)
             @test M._dicM[:σᵤ²] == names0
         else
@@ -392,32 +395,37 @@ end
     # The fits below replace the state of the last fit, so they come after every use of `rh`.
 
     @testset "a resample in which every determinant is constant is drawn again" begin
-        # zvar = [1 d] with d = 0.3 except 4 of 120 observations: a resample that misses all 4
-        # makes d constant, get_marg drops its column and the mean marginal effects are empty
-        # (before the fix: MethodError(zero, Any), and the names stayed overridden)
-        rng = Xoshiro(6); n = 120
+        # zvar = d alone, with d = 1 except one of 200 observations: about 37% of the resamples
+        # miss that observation, so d is constant in them, get_marg drops its column and the mean
+        # marginal effects are empty (before the fix: MethodError(zero, Any), and the names stayed
+        # overridden). Without an intercept column such a resample's model is still identified
+        # (σᵤ² = exp(δ)), so it converges and passes the Hessian checks whatever the rounding, and
+        # every seed counts resamples of this kind. With zvar = [1 d] a constant d would be
+        # collinear with the intercept, and whether such a resample got past the Hessian checks
+        # would depend on the machine.
+        rng = Xoshiro(6); n = 200
         X = hcat(ones(n), randn(rng, n))
-        d = fill(0.3, n); d[1:4] .= -1.0
-        u = abs.(0.5 .* randn(rng, n) .* exp.(0.2 .* d))
-        y = X * [0.8, 0.4] .+ 0.25 .* randn(rng, n) .- u
-        sp = sfmodel_spec(depvar = y, frontier = X, zvar = hcat(ones(n), d), noise = :Normal,
+        d = ones(n); d[1] = 2.0
+        u = abs.(randn(rng, n)) .* sqrt.(exp.(log(0.64) .* d))
+        y = X * [0.8, 0.4] .+ 0.2 .* randn(rng, n) .- u
+        sp = sfmodel_spec(depvar = y, frontier = X, zvar = reshape(d, n, 1), noise = :Normal,
                           ineff = :HalfNormal, hetero = [:sigma_u_sq], type = :prod)
-        ini = sfmodel_init(spec = sp, frontier = X \ y, ln_sigma_u_sq = [log(0.25), 0.0], ln_sigma_v_sq = log(0.06))
+        ini = sfmodel_init(spec = sp, frontier = X \ y, ln_sigma_u_sq = [log(0.64)], ln_sigma_v_sq = log(0.04))
         rc = quiet(() -> sfmodel_fit(spec = sp, method = sfmodel_method(method = :MLE), init = ini,
                                      optim_options = sfmodel_opt(warmstart_solver = nothing, main_solver = Newton(),
                                                                  main_opt = (iterations = 100,)),
                                      marginal = true, show_table = false, verbose = false))
         @test rc.converged
         nm = copy(M._dicM[:σᵤ²])
-        found = false
+        nconst(txt) = (m = match(r"an inefficiency determinant constant in the resample: (\d+)", txt);
+                       m === nothing ? 0 : parse(Int, m[1]))
         for s in (1, 2)
-            v, _, _ = logged(() -> boot(result = rc, R = 100, seed = s, every = 1000))
-            @test !(v isa Exception)
-            _, txt, _ = logged(() -> boot(result = verbose(rc), R = 100, seed = s, every = 1000))
-            found = found || occursin("an inefficiency determinant constant in the resample", txt)
+            v, _, _ = logged(() -> boot(result = rc, R = 50, seed = s, every = 1000))
+            @test v isa Matrix                                   # no MethodError
+            _, txt, _ = logged(() -> boot(result = verbose(rc), R = 50, seed = s, every = 1000))
+            @test nconst(txt) >= 1                               # counted by its kind, for each seed
             @test M._dicM[:σᵤ²] == nm
         end
-        @test found                                              # counted by its kind
     end
 
     @testset "every resample's Hessian singular: counted as such, stops after 10R" begin

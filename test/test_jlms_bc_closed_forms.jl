@@ -98,7 +98,8 @@ end
             end
             @test npos == 0
             @test eb <= 1e-15
-            @test abs(exp(lg(-3.0, 0.7)) - Float64(exp(_b27_h(BigFloat(-3.0) - BigFloat(0.7)) - _b27_h(-3.0)))) <= 1e-15
+            # (5.6e-16 measured, a few ulps of a difference of two log-erfcx values: 1e-14 leaves room)
+            @test abs(exp(lg(-3.0, 0.7)) - Float64(exp(_b27_h(BigFloat(-3.0) - BigFloat(0.7)) - _b27_h(-3.0)))) <= 1e-14
             # a > 0 (not reached by the package): the four terms directly, not h(a - s) - h(a) (9.9e-9 off at 1e4)
             for (a, s) in ((1e4, 1e-4), (1e7, 1e-7), (4.7, 1e-6))
                 bref = exp(_b27_h(BigFloat(a) - BigFloat(s)) - _b27_h(a))

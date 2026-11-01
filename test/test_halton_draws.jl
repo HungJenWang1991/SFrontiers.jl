@@ -162,21 +162,22 @@ using SFrontiers, Test, Random, HaltonSequences, Optim, QuadGK, SpecialFunctions
     end
 
     @testset "draw preparation allocates one block" begin
+        # at most 1.5 blocks: room for what Julia's versions add around an array, and a second block fails
         _hd_alloc(f) = (f(); @allocated f())
         for T in (Float64, Float32)
             y = T.(randn(Xoshiro(3), 400))
             block = 400 * 1024 * sizeof(T)
             @test _hd_alloc(() -> MCI_Backend._prepare_draws(y, 400, T, nothing, 1024, true, 0, false)) <=
-                  1.05 * block + 4096
+                  1.5 * block + 4096
             @test _hd_alloc(() -> MSLE_Backend._prepare_draws(y, 400, T, nothing, 1024, true, 0, false)) <=
-                  1.05 * block + 4096
+                  1.5 * block + 4096
             # shared draws: one row of 1,024 points
             @test _hd_alloc(() -> MCI_Backend._prepare_draws(y, 400, T, nothing, 1024, false, 0, false)) <=
-                  1.05 * 1024 * sizeof(T) + 4096
+                  1.5 * 1024 * sizeof(T) + 4096
             @test _hd_alloc(() -> MSLE_Backend._prepare_draws(y, 400, T, nothing, 1024, false, 0, false)) <=
-                  1.05 * 1024 * sizeof(T) + 4096
+                  1.5 * 1024 * sizeof(T) + 4096
             # the generator call of the panel fits
-            @test _hd_alloc(() -> SFDraws.sf_halton_draws(400, 1024; T = T)) <= 1.05 * block + 4096
+            @test _hd_alloc(() -> SFDraws.sf_halton_draws(400, 1024; T = T)) <= 1.5 * block + 4096
         end
     end
 

@@ -380,11 +380,13 @@ end
     #    1.42e-7, 1.86e-4 and 0.330; without the cancellation-free B in LL_T(PTREH) 5.19e-10,
     #    3.96e-10 and 9.57e-10); at 4e5 within 1.13e-14, 3.88e-14 and 1.14e-8 (PTREH) and 1.27e-14,
     #    6.09e-13 and 1.22e-8 (PTRET), where the package was off by 5.07e-5, 1.92e-5 and 0.328
-    #    (PTREH) and 2.68e-5, 7.06e-2 and 4.17e3 (PTRET) before the fix.
+    #    (PTREH) and 2.68e-5, 7.06e-2 and 4.17e3 (PTRET) before the fix. Each tolerance is at least
+    #    about 80 times the error measured, so that rounding and the quadrature's subdivision (the
+    #    package integrates to rtol 1e-10) leave room.
     # -----------------------------------------------------------------------------------------
     setprecision(BigFloat, 512) do
-        for (model, ratio, tv, tg, tH) in ((:T, 1e3, 1e-11, 1e-10, 1e-8), (:T, 4e5, 1e-12, 1e-11, 1e-7),
-                                           (:H, 2e3, 1e-11, 1e-11, 1e-10), (:H, 4e5, 1e-12, 1e-11, 1e-7))
+        for (model, ratio, tv, tg, tH) in ((:T, 1e3, 1e-11, 1e-10, 1e-8), (:T, 4e5, 1e-12, 1e-10, 1e-6),
+                                           (:H, 2e3, 1e-11, 1e-11, 1e-10), (:H, 4e5, 1e-12, 1e-10, 1e-6))
             @testset "LL_T(PTRE$(model)) at sigma_u/sigma_v = $(ratio)" begin
                 _B43_GL[] = QuadGK.gauss(BigFloat, ratio > 1e5 ? 24 : 16)
                 θ = _b43_θ(model, ratio)

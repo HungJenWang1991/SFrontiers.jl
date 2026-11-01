@@ -60,9 +60,11 @@ end
         r = cl(H4)
         @test r.redflag == 1 && isequal(r.var_cov_matrix, inv(H4))
         # the test is strict: two nearly flat directions of opposite curvature (eigenvalues 1, 0.5,
-        # 5e-15 and -1e-14) pass the old tests (reciprocal condition number about 5e-15), and would
-        # pass a tolerant test "lambda_min < -tau * lambda_max" with tau = 1e-12 or sqrt(eps)
-        H5 = Matrix(Symmetric(Q * Diagonal([1.0, 0.5, 0.5e-14, -1e-14]) * Q'))
+        # 1e-13 and -4e-13) pass the old tests (reciprocal condition number about 1e-13), and would
+        # pass a tolerant test "lambda_min < -tau * lambda_max" with tau = 1e-12 or sqrt(eps). The
+        # eigenvalues are well above the rounding of H5 (about 1e-16), so the verdict does not depend
+        # on the machine.
+        H5 = Matrix(Symmetric(Q * Diagonal([1.0, 0.5, 1e-13, -4e-13]) * Q'))
         @test cl(H5).redflag == 1
         # a ForwardDiff Hessian is symmetric only to rounding: the symmetric part decides
         Sa = copy(S); Sa[1, 2] += 4eps()

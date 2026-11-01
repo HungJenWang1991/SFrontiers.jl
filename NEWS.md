@@ -1,5 +1,9 @@
 # SFrontiers.jl release notes
 
+## Version 2.0.1
+
+Version 2.0.1 changes only the test suite. Its GPU checks now also run when the package is installed from the registry, and they are skipped, with a message, when the CUDA.jl version found is newer than 6.4. Tests whose outcome could depend on the platform's rounding, on the path an optimizer takes or on tolerances tighter than their purpose requires (one of them failed on Linux) now check what they guard without that dependence.
+
 ## Version 2.0.0
 
 Version 2.0.0 is a major release. It corrects results that earlier versions computed wrongly in several models, makes simulation-based estimation (`method = :MSLE` and `:MCI`) more accurate by default, and makes the interface the same under every estimation method. Code written for version 1.4 may need changes. Models fitted with version 1.4 or earlier should be re-estimated: the results of `:MSLE` and `:MCI` fits change, and so do those of the models listed under "Corrected results".

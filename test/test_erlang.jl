@@ -303,7 +303,8 @@ end
         @test maximum(abs.(r1.jlms .- rN.jlms)) < 1e-12
         s1 = _MCIB.jlms_bc_indices(Y, X, Z, pp, draws[1:1, :]; noise=:Normal, ineff=ineff, chunks=1)
         s3 = _MCIB.jlms_bc_indices(Y, X, Z, pp, draws[1:1, :]; noise=:Normal, ineff=ineff, chunks=3)
-        @test s1.jlms == s3.jlms                                # shared draws unchanged
+        # shared draws unchanged (the two take different code paths: equal to rounding, as above)
+        @test maximum(abs.(s1.jlms .- s3.jlms)) < 1e-12
     end
 
     # (3) marginal helpers apply the likelihood's θ clamp [1e-12, 1e12] (and k ∈ [0.1, 100]

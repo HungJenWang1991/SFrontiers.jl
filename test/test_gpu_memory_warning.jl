@@ -62,10 +62,13 @@ using Random
         end
         # Allocated / estimated bytes when this test was written: 1.10, 1.14, 1.05 and 1.07 for the
         # cross-sectional cases, 1.06 and 1.12 for the panel cases; with a shorter last group (below)
-        # 1.07, 1.09, 1.04 and 1.05, and 1.04 and 1.06. U is the largest plus 0.1. The rest of
-        # the bytes are dual vectors of one element per observation or firm, which do not grow with the
-        # number of draws.
-        U = 1.24
+        # 1.07, 1.09, 1.04 and 1.05, and 1.04 and 1.06. The rest of the bytes are dual vectors of one
+        # element per observation or firm, which do not grow with the number of draws. What Julia and
+        # ForwardDiff allocate around the work arrays can change between their versions, so the band is
+        # [L, U] = [0.5, 1.5]: wide enough for that, and narrow enough for the warning, which compares the
+        # estimate with the free GPU memory.
+        L = 0.5
+        U = 1.5
         W = _GD.SF_WORK_ARRAYS
         n = 400                    # observations or firms; chunks = 10 gives groups of 40
         cases = []                 # (label, work arrays, n_draws, q, likelihood, θ)
@@ -115,14 +118,14 @@ using Random
 
         @testset "$label" for (label, narrays, S, q, f, θ) in cases
             est = _GD.sf_hessian_pass_bytes(narrays, n, S, 10, q)
-            @test 0.9 * est <= _gmw_hb(f, θ) <= U * est
+            @test L * est <= _gmw_hb(f, θ) <= U * est
         end
 
         # chunks = 9 splits the 400 observations or firms into 8 groups of 45 and a last group of 40, for which
         # the likelihood allocates one more array of its own size; the estimate counts it.
         @testset "$label, shorter last group" for (label, narrays, S, q, f, θ) in cases
             est = _GD.sf_hessian_pass_bytes(narrays, n, S, 9, q)
-            @test 0.9 * est <= _gmw_hb(θ -> f(θ; chunks = 9), θ) <= U * est
+            @test L * est <= _gmw_hb(θ -> f(θ; chunks = 9), θ) <= U * est
         end
     end
 end

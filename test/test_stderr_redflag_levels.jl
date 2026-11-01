@@ -54,14 +54,15 @@ const _MLESF = SFrontiers.MLE_Backend.SFmle   # MLE internals live in a nested S
     sep = _PANEL._stderr_from_vcov([1.0 0.0; 0.0 -1.0])
     @test sep[1] == 1.0 && isnan(sep[2])
 
-    # ---- End-to-end: a perfectly collinear frontier makes the post-hoc Hessian
-    #      exactly singular. Before the fix the fit crashed at the stddev line and
-    #      lost the result; now it must return a full result with NaN SEs and
-    #      redflag > 0, no exception.
+    # ---- End-to-end: a zero frontier column makes the post-hoc Hessian exactly
+    #      singular. Before the fix the fit crashed at the stddev line and lost the
+    #      result; now it must return a full result with NaN SEs and redflag > 0, no
+    #      exception. (A duplicated column would make it singular only up to rounding,
+    #      and whether inv then throws depends on the machine.)
     Random.seed!(2024)
     n = 150
     cons = ones(n); x1 = randn(n)
-    Xsing = hcat(cons, x1, x1)                         # duplicate column => rank deficient
+    Xsing = hcat(cons, x1, zeros(n))                   # zero column => exactly singular Hessian
     β = [1.0, 0.5, 0.0]
     y = Xsing * β .+ 0.3 .* randn(n) .- abs.(0.4 .* randn(n))
     opt = sfmodel_opt(warmstart_solver = NelderMead(), warmstart_opt = (iterations = 40,),

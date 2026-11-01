@@ -204,8 +204,9 @@ using ForwardDiff
         @test Optim.converged(rn) && !RF.sf_gradient_free(rn) && !RF.sf_ls_failed(rn)
         @test RF.sf_final_fg(rn, f) === (Optim.minimum(rn), Optim.g_residual(rn))
         @test RF.sf_convergence_flag(rn; message = false) == 0
-        # NelderMead (converged): its minimum is f at its minimizer; the gradient is ForwardDiff's there
-        rm_ = optimize(f, x0, NelderMead(), Optim.Options(iterations = 40, time_limit = 30.0))
+        # NelderMead (converged, after about 30 iterations): its minimum is f at its minimizer; the
+        # gradient is ForwardDiff's there
+        rm_ = optimize(f, x0, NelderMead(), Optim.Options(iterations = 500, time_limit = 30.0))
         xm = Optim.minimizer(rm_)
         @test Optim.converged(rm_)
         @test RF.sf_gradient_free(rm_) && Optim.minimum(rm_) == f(xm)

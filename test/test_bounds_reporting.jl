@@ -276,8 +276,11 @@ using Statistics: var
 
     @testset "interior fits are unchanged" begin
         # Data from fixed sequences (no random stream), so that they are the same on every Julia version.
-        # Tolerance 1e-6: the last digits of the fits move slightly between versions of the optimization
-        # and special-function packages.
+        # The fits stop at a gradient norm below 1e-6, and where exactly can move with rounding and between
+        # versions of the optimization and special-function packages: so the coefficients are compared in
+        # units of their standard errors (1e-4), the log-likelihood (second order in the stopping point) to
+        # 1e-6, and the standard errors and jlms to 1e-5 of their values. Bound bookkeeping that touched an
+        # interior fit would move them by far more.
         Nd = 500; iD = 1:Nd
         xd = sqrt(2) .* erfinv.(2 .* mod.(iD .* 0.6180339887498949, 1.0) .- 1)
         vd = 0.5 .* sqrt(2) .* erfinv.(2 .* mod.(iD .* 0.4142135623730951, 1.0) .- 1)
@@ -308,11 +311,11 @@ using Statistics: var
             w = want[m]
             @test _bnd_fields(r)
             @test r.converged && r.redflag == 0 && r.hessian_flag == 0 && isempty(r.bound_check)
-            @test all(isapprox.(r.coeff, w.coeff; rtol = 1e-6))
-            @test isapprox(r.loglikelihood, w.loglikelihood; rtol = 1e-6)
-            @test all(isapprox.(r.std_err, w.std_err; rtol = 1e-6))
-            @test isapprox(sum(r.jlms), w.jlms_sum; rtol = 1e-6)
-            @test all(isapprox.(r.jlms[[1, 250, 500]], w.jlms3; rtol = 1e-6))
+            @test all(abs.(r.coeff .- w.coeff) .<= 1e-4 .* w.std_err)
+            @test isapprox(r.loglikelihood, w.loglikelihood; atol = 1e-6)
+            @test all(isapprox.(r.std_err, w.std_err; rtol = 1e-5))
+            @test isapprox(sum(r.jlms), w.jlms_sum; rtol = 1e-5)
+            @test all(isapprox.(r.jlms[[1, 250, 500]], w.jlms3; rtol = 1e-5))
         end
     end
 

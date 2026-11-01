@@ -81,15 +81,17 @@ end
     #    "DomainError with 0.0: integrand produced Dual{...}(NaN,NaN,...)" under Newton at
     #    300 iterations, from the explicit start below and with init=nothing alike.
     # ------------------------------------------------------------------
-    @testset "Newton at 300 iterations no longer throws" begin
+    @testset "Newton no longer throws (up to 1,000 iterations)" begin
         y, X, id, _, _ = _tre_data(7, 3)
         sp = sfmodel_spec(datatype = :panel_TRE, depvar = y, frontier = X, id = id,
                           type = :production, noise = :Normal, ineff = :HalfNormal)
         ini = sfmodel_init(spec = sp, frontier = [0.44, -0.16], sigma_a_sq = 0.12,
                            ln_sigma_u_sq = -1.2, ln_sigma_v_sq = -2.2)
+        # Newton needs about 160 iterations on this panel, a count that can move with rounding and
+        # package versions: the cap of 1,000 leaves room (the path up to 300 is the one that threw)
         for start in (ini, nothing)
             o = sfmodel_opt(warmstart_solver = nothing, main_solver = Newton(),
-                            main_opt = (iterations = 300, g_abstol = 1e-8))
+                            main_opt = (iterations = 1000, g_abstol = 1e-8))
             r = last(Test.collect_test_logs(() -> sfmodel_fit(spec = sp,
                     method = sfmodel_method(method = :MLE), init = start, optim_options = o,
                     jlms_bc_index = false, marginal = false, show_table = false,

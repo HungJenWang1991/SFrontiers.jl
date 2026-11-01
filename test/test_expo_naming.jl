@@ -43,7 +43,7 @@ const _EB = SFrontiers.MLE_Backend.SFmle
     u  = -0.6 .* log.(rand(n))                       # scale 0.6, so σᵤ² = Var(u) = 0.36
     y  = X * [1.0, 0.5, -0.3] .+ 0.25 .* randn(n) .- u
     βo = X \ y
-    draws = collect(((1:32) .- 0.5) ./ 32)
+    draws = collect(((1:128) .- 0.5) ./ 128)
     opt = sfmodel_opt(warmstart_solver = nothing, main_solver = NelderMead(),
                       main_opt = (iterations = 300,))
 
@@ -119,13 +119,14 @@ const _EB = SFrontiers.MLE_Backend.SFmle
 
         # the simulation backend estimates the same quantity, and now says so
         rS = last(Test.collect_test_logs(() -> sfmodel_fit(spec = sp,
-                method = sfmodel_method(method = :MSLE, draws = draws, n_draws = 32,
+                method = sfmodel_method(method = :MSLE, draws = draws, n_draws = 128,
                                         multiRand = false),
                 init = ini, optim_options = opt, jlms_bc_index = false, marginal = false,
                 show_table = false, verbose = false)))
         @test :sigma_sq in propertynames(rS)
         @test !(:lambda in propertynames(rS))
-        # both are log Var(u): compare the two estimates of the same thing
+        # both are log Var(u): compare the two estimates of the same thing (6.5% apart with these 128
+        # draws, 30% with 32; estimating the scale instead of Var(u) would put them about 48% apart)
         @test isapprox(exp(Float64(rM.coeff[4])), exp(Float64(rS.coeff[4])); rtol = 0.35)
     end
 

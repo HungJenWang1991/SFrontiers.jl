@@ -102,15 +102,15 @@ end
             adj = zeros(size(zb)); Fv = zeros(size(zb))
             B.copula_log_adjustment!(gau, adj, Fv, zb, dr, nz, (inv_sigma_v = 1.0,), (rho = ρ,), c32)
             # reference: the exact normal scores of the package's own F_v (noise_cdf!, unchanged by the fix) and of
-            # F_u; the specification's Float32 √2 shifts each score by 1.7e-8 relative, so the tolerance is 2e-6;
-            # the old cap at ±4.62 was off by up to 5 nats here
+            # F_u; the specification's Float32 √2 shifts each score by 1.7e-8 relative (1.3e-6 nats measured), so
+            # the tolerance is 1e-5; the old cap at ±4.62 was off by up to 5 nats here
             Fv0 = zeros(size(zb)); B.noise_cdf!(nz, Fv0, zb, (inv_sigma_v = 1.0,), c32)
             err = 0.0
             for i in eachindex(adj)
                 qv = _b42_qB(BigFloat(Fv0[i])); qu = _b42_qB(BigFloat(dr[i]))
                 err = max(err, Float64(abs(adj[i] - _b42_gaussB(qv, qu, BigFloat(ρ)))))
             end
-            @test err <= 2e-6
+            @test err <= 1e-5
             # ForwardDiff gradient in (shift of z, θ_ρ) where the old Float32 clamps bound and F_v is still accurate
             # in Float64 (|z| ≤ 5.6): against 512-bit central differences of the exact density
             z2 = [-5.6, -5.2, -4.8, 4.8, 5.2, 5.6]; Fu2 = bname == "MCI" ? [1e-7, 1e-5, 0.3, 1 - 1e-5, 1 - 1e-7] : [0.3]

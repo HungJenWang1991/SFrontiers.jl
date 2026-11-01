@@ -40,6 +40,9 @@ const _RF = SFrontiers.SFRedflag
 
     good = sfmodel_init(spec = spec, frontier = X \ y, ln_sigma_u_sq = log(0.36), ln_sigma_v_sq = log(0.09))
     far  = sfmodel_init(spec = spec, frontier = [0.0, 0.0], ln_sigma_u_sq = 3.0, ln_sigma_v_sq = -3.0)
+    # where one Newton step from `far` lands under :MLE (ln σᵤ² ≈ -168), typed in so that the
+    # checks below do not depend on the step the optimizer and its line search take
+    p1 = [0.85, 0.43, -168.08, -3.57]
 
     @testset "MLE: an Int, whatever show_table is" begin
         for st in (false, true)
@@ -54,13 +57,11 @@ const _RF = SFrontiers.SFRedflag
             @test r.redflag === 2
             @test any(isnan, stderror(r)) && !all(isnan, stderror(r))
 
-            # 1: one Newton step from the far start lands at ln σᵤ² ≈ -168, a boundary
-            # solution with a numerically singular Hessian: inv succeeds there, but the
-            # reciprocal condition number is about 1e-38, so every standard error is NaN.
-            # Before the fix :MLE read `true` with one standard error NaN (the non-positive-
-            # diagonal branch), where MCI and MSLE read 1 with all of them NaN.
-            r = fit(:MLE, far, newton(1); st = st)
-            @test r.coeff[3] < -100
+            # 1: p1, a boundary solution with a numerically singular Hessian: inv succeeds
+            # there, but the reciprocal condition number is about 1e-38, so every standard
+            # error is NaN. Before the fix :MLE read `true` with one standard error NaN (the
+            # non-positive-diagonal branch), where MCI and MSLE read 1 with all of them NaN.
+            r = fit(:MLE, p1, newton(0); st = st)
             @test r.redflag === 1
             @test r.iter_limit_reached
             @test all(isnan, stderror(r))
@@ -93,17 +94,21 @@ const _RF = SFrontiers.SFRedflag
         @test r.redflag == 1 && r.hessian_flag == 0 && all(isfinite, r.var_cov_matrix)
         @test cl([1.0 0.0; 0.0 -1.0]; at_clamp = true).redflag == 1
         # the verdict does not depend on the parameter order (the TN-scaling and panel-TFE
-        # results are classified in the analytic order, then permuted)
+        # results are classified in the analytic order, then permuted). The smallest
+        # eigenvalue is ±1e-8 to ±1e-13, so every matrix is clearly 0 or clearly 2: for a
+        # matrix whose reciprocal condition number is within rounding of eps (a smallest
+        # eigenvalue near 1e-16), the two orders can round to different sides of it.
         rng = Xoshiro(20)
-        agree = 0
+        agree = 0; seen = Set{Int}()
         for _ in 1:300
             Q = Matrix(qr(randn(rng, 4, 4)).Q)
-            H = Q * Diagonal([1.0, 1.0, 1.0, 10.0^(-rand(rng, 13:19))]) * Q'
+            H = Q * Diagonal([1.0, 1.0, 1.0, rand(rng, (-1.0, 1.0)) * 10.0^(-rand(rng, 8:13))]) * Q'
             H = (H + H') / 2
             P = [1, 2, 4, 3]
             agree += cl(H).redflag == cl(H[P, P]).redflag
+            push!(seen, cl(H).redflag)
         end
-        @test agree == 300
+        @test agree == 300 && seen == Set([0, 2])
         @test _RF.sf_scale_at_clamp(1e-12) && _RF.sf_scale_at_clamp(1e12) && _RF.sf_scale_at_clamp(NaN)
         @test !_RF.sf_scale_at_clamp(1.0001e-12) && !_RF.sf_scale_at_clamp(0.9999e12)
         # the backends' own entry points apply the same rule
@@ -118,9 +123,8 @@ const _RF = SFrontiers.SFRedflag
 
     @testset "the same point gets the same flag under every method" begin
         at(m, p) = fit(m, p, newton(0))
-        # the MLE one-step landing point: all standard errors NaN under every method now;
+        # p1, the MLE one-step landing point: all standard errors NaN under every method now;
         # before, :MLE kept three of its four
-        p1 = collect(fit(:MLE, far, newton(1)).coeff)
         @test [at(m, p1).redflag for m in (:MLE, :MCI, :MSLE)] == [1, 1, 1]
         @test all(m -> all(isnan, stderror(at(m, p1))), (:MLE, :MCI, :MSLE))
         # the clean optimum with ln σᵤ² moved past the clamp (about -55.26). Under
@@ -137,10 +141,11 @@ const _RF = SFrontiers.SFRedflag
         pe = [pc[1], pc[2], -30.0, pc[4]]
         @test [fit(m, pe, newton(0); sp = spe).redflag for m in (:MLE, :MCI, :MSLE)] == [1, 1, 1]
 
-        # a duplicated regressor. On these data inv throws under all three methods (whether
-        # it does is rounding luck), so this block pins only the parity; the panel case below
-        # is one where :MLE's inv succeeds and the reciprocal condition number alone decides.
-        Xd = hcat(X, X[:, 2])
+        # an exactly singular Hessian (a zero frontier column): inv throws under all three
+        # methods, so all read 1 with every standard error NaN. A duplicated regressor would
+        # make the Hessian singular only up to rounding: whether inv throws, and on which side
+        # of eps the reciprocal condition number falls, then depends on the machine.
+        Xd = hcat(X, zeros(n))
         spd = sfmodel_spec(depvar = y, frontier = Xd, noise = :Normal, ineff = :HalfNormal, type = :prod)
         pd = sfmodel_init(spec = spd, frontier = [X \ y; 0.0], ln_sigma_u_sq = log(0.36), ln_sigma_v_sq = log(0.09))
         optnm = sfmodel_opt(main_solver = NelderMead(), main_opt = (iterations = 2000,))
@@ -150,10 +155,13 @@ const _RF = SFrontiers.SFRedflag
             @test all(isnan, stderror(r))
         end
 
-        # a converged fit whose Hessian inv accepts (cond 2.6e18) but whose reciprocal
-        # condition number (3e-17) is below eps: before the fix :MLE read `false` with
-        # standard errors up to 1.5e6, where MCI read 1 (its inv throws). The data are a
-        # panel_TFE duplicated-frontier case (MersenneTwister(201)).
+        # a converged fit with a duplicated frontier column (panel_TFE, MersenneTwister(201)).
+        # Its Hessian is singular only up to rounding: on one machine :MLE's inv accepted it
+        # (cond 2.6e18) and the reciprocal condition number (3e-17, below eps) decided; on
+        # another inv throws. Before the fix :MLE ignored the reciprocal condition number and
+        # read `false` with standard errors up to 1.5e6. Which branch a machine takes is left
+        # open: the flag and the standard errors must be those the shared rule gives for the
+        # fit's own Hessian (a half-normal fit's Hessian is not reordered).
         rng2 = MersenneTwister(201); N2, T2 = 100, 5; NT2 = N2 * T2
         id2 = repeat(1:N2, inner = T2); x2 = randn(rng2, NT2); z2 = randn(rng2, NT2)
         al2 = repeat(0.5 .* randn(rng2, N2), inner = T2); v2 = 0.3 .* randn(rng2, NT2)
@@ -166,8 +174,9 @@ const _RF = SFrontiers.SFRedflag
         for m in (:MLE, :MCI)
             r = fit(m, in2, newton(100); sp = sp2)
             @test r.converged
-            @test r.redflag === 1
-            @test all(isnan, stderror(r))
+            c = _RF.sf_classify_hessian(r.Hessian; message = false)
+            @test r.redflag === c.redflag
+            @test isnan.(stderror(r)) == .!(diag(c.var_cov_matrix) .> 0)
         end
 
         # the panel backend: panel_TFE half-normal, ln σᵤ² past the clamp, MLE and MCI
@@ -212,18 +221,20 @@ const _RF = SFrontiers.SFRedflag
     @testset "MLE honours every Optim option" begin
         # a callback that stops the run: ignored under :MLE before, which then converged
         cb = sfmodel_opt(main_solver = Newton(), main_opt = (iterations = 100, callback = st -> true))
+        # (at most one iteration: when Optim first calls the callback is Optim's choice)
         for m in (:MLE, :MCI)
             r = fit(m, good, cb)
-            @test r.actual_iterations == 0
+            @test r.actual_iterations <= 1
             @test !r.converged && r.redflag >= 1
         end
-        # the warmstart's own tolerance: a huge one stops NelderMead at once. Before, the
-        # warmstart ran at the main tolerance and used all 50 iterations.
+        # the warmstart's own tolerance: a huge one stops NelderMead at once (0 iterations
+        # with Optim 2; at most 1 whenever Optim checks convergence). Before, the warmstart
+        # ran at the main tolerance and used all 50 iterations.
         opt_ws = sfmodel_opt(warmstart_solver = NelderMead(), warmstart_opt = (iterations = 50, g_abstol = 1e10),
                              main_solver = Newton(), main_opt = (iterations = 100,))
         r = fit(:MLE, good, opt_ws)
         r2 = fit(:MLE, r.main_ini, newton(100))
-        @test r.actual_iterations == r2.actual_iterations     # 0 warmstart iterations
+        @test 0 <= r.actual_iterations - r2.actual_iterations <= 1
         # actual_iterations counts the warmstart too (it counted the main stage only)
         opt5 = sfmodel_opt(warmstart_solver = NelderMead(), warmstart_opt = (iterations = 5, g_abstol = 1e-12),
                            main_solver = Newton(), main_opt = (iterations = 100,))

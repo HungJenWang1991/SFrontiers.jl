@@ -349,28 +349,33 @@ end
 # The GPU draw object at predict — GPU-gated, and run in a SEPARATE process: `using CUDA` must precede
 # `using SFrontiers` for the GPU overloads to register, and this file is included after
 # SFrontiers is already loaded. Same mechanism as `test_gpu_equivalence.jl`, including the
-# JULIA_LOAD_PATH restore — `Pkg.test()` sandboxes the load path, and CUDA is deliberately
-# not a test dependency, so the subprocess has to be pointed back at the user environment.
-# Skipped as a no-op testset when CUDA is unavailable.
+# load path — `Pkg.test()` sandboxes it, and CUDA is deliberately not a test dependency, so
+# the subprocess gets the test environment followed by the user's default environment.
+# Skipped as a no-op testset when CUDA is unavailable, and when its version is newer than
+# the versions SFrontiers supports (6.4 or earlier).
 # ---------------------------------------------------------------------------
 @testset "predict takes the GPU draw object the fit took (gated)" begin
-    pkgroot = dirname(@__DIR__)
     julia   = joinpath(Sys.BINDIR, Base.julia_exename())
-    _lp = join(["@", "@v#.#", "@stdlib"], Sys.iswindows() ? ";" : ":")
-    probe_cmd = addenv(
-        `$julia --project=$pkgroot --startup-file=no -e "try; using CUDA; print(CUDA.functional()); catch; print(false); end"`,
-        "JULIA_LOAD_PATH" => _lp)
-    gpu_ok = try
-        strip(read(probe_cmd, String)) == "true"
+    _lp = join([Base.load_path(); "@v#.#"; "@stdlib"], Sys.iswindows() ? ";" : ":")
+    probe_code = "try; using CUDA; println(CUDA.functional()); print(pkgversion(CUDA)); catch; print(false); end"
+    probe_cmd = addenv(`$julia --startup-file=no -e $probe_code`, "JULIA_LOAD_PATH" => _lp)
+    probe = try
+        split(read(probe_cmd, String))
     catch
-        false
+        String[]
     end
+    gpu_ok = !isempty(probe) && probe[1] == "true"
+    cuda_v = length(probe) > 1 ? tryparse(VersionNumber, probe[2]) : nothing
 
     if !gpu_ok
         @test_skip "CUDA not available/functional - GPU custom-draw roundtrip skipped"
+    elseif cuda_v !== nothing && cuda_v >= v"6.5"
+        @warn("GPU custom-draw roundtrip skipped: CUDA.jl $cuda_v in the default environment is " *
+              "newer than the versions SFrontiers supports (6.4 or earlier)")
+        @test_skip "CUDA.jl newer than 6.4 - GPU custom-draw roundtrip skipped"
     else
         runner = joinpath(@__DIR__, "gpu_custom_draw_runner.jl")
-        cmd = addenv(`$julia --project=$pkgroot --startup-file=no $runner`,
+        cmd = addenv(`$julia --startup-file=no $runner`,
                      "JULIA_LOAD_PATH" => _lp)
         log = IOBuffer()
         ok  = success(pipeline(cmd; stdout = log, stderr = log))

@@ -64,8 +64,9 @@ end
 _b40_grad(f, p) = ForwardDiff.gradient(f, p, ForwardDiff.GradientConfig(nothing, p), Val{false}())
 _b40_hess(f, p) = ForwardDiff.hessian(f, p, ForwardDiff.HessianConfig(nothing, p), Val{false}())
 
-# bytes allocated by one evaluation, after two warm-up calls
-_b40_alloc(f) = (f(); f(); @allocated f())
+# bytes allocated by one evaluation, after two warm-up calls: the smallest of three readings (@allocated
+# reads a process-wide counter, to which something else can add during a single reading)
+_b40_alloc(f) = (f(); f(); minimum(@allocated(f()) for _ in 1:3))
 
 @testset "one log-sum-exp temporary per evaluation (MCI, MSLE)" begin
 

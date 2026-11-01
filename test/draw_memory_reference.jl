@@ -191,8 +191,10 @@ end
 # Bit-for-bit equality of two numbers or arrays (of floats or ForwardDiff duals).
 _same_bits(x, y) = size(x) == size(y) && reinterpret(UInt8, vec(collect(x))) == reinterpret(UInt8, vec(collect(y)))
 
-# Bytes allocated by one call of f, after two warm-up calls.
-_alloc(f) = (f(); f(); @allocated f())
+# Bytes allocated by one call of f, after two warm-up calls: the smallest of three readings. @allocated
+# reads a process-wide counter, so bytes allocated meanwhile by something else (a finalizer run by a
+# collection, another thread) can add to a single reading; what f itself allocates is in every reading.
+_alloc(f) = (f(); f(); minimum(@allocated(f()) for _ in 1:3))
 
 # A Wang-Ho panel_TFE data set: firm i has 3 + mod(i, 3) periods, its observations consecutive.
 function _ref_panel_data(F, seed)

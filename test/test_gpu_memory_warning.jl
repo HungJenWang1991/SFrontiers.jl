@@ -53,12 +53,14 @@ using Random
     end
 
     @testset "the estimate matches what an evaluation allocates" begin
-        # Bytes that one ForwardDiff Hessian evaluation of f allocates, after two warm-up calls.
+        # Bytes that one ForwardDiff Hessian evaluation of f allocates, after two warm-up calls: the
+        # smallest of three readings (@allocated reads a process-wide counter, to which something else,
+        # such as a finalizer run by a collection, can add during a single reading).
         function _gmw_hb(f, θ)
             cfg = ForwardDiff.HessianConfig(nothing, θ)
             h() = ForwardDiff.hessian(f, θ, cfg, Val{false}())
             h(); h()
-            return @allocated h()
+            return minimum(@allocated(h()) for _ in 1:3)
         end
         # Allocated / estimated bytes when this test was written: 1.10, 1.14, 1.05 and 1.07 for the
         # cross-sectional cases, 1.06 and 1.12 for the panel cases; with a shorter last group (below)

@@ -162,8 +162,11 @@ using SFrontiers, Test, Random, HaltonSequences, Optim, QuadGK, SpecialFunctions
     end
 
     @testset "draw preparation allocates one block" begin
-        # at most 1.5 blocks: room for what Julia's versions add around an array, and a second block fails
-        _hd_alloc(f) = (f(); @allocated f())
+        # at most 1.5 blocks: room for what Julia's versions add around an array, and a second block fails.
+        # The smallest of three readings: @allocated reads a process-wide counter, so bytes allocated
+        # meanwhile by something else (a finalizer run by a collection, another thread) can add to a
+        # single reading (one reading on macOS was 1.84 blocks where the same call read 1.0 elsewhere).
+        _hd_alloc(f) = (f(); minimum(@allocated(f()) for _ in 1:3))
         for T in (Float64, Float32)
             y = T.(randn(Xoshiro(3), 400))
             block = 400 * 1024 * sizeof(T)

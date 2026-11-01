@@ -13,7 +13,6 @@ SFrontiers.jl estimates the classic models by analytic maximum likelihood. Every
   - **MLE**: analytic maximum likelihood, with no simulation, for the classic models: normal noise with half-normal, truncated-normal or exponential inefficiency.
   - **MSLE**: maximum simulated likelihood, drawing inefficiency through its inverse CDF.
   - **MCI**: Monte Carlo integration with change-of-variable transformations.
-  - The simulation methods use Halton quasi-random draws, or draws you supply.
 
 - A wide menu of models
   - 3 noise distributions and 11 inefficiency distributions, supporting all combinations for production and cost frontiers.
